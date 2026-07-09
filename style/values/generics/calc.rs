@@ -209,6 +209,7 @@ pub enum SortKey {
     Rex,
     Ric,
     Rlh,
+    Rpx,
     S, // Sec
     Svb,
     Svh,
