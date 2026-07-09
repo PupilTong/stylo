@@ -51,6 +51,13 @@ fn generate_properties(engine: &str) {
         }
     }
 
+    // The property generator trims its output to the Lynx-supported set when the
+    // `lynx` feature is on (see properties/data.py). Cargo sets CARGO_FEATURE_LYNX
+    // for the build script; forward it to build.py as STYLO_LYNX, and re-run
+    // codegen whenever the feature is toggled.
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_LYNX");
+    let lynx = env::var_os("CARGO_FEATURE_LYNX").is_some();
+
     let script = Path::new(&env::var_os("CARGO_MANIFEST_DIR").unwrap())
         .join("properties")
         .join("build.py");
@@ -62,6 +69,7 @@ fn generate_properties(engine: &str) {
         // TODO(mrobinson): Is this happening because of how we run this script? It
         // would be better to ensure are just placed in the output directory.
         .env("PYTHONDONTWRITEBYTECODE", "1")
+        .env("STYLO_LYNX", if lynx { "1" } else { "0" })
         .arg(&script)
         .arg(engine)
         .arg("style-crate")

@@ -58,6 +58,27 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
+  # The Lynx-only configuration: builds with the `lynx` feature (which trims the
+  # CSS surface to what LynxJS supports and enables the Lynx-only additions) and
+  # runs the Lynx test suites, which only exist under that feature.
+  linux-lynx:
+    name: Linux (Lynx feature)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build with the lynx feature
+        run: cargo build --features lynx
+        env:
+          RUST_BACKTRACE: 1
+      - name: Run the Lynx test suites
+        # Glob target selection self-maintains: any new tests/lynx_*.rs suite is
+        # picked up automatically and can't be silently skipped.
+        run: cargo test -p stylo --features lynx --test 'lynx_*'
+        env:
+          RUST_BACKTRACE: 1
+
   build-result:
     name: Result
     runs-on: ubuntu-latest
@@ -67,6 +88,7 @@ jobs:
       - linux-release
       - macos-debug
       - windows-debug
+      - linux-lynx
     steps:
       - name: Success
         if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}

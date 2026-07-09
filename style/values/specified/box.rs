@@ -30,7 +30,10 @@ fn grid_enabled() -> bool {
 
 #[cfg(feature = "servo")]
 fn grid_enabled() -> bool {
-    static_prefs::pref!("layout.grid.enabled")
+    // Lynx supports `display: grid`, and its grid-* longhands/shorthands are
+    // force-enabled by the `lynx` feature, so enable the keyword to match rather
+    // than gate it on the servo `layout.grid.enabled` pref (off by default).
+    cfg!(feature = "lynx") || static_prefs::pref!("layout.grid.enabled")
 }
 
 #[inline]
@@ -104,10 +107,12 @@ pub enum DisplayInside {
     Flow,
     FlowRoot,
     Flex,
+    #[cfg(feature = "lynx")]
     #[css(keyword = "linear")]
     LynxLinear,
     Grid,
     Table,
+    #[cfg(feature = "lynx")]
     #[css(keyword = "relative")]
     LynxRelative,
     TableRowGroup,
@@ -200,6 +205,7 @@ impl Display {
     );
     pub const Flex: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flex as u16);
+    #[cfg(feature = "lynx")]
     pub const Linear: Self = Self(
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::LynxLinear as u16,
     );
@@ -209,6 +215,7 @@ impl Display {
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
     pub const InlineGrid: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
+    #[cfg(feature = "lynx")]
     pub const LynxRelative: Self = Self(
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::LynxRelative as u16,
@@ -369,7 +376,9 @@ impl Display {
     /// This is used to implement various style fixups.
     pub fn is_item_container(&self) -> bool {
         match self.inside() {
-            DisplayInside::Flex | DisplayInside::LynxLinear => true,
+            DisplayInside::Flex => true,
+            #[cfg(feature = "lynx")]
+            DisplayInside::LynxLinear => true,
             DisplayInside::Grid => true,
             _ => false,
         }
@@ -451,29 +460,60 @@ enum DisplayKeyword {
     Full(Display),
     Inside(DisplayInside),
     Outside(DisplayOutside),
+    // Under `lynx` the `list-item` keyword is gated off, so this variant is
+    // never constructed there; its match arms stay so `Display::parse` is
+    // identical in both configs.
+    #[cfg_attr(feature = "lynx", allow(dead_code))]
     ListItem,
 }
 
 impl DisplayKeyword {
     fn parse<'i>(input: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
         use self::DisplayKeyword::*;
+        // Under `lynx`, `display` accepts only none | block | flex | grid plus
+        // the Lynx-only `linear`/`relative` values
+        // (core/renderer/css/parser/enum_handler.cc ToDisplayType). All the
+        // inline-*, table*, list-item, contents and flow(-root) keywords below
+        // are `#[cfg(not(feature = "lynx"))]`-gated so they stop parsing; their
+        // Display variants stay defined for stylo's internal use.
+        //
+        // Residual: the multi-keyword `<display-outside> <display-inside>` form
+        // (e.g. `display: block flex`) is left intact, so such combinations still
+        // parse — harmlessly, since they compute to the same single-keyword
+        // Display the shorthand would produce.
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
+            #[cfg(not(feature = "lynx"))]
             "contents" => Full(Display::Contents),
+            #[cfg(feature = "lynx")]
             "linear" => Full(Display::Linear),
+            #[cfg(feature = "lynx")]
             "relative" => Full(Display::LynxRelative),
+            #[cfg(not(feature = "lynx"))]
             "inline-block" => Full(Display::InlineBlock),
+            #[cfg(not(feature = "lynx"))]
             "inline-table" => Full(Display::InlineTable),
+            #[cfg(not(feature = "lynx"))]
             "-webkit-flex" => Full(Display::Flex),
+            #[cfg(not(feature = "lynx"))]
             "inline-flex" | "-webkit-inline-flex" => Full(Display::InlineFlex),
+            #[cfg(not(feature = "lynx"))]
             "inline-grid" if grid_enabled() => Full(Display::InlineGrid),
+            #[cfg(not(feature = "lynx"))]
             "table-caption" => Full(Display::TableCaption),
+            #[cfg(not(feature = "lynx"))]
             "table-row-group" => Full(Display::TableRowGroup),
+            #[cfg(not(feature = "lynx"))]
             "table-header-group" => Full(Display::TableHeaderGroup),
+            #[cfg(not(feature = "lynx"))]
             "table-footer-group" => Full(Display::TableFooterGroup),
+            #[cfg(not(feature = "lynx"))]
             "table-column" => Full(Display::TableColumn),
+            #[cfg(not(feature = "lynx"))]
             "table-column-group" => Full(Display::TableColumnGroup),
+            #[cfg(not(feature = "lynx"))]
             "table-row" => Full(Display::TableRow),
+            #[cfg(not(feature = "lynx"))]
             "table-cell" => Full(Display::TableCell),
             #[cfg(feature = "gecko")]
             "ruby-base" => Full(Display::RubyBase),
@@ -491,15 +531,20 @@ impl DisplayKeyword {
             /// <display-outside> = block | inline | run-in
             /// https://drafts.csswg.org/css-display/#typedef-display-outside
             "block" => Outside(DisplayOutside::Block),
+            #[cfg(not(feature = "lynx"))]
             "inline" => Outside(DisplayOutside::Inline),
 
+            #[cfg(not(feature = "lynx"))]
             "list-item" => ListItem,
 
             /// <display-inside> = flow | flow-root | table | flex | grid | ruby
             /// https://drafts.csswg.org/css-display/#typedef-display-inside
+            #[cfg(not(feature = "lynx"))]
             "flow" => Inside(DisplayInside::Flow),
             "flex" => Inside(DisplayInside::Flex),
+            #[cfg(not(feature = "lynx"))]
             "flow-root" => Inside(DisplayInside::FlowRoot),
+            #[cfg(not(feature = "lynx"))]
             "table" => Inside(DisplayInside::Table),
             "grid" if grid_enabled() => Inside(DisplayInside::Grid),
             #[cfg(feature = "gecko")]
@@ -516,7 +561,9 @@ impl ToCss for Display {
         let outside = self.outside();
         let inside = self.inside();
         match *self {
+            #[cfg(feature = "lynx")]
             Display::Linear => dest.write_str("linear"),
+            #[cfg(feature = "lynx")]
             Display::LynxRelative => dest.write_str("relative"),
             Display::Block | Display::Inline => outside.to_css(dest),
             Display::InlineBlock => dest.write_str("inline-block"),
@@ -2013,7 +2060,12 @@ impl Parse for Overflow {
             "visible" => Self::Visible,
             "hidden" => Self::Hidden,
             "scroll" => Self::Scroll,
+            // Lynx's overflow accepts only visible | hidden | scroll
+            // (core/renderer/css/parser/enum_handler.cc ToOverflowType); auto,
+            // overlay and clip are not part of its grammar.
+            #[cfg(not(feature = "lynx"))]
             "auto" | "overlay" => Self::Auto,
+            #[cfg(not(feature = "lynx"))]
             "clip" => Self::Clip,
             #[cfg(feature = "gecko")]
             "-moz-hidden-unscrollable" if static_prefs::pref!("layout.css.overflow-moz-hidden-unscrollable.enabled") => {

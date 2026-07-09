@@ -76,6 +76,7 @@ pub enum LengthUnit {
     Pt,
     Pc,
     // Lynx-specific viewport-relative length (1rpx = viewport width / 750).
+    #[cfg(feature = "lynx")]
     Rpx,
     // Font-relative lengths.
     Em,
@@ -153,6 +154,7 @@ impl LengthUnit {
             // The Lynx rpx unit is viewport-relative (1rpx = viewport
             // width / 750), so like vw/vh below it is only valid in contexts
             // permitting computational dependence (not @font-face descriptors).
+            #[cfg(feature = "lynx")]
             "rpx" if allows_computational_dependence => Self::Rpx,
             // font-relative
             "em" if allows_computational_dependence => Self::Em,
@@ -215,6 +217,7 @@ impl LengthUnit {
             Self::Q => "q",
             Self::Pt => "pt",
             Self::Pc => "pc",
+            #[cfg(feature = "lynx")]
             Self::Rpx => "rpx",
             Self::Em => NoCalcLength::EM,
             Self::Ex => NoCalcLength::EX,
@@ -292,6 +295,7 @@ impl LengthUnit {
     }
 
     /// Whether this is the Lynx-specific `rpx` viewport-relative unit.
+    #[cfg(feature = "lynx")]
     #[inline]
     pub fn is_rpx(self) -> bool {
         matches!(self, Self::Rpx)
@@ -346,6 +350,7 @@ impl LengthUnit {
             Self::Px | Self::In | Self::Cm | Self::Mm | Self::Q | Self::Pt | Self::Pc => {
                 SortKey::Px
             },
+            #[cfg(feature = "lynx")]
             Self::Rpx => SortKey::Rpx,
             Self::Em => SortKey::Em,
             Self::Ex => SortKey::Ex,
@@ -1002,11 +1007,13 @@ impl NoCalcLength {
     /// `N/7.5 vw`): the viewport width comes from the device (flagging the
     /// style with `USES_VIEWPORT_UNITS`), zoom applies to the base, and the
     /// scaled result truncates on the `Au` grid.
+    #[cfg(feature = "lynx")]
     fn rpx_to_computed_value(&self, context: &Context) -> CSSPixelLength {
         debug_assert_eq!(self.unit, LengthUnit::Rpx);
         let size = context.viewport_size_for_viewport_unit_resolution(ViewportVariant::UADefault);
         let length = context.builder.effective_zoom.zoom(size.width.0 as f32);
-        let trunc_scaled = ((length as f64 * self.value as f64 / 750.).trunc() / AU_PER_PX as f64) as f32;
+        let trunc_scaled =
+            ((length as f64 * self.value as f64 / 750.).trunc() / AU_PER_PX as f64) as f32;
         CSSPixelLength::new(crate::values::normalize(trunc_scaled))
     }
 
@@ -1046,6 +1053,7 @@ impl NoCalcLength {
         if unit.is_container_relative() {
             return self.container_relative_to_computed_value(context);
         }
+        #[cfg(feature = "lynx")]
         if unit.is_rpx() {
             return self.rpx_to_computed_value(context);
         }
