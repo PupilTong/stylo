@@ -157,6 +157,7 @@ pub mod image;
 pub mod length;
 pub mod length_percentage;
 pub mod list;
+#[cfg(feature = "lynx")]
 pub mod lynx_layout;
 pub mod motion;
 pub mod outline;

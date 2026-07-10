@@ -1040,8 +1040,18 @@ pub mod white_space {
         ) -> Result<Longhands, ParseError<'i>> {
             let (mode, collapse) = try_match_ident_ignore_ascii_case! { input,
                 "normal" => (Wrap::Wrap, Collapse::Collapse),
+                // Lynx's white-space accepts only normal | nowrap
+                // (core/renderer/css/parser/enum_handler.cc ToWhiteSpaceType).
+                // Under `lynx`, `nowrap` is handled here rather than via the
+                // component-longhand fallback below (which is gated out), and the
+                // pre* family is gated out — so nothing else parses.
+                #[cfg(feature = "lynx")]
+                "nowrap" => (Wrap::Nowrap, Collapse::Collapse),
+                #[cfg(not(feature = "lynx"))]
                 "pre" => (Wrap::Nowrap, Collapse::Preserve),
+                #[cfg(not(feature = "lynx"))]
                 "pre-wrap" => (Wrap::Wrap, Collapse::Preserve),
+                #[cfg(not(feature = "lynx"))]
                 "pre-line" => (Wrap::Wrap, Collapse::PreserveBreaks),
             };
             Ok(expanded! {
@@ -1054,26 +1064,35 @@ pub mod white_space {
             return Ok(result);
         }
 
-        let mut wrap = None;
-        let mut collapse = None;
-        let mut parsed = 0;
+        // The component-longhand fallback (`text-wrap-mode` / `white-space-collapse`
+        // values and their two-keyword combinations) is not part of Lynx's
+        // white-space grammar — normal | nowrap are both handled above — so it is
+        // gated out under `lynx`, leaving those two as the only accepted values.
+        #[cfg(not(feature = "lynx"))]
+        {
+            let mut wrap = None;
+            let mut collapse = None;
+            let mut parsed = 0;
 
-        loop {
-            parsed += 1;
-            try_parse_one!(context, input, wrap, text_wrap_mode::parse);
-            try_parse_one!(context, input, collapse, white_space_collapse::parse);
-            parsed -= 1;
-            break;
+            loop {
+                parsed += 1;
+                try_parse_one!(context, input, wrap, text_wrap_mode::parse);
+                try_parse_one!(context, input, collapse, white_space_collapse::parse);
+                parsed -= 1;
+                break;
+            }
+
+            if parsed != 0 {
+                return Ok(expanded! {
+                    text_wrap_mode: unwrap_or_initial!(text_wrap_mode, wrap),
+                    white_space_collapse: unwrap_or_initial!(white_space_collapse, collapse),
+                });
+            }
         }
+        #[cfg(feature = "lynx")]
+        let _ = context;
 
-        if parsed == 0 {
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-        }
-
-        Ok(expanded! {
-            text_wrap_mode: unwrap_or_initial!(text_wrap_mode, wrap),
-            white_space_collapse: unwrap_or_initial!(white_space_collapse, collapse),
-        })
+        Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError))
     }
 
     impl<'a> ToCss for LonghandsToSerialize<'a> {
@@ -1128,7 +1147,9 @@ pub mod white_space {
     }
 }
 
-#[cfg(feature = "gecko")]
+// Available under servo too (not gecko-only): the `-webkit-text-stroke`
+// shorthand is now servo-visible behind `layout.unimplemented` to back Lynx's
+// unprefixed `text-stroke`, and its sub-longhand parses are servo-available.
 pub mod _webkit_text_stroke {
     pub use crate::properties::generated::shorthands::_webkit_text_stroke::*;
 

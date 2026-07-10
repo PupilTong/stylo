@@ -1,3 +1,7 @@
+// display:linear|relative are gated behind the `lynx` cargo feature; without it
+// there is nothing to test.
+#![cfg(feature = "lynx")]
+
 use cssparser::{Parser as CssParser, ParserInput};
 use style::context::QuirksMode;
 use style::custom_properties::AttrTaint;
