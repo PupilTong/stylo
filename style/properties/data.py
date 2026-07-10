@@ -373,6 +373,10 @@ class Property(object):
         self.aliases = parse_property_aliases(aliases)
         self.extra_prefixes = parse_property_aliases(extra_prefixes)
         self.flags = flags.split() if flags else []
+        # Set by PropertiesData.declare_* when the `lynx` feature is on and this
+        # property is not in LYNX_SUPPORTED: forces enabled_in_content() to
+        # False so the property stops parsing from content (see LYNX_SUPPORTED).
+        self.lynx_disabled = False
 
     def rule_types_allowed_names(self):
         for name in RULE_VALUES:
@@ -394,6 +398,8 @@ class Property(object):
         return self.enabled_in == "chrome"
 
     def enabled_in_content(self):
+        if self.lynx_disabled:
+            return False
         return self.enabled_in == "content"
 
     def is_visited_dependent(self):
@@ -785,6 +791,7 @@ class Alias(object):
         self.idl_method = idl_method(name, self.camel_case)
         self.original = original
         self.enabled_in = original.enabled_in
+        self.lynx_disabled = getattr(original, "lynx_disabled", False)
         self.animatable = original.animatable
         self.servo_pref = original.servo_pref
         self.gecko_pref = gecko_pref
@@ -815,6 +822,8 @@ class Alias(object):
         return self.enabled_in == "chrome"
 
     def enabled_in_content(self):
+        if self.lynx_disabled:
+            return False
         return self.enabled_in == "content"
 
     def noncustomcsspropertyid(self):
@@ -870,9 +879,94 @@ class Descriptor(object):
         self.camel_case = to_camel_case(name)
 
 
+# The CSS properties LynxJS supports, by stylo property name. Under the `lynx`
+# cargo feature (see build.rs -> build.py -> `PropertiesData(lynx=...)`), every
+# content property NOT in this set is forced to be disabled-for-content, so it
+# stops parsing from author CSS (its `LonghandId`/`ShorthandId` still exists, so
+# stylo keeps compiling). This is the property-level half of making stylo behave
+# like Lynx's CSS engine; per-keyword value trimming is done with
+# `#[cfg(not(feature = "lynx"))]` in the individual parsers.
+#
+# The set is derived strictly from https://lynxjs.org/next/api/css/properties.md
+# mapped onto stylo's names: the standard properties Lynx lists, the Lynx-only
+# linear-*/relative-* longhands, and the inline-logical box properties Lynx
+# exposes (margin/padding/border/inset -inline-start/-end and the *-start-*/
+# *-end-* / *-inline-* border longhands). Things Lynx omits — tables, floats,
+# multicol, list markers, generated content/counters, outline, block-logical
+# box properties, writing-mode/unicode-bidi, containment, and so on — are
+# deliberately absent so they get disabled. `all` is kept (it is a cascade
+# meta-property, and its runtime expansion already skips disabled longhands).
+#
+# A few Lynx properties ship gecko-only in stock stylo and are ported to servo
+# behind `layout.unimplemented` (see longhands.toml/shorthands.toml):
+# offset-distance/-rotate, and the -webkit-text-stroke* family — listed here by
+# their canonical -webkit- names, whose unprefixed `text-stroke*` Lynx spellings
+# are registered as aliases (so the alias inherits the same lynx_disabled state).
+# Edit this set to adjust which properties Lynx exposes.
+LYNX_SUPPORTED = frozenset(
+    """
+    all
+    align-content align-items align-self
+    justify-content justify-items justify-self
+    order
+    flex flex-basis flex-direction flex-flow flex-grow flex-shrink flex-wrap
+    gap column-gap row-gap
+    aspect-ratio
+    animation animation-delay animation-direction animation-duration
+    animation-fill-mode animation-iteration-count animation-name
+    animation-play-state animation-timing-function
+    transition transition-delay transition-duration transition-property
+    transition-timing-function
+    background background-clip background-color background-image
+    background-origin background-position background-repeat background-size
+    border border-bottom border-bottom-color border-bottom-left-radius
+    border-bottom-right-radius border-bottom-style border-bottom-width
+    border-color border-left border-left-color border-left-style border-left-width
+    border-radius border-right border-right-color border-right-style
+    border-right-width border-style border-top border-top-color
+    border-top-left-radius border-top-right-radius border-top-style
+    border-top-width border-width
+    border-inline-start-color border-inline-start-style border-inline-start-width
+    border-inline-end-color border-inline-end-style border-inline-end-width
+    border-start-start-radius border-start-end-radius border-end-start-radius
+    border-end-end-radius
+    bottom top left right inset-inline-start inset-inline-end
+    position box-shadow box-sizing z-index opacity visibility pointer-events
+    overflow overflow-x overflow-y display
+    width height min-width min-height max-width max-height
+    margin margin-bottom margin-left margin-right margin-top
+    padding padding-bottom padding-left padding-right padding-top
+    margin-inline-start margin-inline-end padding-inline-start padding-inline-end
+    color cursor direction letter-spacing line-height
+    text-align text-decoration text-indent text-overflow text-shadow word-break
+    white-space vertical-align
+    -webkit-text-stroke -webkit-text-stroke-color -webkit-text-stroke-width
+    font-family font-feature-settings font-optical-sizing font-size font-style
+    font-variation-settings font-weight
+    grid-auto-columns grid-auto-flow grid-auto-rows
+    grid-column grid-column-end grid-column-start
+    grid-row grid-row-end grid-row-start
+    grid-template-columns grid-template-rows
+    filter clip-path mask mask-composite mask-image perspective
+    transform transform-origin image-rendering
+    offset-path offset-distance offset-rotate
+    linear-direction linear-weight linear-weight-sum
+    relative-id relative-center relative-layout-once
+    relative-align-top relative-align-right relative-align-bottom
+    relative-align-left relative-align-inline-start relative-align-inline-end
+    relative-top-of relative-right-of relative-bottom-of relative-left-of
+    relative-inline-start-of relative-inline-end-of
+    """.split()
+)
+
+
 class PropertiesData(object):
-    def __init__(self, engine):
+    def __init__(self, engine, lynx=False):
         self.engine = engine
+        # Whether the `lynx` cargo feature is on: enables the Lynx-only
+        # additions (properties tagged `lynx_only` in longhands.toml) and
+        # disables every content property absent from LYNX_SUPPORTED.
+        self.lynx = lynx
         self.longhands = []
         self.longhands_by_name = {}
         self.logical_groups = {}
@@ -1008,6 +1102,18 @@ class PropertiesData(object):
         self.property_descriptors = self._load_descriptors("property_descriptors.toml")
         self.view_transition_descriptors = self._load_descriptors("view_transition_descriptors.toml")
 
+        # Fail the build if a LYNX_SUPPORTED name never matched a declared
+        # property — catches a typo (or a gecko-only entry) that would otherwise
+        # silently disable a supported property, or silently do nothing. `all` is
+        # declared later (declare_all_shorthand), so allow it explicitly.
+        if self.lynx:
+            declared = set(self.longhands_by_name) | set(self.shorthands_by_name) | {"all"}
+            unknown = sorted(n for n in LYNX_SUPPORTED if n not in declared)
+            assert not unknown, (
+                "LYNX_SUPPORTED names not declared as servo-visible properties "
+                "(typo or gecko-only?): %r" % unknown
+            )
+
 
     def declare_all_shorthand(self):
         # We don't define the 'all' shorthand using the regular helpers:shorthand
@@ -1076,9 +1182,16 @@ class PropertiesData(object):
     def declare_longhand(self, style_struct, name, extra_gecko_aliases=None, engine=None, **kwargs):
         if engine and self.engine != engine:
             return
+        # Lynx-only additions (the linear-*/relative-* longhands) exist only
+        # under the `lynx` feature; skip declaring them otherwise, since their
+        # value types are `#[cfg(feature = "lynx")]`-gated out of the crate.
+        lynx_only = kwargs.pop("lynx_only", False)
+        if lynx_only and not self.lynx:
+            return
         if extra_gecko_aliases and self.engine == "gecko":
             kwargs.setdefault('aliases', []).extend(extra_gecko_aliases)
         longhand = Longhand(style_struct, name, **kwargs)
+        longhand.lynx_disabled = self.lynx and name not in LYNX_SUPPORTED
         self.add_prefixed_aliases(longhand)
         longhand.aliases = [Alias(xp[0], longhand, xp[1]) for xp in longhand.aliases]
         self.longhand_aliases += longhand.aliases
@@ -1102,6 +1215,7 @@ class PropertiesData(object):
                 kwargs.setdefault('aliases', []).extend(extra_gecko_aliases)
         sub_properties = [self.longhands_by_name[s] for s in sub_properties]
         shorthand = Shorthand(name, sub_properties, *args, **kwargs)
+        shorthand.lynx_disabled = self.lynx and name not in LYNX_SUPPORTED
         self.add_prefixed_aliases(shorthand)
         shorthand.aliases = [Alias(xp[0], shorthand, xp[1]) for xp in shorthand.aliases]
         self.shorthand_aliases += shorthand.aliases

@@ -369,9 +369,22 @@ impl NonCustomPropertyId {
     /// Whether this property is enabled for all content right now.
     #[inline]
     pub(super) fn enabled_for_all_content(self) -> bool {
-        static EXPERIMENTAL: NonCustomPropertyIdSet = ${non_custom_property_id_set(lambda p: p.experimental(engine))};
+        // `and not p.lynx_disabled`: a property the `lynx` feature disables must
+        // stay disabled even when its experimental servo pref is flipped on —
+        // otherwise e.g. enabling `layout.grid.enabled` would re-admit the
+        // lynx-disabled grid shorthands. `lynx_disabled` is always false without
+        // the feature, so the servo build is unchanged.
+        static EXPERIMENTAL: NonCustomPropertyIdSet = ${non_custom_property_id_set(lambda p: p.experimental(engine) and not p.lynx_disabled)};
+        // Under the `lynx` feature, a property Lynx supports is content-enabled
+        // even when stylo keeps it behind an experimental servo pref
+        // (`layout.grid.enabled`, `layout.unimplemented`, ...): lynx-vello, not
+        // servo, provides its layout/paint, so the pref is meaningless here. We
+        // do this by forcing it into ALWAYS_ENABLED rather than by clearing the
+        // pref, so `servo_pref` (and hence shorthand `LonghandsToSerialize`
+        // `Option`-ness) is untouched. `data.lynx and not p.lynx_disabled` is
+        // only ever true under `lynx`, so the servo build is unchanged.
         static ALWAYS_ENABLED: NonCustomPropertyIdSet = ${non_custom_property_id_set(
-            lambda p: (not p.experimental(engine)) and p.enabled_in_content()
+            lambda p: p.enabled_in_content() and ((not p.experimental(engine)) or (data.lynx and not p.lynx_disabled))
         )};
 
         let passes_pref_check = || {

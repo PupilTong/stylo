@@ -36,7 +36,11 @@ def main():
     if engine not in ["servo", "gecko"]:
         abort(usage)
 
-    properties = data.PropertiesData(engine)
+    # Set by build.rs from the `lynx` cargo feature: trims the generated property
+    # set to what LynxJS supports (see data.LYNX_SUPPORTED).
+    lynx = os.environ.get("STYLO_LYNX") == "1"
+
+    properties = data.PropertiesData(engine, lynx=lynx)
     properties_template = os.path.join(BASE, "properties.mako.rs")
     properties_file = render(
         properties_template,

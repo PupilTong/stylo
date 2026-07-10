@@ -1260,6 +1260,7 @@ affects = "layout"
 # box-level `display: linear` layout mode; reusing Box keeps this patch small
 # and gives ComputedValues generated clone_* accessors without a new style struct.
 [linear-direction]
+lynx_only = true
 struct = "box"
 spec = "Nonstandard Lynx linear layout property"
 animation_type = "none"
@@ -1268,6 +1269,7 @@ affects = "layout"
 keyword = { values = ["column", "row", "column-reverse", "row-reverse"] }
 
 [linear-weight]
+lynx_only = true
 type = "NonNegativeNumber"
 initial = "From::from(0.)"
 struct = "box"
@@ -1277,6 +1279,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [linear-weight-sum]
+lynx_only = true
 type = "NonNegativeNumber"
 initial = "From::from(0.)"
 struct = "box"
@@ -1289,6 +1292,7 @@ affects = "layout"
 # linear layout knobs above: they parameterize the box-level `display: relative`
 # layout mode while keeping this fork patch mechanical and accessor-compatible.
 [relative-id]
+lynx_only = true
 type = "Integer"
 initial = "-1"
 struct = "box"
@@ -1298,6 +1302,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-top]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1307,6 +1312,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-right]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1316,6 +1322,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-bottom]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1325,6 +1332,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-left]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1334,6 +1342,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-top-of]
+lynx_only = true
 type = "Integer"
 initial = "-1"
 struct = "box"
@@ -1343,6 +1352,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-right-of]
+lynx_only = true
 type = "Integer"
 initial = "-1"
 struct = "box"
@@ -1352,6 +1362,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-bottom-of]
+lynx_only = true
 type = "Integer"
 initial = "-1"
 struct = "box"
@@ -1361,6 +1372,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-left-of]
+lynx_only = true
 type = "Integer"
 initial = "-1"
 struct = "box"
@@ -1370,6 +1382,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-inline-start]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1379,6 +1392,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-inline-end]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1388,6 +1402,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-inline-start-of]
+lynx_only = true
 type = "Integer"
 initial = "-1"
 struct = "box"
@@ -1397,6 +1412,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-inline-end-of]
+lynx_only = true
 type = "Integer"
 initial = "-1"
 struct = "box"
@@ -1406,6 +1422,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-center]
+lynx_only = true
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
 animation_type = "none"
@@ -1414,6 +1431,7 @@ affects = "layout"
 keyword = { values = ["none", "vertical", "horizontal", "both"] }
 
 [relative-layout-once]
+lynx_only = true
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
 animation_type = "none"
@@ -1605,7 +1623,10 @@ affects = "overflow"
 type = "LengthPercentage"
 initial = "computed::LengthPercentage::zero()"
 struct = "box"
-engine = "gecko"
+# Lynx supports offset-distance; stylo ships it gecko-only. Expose it in servo
+# behind the same experimental pref as offset-path so the `lynx` feature can
+# force-enable it (see enabled_for_all_content's ALWAYS_ENABLED).
+servo_pref = "layout.unimplemented"
 flags = "CAN_ANIMATE_ON_COMPOSITOR"
 spec = "https://drafts.fxtf.org/motion-1/#offset-distance-property"
 servo_restyle_damage = "rebuild_box"
@@ -1636,7 +1657,9 @@ affects = "overflow"
 type = "OffsetRotate"
 initial = "computed::OffsetRotate::auto()"
 struct = "box"
-engine = "gecko"
+# Lynx-supported; gecko-only in stylo. Expose in servo behind the experimental
+# pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 flags = "CAN_ANIMATE_ON_COMPOSITOR"
 spec = "https://drafts.fxtf.org/motion-1/#offset-rotate-property"
 servo_restyle_damage = "rebuild_box"
@@ -2679,7 +2702,11 @@ affects = "paint"
 type = "Color"
 initial = "computed_value::T::currentcolor()"
 struct = "inherited_text"
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke-color`; stylo ships it gecko-only
+# under the -webkit- name. Expose it in servo behind the experimental pref (so
+# the `lynx` feature force-enables it) and register the unprefixed Lynx alias.
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke-color"]
 ignored_when_colors_disabled = true
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke-color"
 affects = "paint"
@@ -2688,7 +2715,9 @@ affects = "paint"
 type = "LineWidth"
 initial = "app_units::Au(0)"
 struct = "inherited_text"
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke-width` (see -webkit-text-stroke-color).
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke-width"]
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke-width"
 animation_type = "discrete"
 affects = "overflow"
