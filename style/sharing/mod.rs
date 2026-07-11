@@ -321,8 +321,16 @@ pub struct StyleSharingCandidate<E: TElement> {
     considered_nontrivial_scoped_style: bool,
 }
 
+/// The element-handle stand-in used to size the typeless TLS cache. Gecko's
+/// and Servo's element handles are one word; the lynx embedder's handle is an
+/// arena reference plus a generational id — two words. (lynx addition)
+#[cfg(feature = "lynx")]
+type FakeElementHandle = [usize; 2];
+#[cfg(not(feature = "lynx"))]
+type FakeElementHandle = usize;
+
 struct FakeCandidate {
-    _element: usize,
+    _element: FakeElementHandle,
     _validation_data: ValidationData,
     _may_contain_scoped_style: bool,
 }
