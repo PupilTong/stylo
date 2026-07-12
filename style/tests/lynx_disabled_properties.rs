@@ -31,11 +31,6 @@ const NON_LYNX_PROPERTIES: &[&str] = &[
     "quotes",
     "counter-increment",
     "counter-reset",
-    // Outline.
-    "outline",
-    "outline-width",
-    "outline-color",
-    "outline-style",
     // Multicol.
     "columns",
     "column-count",
@@ -93,16 +88,50 @@ const NON_LYNX_PROPERTIES: &[&str] = &[
     "grid-area",
     "grid-template",
     "grid-template-areas",
-    // Background/mask longhands outside the supported subset.
-    "background-attachment",
+    // Background/mask pieces outside the supported subset. NOTE:
+    // `background-attachment` and `mask-repeat` are NOT here — they are
+    // sub-longhands of the supported `background`/`mask` shorthands, which
+    // data.py keeps enabled so those shorthands can serialize and their
+    // standalone wire ids can ingest (see LYNX_SUPPORTED). `mask-position`
+    // stays disabled: it is itself a shorthand (over mask-position-x/y) and
+    // not in the Lynx list.
     "background-blend-mode",
-    "mask-repeat",
     "mask-position",
     // place-* shorthands.
     "place-content",
     "place-items",
     "place-self",
 ];
+
+/// Sub-longhands of supported shorthands stay enabled even when Lynx does
+/// not document them individually: shorthand parsing writes them, CSSOM-style
+/// serialization iterates only enabled ones, and real `.web.bundle`s carry
+/// some of their standalone ids — see the propagation loop in data.py.
+const SHORTHAND_CARRIED_LONGHANDS: &[&str] = &[
+    "background-attachment",   // via `background`
+    "background-position-x",   // via `background-position`
+    "background-position-y",   // via `background-position`
+    "text-decoration-color",   // via `text-decoration` (wire id 148)
+    "text-decoration-line",    // via `text-decoration`
+    "text-decoration-style",   // via `text-decoration`
+    "mask-repeat",             // via `mask`
+    "border-image-source",     // via `border`
+];
+
+#[test]
+fn shorthand_carried_longhands_stay_enabled() {
+    let mut disabled = Vec::new();
+    for &name in SHORTHAND_CARRIED_LONGHANDS {
+        if !is_content_enabled(name) {
+            disabled.push(name);
+        }
+    }
+    assert!(
+        disabled.is_empty(),
+        "sub-longhands of supported shorthands must stay content-enabled \
+         (data.py propagation), but these are disabled: {disabled:?}",
+    );
+}
 
 #[test]
 fn non_lynx_properties_are_disabled() {
