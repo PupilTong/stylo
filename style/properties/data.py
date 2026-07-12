@@ -931,6 +931,7 @@ LYNX_SUPPORTED = frozenset(
     border-start-start-radius border-start-end-radius border-end-start-radius
     border-end-end-radius
     bottom top left right inset-inline-start inset-inline-end
+    outline outline-color outline-style outline-width
     position box-shadow box-sizing z-index opacity visibility pointer-events
     overflow overflow-x overflow-y display
     width height min-width min-height max-width max-height
@@ -1113,6 +1114,24 @@ class PropertiesData(object):
                 "LYNX_SUPPORTED names not declared as servo-visible properties "
                 "(typo or gecko-only?): %r" % unknown
             )
+            # A shorthand Lynx exposes must keep its full standard expansion
+            # functional. Shorthand *parsing* writes every sub-longhand
+            # unconditionally, but `ShorthandId::longhands()` (which drives
+            # CSSOM-style serialization) and gated `PropertyId::parse` (which
+            # drives per-longhand wire ingestion — e.g. the standalone
+            # `text-decoration-color` id real `.web.bundle`s carry) both skip
+            # lynx-disabled longhands. Listing a shorthand without its
+            # sub-longhands therefore made it parse-only (its serialization
+            # came back empty and its longhands stopped parsing), so enable
+            # the sub-longhands of every supported shorthand. `all` is
+            # excluded: it expands to (almost) every longhand and would undo
+            # the lynx gating wholesale; its parse/serialization paths are
+            # special-cased and never consult `longhands()`.
+            for shorthand in self.shorthands:
+                if shorthand.name == "all" or shorthand.lynx_disabled:
+                    continue
+                for sub in shorthand.sub_properties:
+                    sub.lynx_disabled = False
 
 
     def declare_all_shorthand(self):
