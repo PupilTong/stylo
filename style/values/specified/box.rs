@@ -828,15 +828,16 @@ impl BaselineSource {
 
 /// https://drafts.csswg.org/css-scroll-snap-1/#snap-axis
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToComputedValue,
     ToCss,
@@ -854,15 +855,16 @@ pub enum ScrollSnapAxis {
 
 /// https://drafts.csswg.org/css-scroll-snap-1/#snap-strictness
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToComputedValue,
     ToCss,
@@ -879,14 +881,15 @@ pub enum ScrollSnapStrictness {
 
 /// https://drafts.csswg.org/css-scroll-snap-1/#scroll-snap-type
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     MallocSizeOf,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToComputedValue,
     ToResolvedValue,
@@ -1037,15 +1040,16 @@ impl ToCss for ScrollSnapAlign {
 }
 
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToComputedValue,
     ToCss,
@@ -1060,15 +1064,16 @@ pub enum ScrollSnapStop {
 }
 
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToComputedValue,
     ToCss,
@@ -1084,15 +1089,16 @@ pub enum OverscrollBehavior {
 }
 
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToComputedValue,
     ToCss,
@@ -1419,16 +1425,17 @@ impl Parse for LineClamp {
 }
 
 /// https://drafts.csswg.org/css-contain-2/#content-visibility
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     FromPrimitive,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToAnimatedValue,
     ToComputedValue,
@@ -1593,17 +1600,18 @@ pub type Perspective = GenericPerspective<NonNegativeLength>;
 
 /// https://drafts.csswg.org/css-box/#propdef-float
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     FromPrimitive,
     Hash,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToComputedValue,
     ToCss,
@@ -1630,17 +1638,18 @@ impl Float {
 
 /// https://drafts.csswg.org/css2/#propdef-clear
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     FromPrimitive,
     Hash,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToComputedValue,
     ToCss,
@@ -1661,16 +1670,17 @@ pub enum Clear {
 
 /// https://drafts.csswg.org/css-ui/#propdef-resize
 #[allow(missing_docs)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
 #[derive(
     Clone,
     Copy,
     Debug,
+    Deserialize,
     Eq,
     Hash,
     MallocSizeOf,
     Parse,
     PartialEq,
+    Serialize,
     SpecifiedValueInfo,
     ToCss,
     ToShmem,
