@@ -1632,7 +1632,9 @@ affects = "overflow"
 type = "LengthPercentage"
 initial = "computed::LengthPercentage::zero()"
 struct = "box"
-engine = "gecko"
+# Lynx-supported; gecko-only in stylo. Expose in servo behind the experimental
+# pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 flags = "CAN_ANIMATE_ON_COMPOSITOR"
 spec = "https://drafts.fxtf.org/motion-1/#offset-distance-property"
 servo_restyle_damage = "rebuild_box"
