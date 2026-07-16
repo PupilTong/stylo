@@ -322,7 +322,7 @@ impl ToCss for TextOverflow {
 )]
 #[cfg_attr(
     feature = "lynx",
-    css(bitflags(single = "none,underline,line-through"))
+    css(bitflags(single = "none", mixed = "underline,line-through"))
 )]
 #[repr(C)]
 /// Specified keyword values for the text-decoration-line property.
