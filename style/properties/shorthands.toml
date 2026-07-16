@@ -557,7 +557,11 @@ spec = "https://www.w3.org/TR/css-text-4/#white-space-property"
 derive_value_info = false
 
 [-webkit-text-stroke]
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke`; stylo ships it gecko-only.
+# Expose it in servo behind the experimental pref (so `lynx` force-enables it)
+# and register the unprefixed Lynx alias.
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke"]
 sub_properties = ["-webkit-text-stroke-width", "-webkit-text-stroke-color"]
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke"
 derive_serialize = true

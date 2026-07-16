@@ -17,10 +17,8 @@ use thin_vec::ThinVec;
 /// A Lynx relative-layout alignment reference.
 ///
 /// `parent` computes to `0` (`RelativeAlignType::kParent` in Lynx), while
-/// positive integers reference sibling `relative-id` values. `None` is the
-/// unset sentinel (computed `-1`, `SL_DEFAULT_RELATIVE_ID` in Lynx): it is
-/// not parseable from author CSS, only produced from computed values, and
-/// serializes as `-1` to match how Lynx reports the sentinel.
+/// positive integers reference sibling `relative-id` values. `none` maps to
+/// the internal unset sentinel (`-1`, `SL_DEFAULT_RELATIVE_ID` in Lynx).
 #[derive(Clone, Debug, MallocSizeOf, PartialEq, ToShmem)]
 pub enum RelativeAlign {
     /// No alignment reference (the initial value; computed `-1`).
@@ -36,6 +34,12 @@ impl Parse for RelativeAlign {
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<Self, ParseError<'i>> {
+        if input
+            .try_parse(|input| input.expect_ident_matching("none"))
+            .is_ok()
+        {
+            return Ok(Self::None);
+        }
         if input
             .try_parse(|input| input.expect_ident_matching("parent"))
             .is_ok()
@@ -75,8 +79,7 @@ impl ToCss for RelativeAlign {
         W: Write,
     {
         match *self {
-            // The unset sentinel serializes as Lynx reports it.
-            Self::None => dest.write_str("-1"),
+            Self::None => dest.write_str("none"),
             Self::Parent => dest.write_str("parent"),
             Self::Id(ref id) => id.to_css(dest),
         }
@@ -93,3 +96,68 @@ impl ToTyped for RelativeAlign {
 }
 
 impl SpecifiedValueInfo for RelativeAlign {}
+
+/// A Lynx relative-layout sibling reference (`none | <positive-integer>`).
+#[derive(Clone, Debug, MallocSizeOf, PartialEq, ToShmem)]
+pub enum RelativeReference {
+    /// No sibling reference (computed sentinel `-1`).
+    None,
+    /// A positive sibling `relative-id`.
+    Id(Integer),
+}
+
+impl Parse for RelativeReference {
+    fn parse<'i, 't>(
+        context: &ParserContext,
+        input: &mut Parser<'i, 't>,
+    ) -> Result<Self, ParseError<'i>> {
+        if input
+            .try_parse(|input| input.expect_ident_matching("none"))
+            .is_ok()
+        {
+            return Ok(Self::None);
+        }
+        Integer::parse_positive(context, input).map(Self::Id)
+    }
+}
+
+impl ToComputedValue for RelativeReference {
+    type ComputedValue = computed::lynx_layout::RelativeReference;
+
+    fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
+        match *self {
+            Self::None => -1,
+            Self::Id(ref id) => id.to_computed_value(context),
+        }
+    }
+
+    fn from_computed_value(computed: &Self::ComputedValue) -> Self {
+        match *computed {
+            id if id > 0 => Self::Id(Integer::from_computed_value(&id)),
+            _ => Self::None,
+        }
+    }
+}
+
+impl ToCss for RelativeReference {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        match *self {
+            Self::None => dest.write_str("none"),
+            Self::Id(ref id) => id.to_css(dest),
+        }
+    }
+}
+
+impl ToTyped for RelativeReference {
+    fn to_typed(&self, dest: &mut ThinVec<TypedValue>) -> Result<(), ()> {
+        match *self {
+            Self::None => Err(()),
+            Self::Id(ref id) => id.to_typed(dest),
+        }
+    }
+}
+
+impl SpecifiedValueInfo for RelativeReference {}

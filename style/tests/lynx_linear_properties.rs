@@ -1,3 +1,7 @@
+// The linear-* longhands this suite exercises are gated behind the `lynx` cargo
+// feature; without it there is nothing to test.
+#![cfg(feature = "lynx")]
+
 use style::context::QuirksMode;
 use style::properties::declaration_block::{parse_one_declaration_into, parse_style_attribute};
 use style::properties::{

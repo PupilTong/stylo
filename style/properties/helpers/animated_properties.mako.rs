@@ -459,7 +459,11 @@ impl AnimationValue {
             % for prop in data.longhands:
             % if prop.animatable and not prop.logical:
             LonghandId::${prop.camel_case} => {
+                % if data.lynx and prop.name == "color":
+                let computed = style.clone_color_value();
+                % else:
                 let computed = style.clone_${prop.ident}();
+                % endif
                 AnimationValue::${prop.camel_case}(
                 % if prop.animation_type == "discrete":
                     computed
