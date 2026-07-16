@@ -48,8 +48,12 @@ fn assert_rejects(name: &str, value: &str) {
 
 #[test]
 fn parses_relative_integer_references() {
+    assert_parses("relative-id", "7", LonghandId::RelativeId);
+    for invalid in ["-1", "0", "1.5", "none", "parent"] {
+        assert_rejects("relative-id", invalid);
+    }
+
     for (name, id) in [
-        ("relative-id", LonghandId::RelativeId),
         ("relative-top-of", LonghandId::RelativeTopOf),
         ("relative-right-of", LonghandId::RelativeRightOf),
         ("relative-bottom-of", LonghandId::RelativeBottomOf),
@@ -61,10 +65,11 @@ fn parses_relative_integer_references() {
         ("relative-inline-end-of", LonghandId::RelativeInlineEndOf),
     ] {
         assert_parses(name, "7", id);
-        assert_parses(name, "-1", id);
+        assert_parses(name, "none", id);
         assert_rejects(name, "parent");
         assert_rejects(name, "1.5");
-        assert_rejects(name, "none");
+        assert_rejects(name, "-1");
+        assert_rejects(name, "0");
     }
 }
 
@@ -85,10 +90,10 @@ fn parses_relative_align_references() {
         ),
     ] {
         assert_parses(name, "parent", id);
+        assert_parses(name, "none", id);
         assert_parses(name, "7", id);
         assert_rejects(name, "0");
         assert_rejects(name, "-1");
-        assert_rejects(name, "none");
         assert_rejects(name, "1.5");
     }
 }
@@ -205,7 +210,7 @@ fn relative_align_sentinel_round_trips_without_fabricating_ids() {
         RelativeAlign::from_computed_value(&0),
         RelativeAlign::Parent
     );
-    // The sentinel serializes the way Lynx reports it.
-    assert_eq!(RelativeAlign::None.to_css_string(), "-1");
+    // The sentinel is an authored Lynx keyword.
+    assert_eq!(RelativeAlign::None.to_css_string(), "none");
     assert_eq!(RelativeAlign::Parent.to_css_string(), "parent");
 }

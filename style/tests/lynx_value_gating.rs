@@ -1,8 +1,7 @@
 // Verifies the curated per-keyword value trimming under the `lynx` feature:
-// `display`, `overflow{,-x,-y}` and `white-space` are supported properties, but
-// Lynx accepts only a subset of their standard keyword values (verified against
-// core/renderer/css/parser/enum_handler.cc). The Lynx-accepted keywords must
-// parse; the rest must be rejected. Gated behind `lynx`.
+// `display` and `overflow{,-x,-y}` use Lynx value sets. `white-space` is a
+// supported shorthand and therefore keeps Stylo's complete shorthand grammar,
+// together with both component longhands.
 #![cfg(feature = "lynx")]
 
 use style::context::QuirksMode;
@@ -50,17 +49,25 @@ fn assert_rejects(name: &str, value: &str) {
 }
 
 #[test]
+fn custom_properties_and_var_references_remain_enabled() {
+    assert_accepts("--lynx-size", "12px");
+    assert_accepts("width", "var(--lynx-size)");
+    assert_accepts("width", "var(--missing, 10px)");
+}
+
+#[test]
 fn display_keyword_gating() {
-    // Lynx: none | flex | grid | block, plus the Lynx-only linear | relative.
+    // Lynx: none | flex | grid, plus the Lynx-only linear | relative.
     // `grid` is force-enabled under `lynx` (grid_enabled() returns true), so it
     // parses out of the box — matching its grid-* longhands, which are enabled
     // the same way — without needing stylo's `layout.grid.enabled` pref.
-    for value in ["none", "flex", "grid", "block", "linear", "relative"] {
+    for value in ["none", "flex", "grid", "linear", "relative"] {
         assert_accepts("display", value);
     }
     // Everything else in stylo's `display` grammar is gated out.
     for value in [
         "inline",
+        "block",
         "inline-block",
         "inline-flex",
         "inline-grid",
@@ -79,37 +86,50 @@ fn display_keyword_gating() {
 
 #[test]
 fn overflow_keyword_gating() {
-    // Lynx overflow / overflow-x / overflow-y: visible | hidden | scroll.
+    // Lynx overflow / overflow-x / overflow-y: visible | hidden.
     for prop in ["overflow", "overflow-x", "overflow-y"] {
-        for value in ["visible", "hidden", "scroll"] {
+        for value in ["visible", "hidden"] {
             assert_accepts(prop, value);
         }
-        for value in ["auto", "clip", "overlay"] {
+        for value in ["scroll", "auto", "clip", "overlay"] {
             assert_rejects(prop, value);
         }
     }
 }
 
 #[test]
-fn white_space_keyword_gating() {
-    // Lynx white-space: normal | nowrap (nothing else).
-    for value in ["normal", "nowrap"] {
-        assert_accepts("white-space", value);
-    }
-    // Everything else is gated out: the legacy `pre*` keywords, and — since the
-    // component-longhand fallback is disabled under `lynx` — the bare
-    // `text-wrap-mode` / `white-space-collapse` values and their combinations.
+fn white_space_uses_the_complete_shorthand_grammar() {
     for value in [
+        "normal",
+        "nowrap",
         "pre",
         "pre-wrap",
         "pre-line",
         "break-spaces",
-        "wrap",
-        "collapse",
-        "preserve",
-        "preserve-breaks",
-        "nowrap preserve",
+        "preserve nowrap",
     ] {
-        assert_rejects("white-space", value);
+        assert_accepts("white-space", value);
     }
+    assert_accepts("text-wrap-mode", "wrap");
+    assert_accepts("text-wrap-mode", "nowrap");
+    assert_accepts("white-space-collapse", "preserve-breaks");
+    assert_rejects("white-space", "balance");
+}
+
+#[test]
+fn css_wide_keywords_keep_their_standard_meaning() {
+    for property in ["display", "width", "color", "background", "font-size"] {
+        for value in ["inherit", "initial", "unset", "revert", "revert-layer"] {
+            assert_accepts(property, value);
+        }
+    }
+}
+
+#[test]
+fn direction_follows_the_w3c_grammar() {
+    for value in ["ltr", "rtl"] {
+        assert_accepts("direction", value);
+    }
+    assert_rejects("direction", "normal");
+    assert_rejects("direction", "lynx-rtl");
 }

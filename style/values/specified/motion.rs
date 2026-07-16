@@ -149,20 +149,35 @@ impl Parse for OffsetPathFunction {
     ) -> Result<Self, ParseError<'i>> {
         use crate::values::specified::basic_shape::{AllowedBasicShapes, ShapeType};
 
+        #[cfg(feature = "lynx")]
+        return BasicShape::parse(
+            context,
+            input,
+            AllowedBasicShapes::INSET
+                | AllowedBasicShapes::CIRCLE
+                | AllowedBasicShapes::ELLIPSE
+                | AllowedBasicShapes::PATH,
+            ShapeType::Outline,
+        )
+        .map(OffsetPathFunction::Shape);
+
         // <offset-path> = <ray()> | <url> | <basic-shape>
         // https://drafts.fxtf.org/motion-1/#typedef-offset-path
+        #[cfg(not(feature = "lynx"))]
         if let Ok(ray) = input.try_parse(|i| RayFunction::parse(context, i)) {
             return Ok(OffsetPathFunction::Ray(ray));
         }
 
+        #[cfg(not(feature = "lynx"))]
         if static_prefs::pref!("layout.css.motion-path-url.enabled") {
             if let Ok(url) = input.try_parse(|i| SpecifiedUrl::parse(context, i)) {
                 return Ok(OffsetPathFunction::Url(url));
             }
         }
 
-        BasicShape::parse(context, input, AllowedBasicShapes::ALL, ShapeType::Outline)
-            .map(OffsetPathFunction::Shape)
+        #[cfg(not(feature = "lynx"))]
+        return BasicShape::parse(context, input, AllowedBasicShapes::ALL, ShapeType::Outline)
+            .map(OffsetPathFunction::Shape);
     }
 }
 
@@ -171,13 +186,23 @@ impl Parse for OffsetPath {
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<Self, ParseError<'i>> {
+        #[cfg(feature = "lynx")]
+        return OffsetPathFunction::parse(context, input).map(|path| OffsetPath::OffsetPath {
+            path: Box::new(path),
+            coord_box: CoordBox::BorderBox,
+        });
+
         // Parse none.
+        #[cfg(not(feature = "lynx"))]
         if input.try_parse(|i| i.expect_ident_matching("none")).is_ok() {
             return Ok(OffsetPath::none());
         }
 
+        #[cfg(not(feature = "lynx"))]
         let mut path = None;
+        #[cfg(not(feature = "lynx"))]
         let mut coord_box = None;
+        #[cfg(not(feature = "lynx"))]
         loop {
             if path.is_none() {
                 path = input
@@ -194,6 +219,7 @@ impl Parse for OffsetPath {
             break;
         }
 
+        #[cfg(not(feature = "lynx"))]
         if let Some(p) = path {
             return Ok(OffsetPath::OffsetPath {
                 path: Box::new(p),
@@ -201,10 +227,11 @@ impl Parse for OffsetPath {
             });
         }
 
-        match coord_box {
+        #[cfg(not(feature = "lynx"))]
+        return match coord_box {
             Some(c) => Ok(OffsetPath::CoordBox(c)),
             None => Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError)),
-        }
+        };
     }
 }
 
@@ -220,6 +247,7 @@ pub enum OffsetRotateDirection {
     /// 0deg offset (face forward).
     Auto,
     /// 180deg offset (face backward).
+    #[cfg(not(feature = "lynx"))]
     Reverse,
 }
 
@@ -276,23 +304,44 @@ impl Parse for OffsetRotate {
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<Self, ParseError<'i>> {
+        #[cfg(feature = "lynx")]
+        {
+            if input.try_parse(|i| i.expect_ident_matching("auto")).is_ok() {
+                return Ok(Self::auto());
+            }
+            let angle = Angle::parse(context, input)?;
+            if !matches!(angle.degrees(), Some(value) if (0.0..=360.0).contains(&value)) {
+                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+            }
+            return Ok(Self {
+                direction: OffsetRotateDirection::None,
+                angle,
+            });
+        }
+
+        #[cfg(not(feature = "lynx"))]
         let location = input.current_source_location();
+        #[cfg(not(feature = "lynx"))]
         let mut direction = input.try_parse(OffsetRotateDirection::parse);
+        #[cfg(not(feature = "lynx"))]
         let angle = input.try_parse(|i| Angle::parse(context, i));
+        #[cfg(not(feature = "lynx"))]
         if direction.is_err() {
             // The direction and angle could be any order, so give it a change to parse
             // direction again.
             direction = input.try_parse(OffsetRotateDirection::parse);
         }
 
+        #[cfg(not(feature = "lynx"))]
         if direction.is_err() && angle.is_err() {
             return Err(location.new_custom_error(StyleParseErrorKind::UnspecifiedError));
         }
 
-        Ok(OffsetRotate {
+        #[cfg(not(feature = "lynx"))]
+        return Ok(OffsetRotate {
             direction: direction.unwrap_or(OffsetRotateDirection::None),
             angle: angle.unwrap_or(Zero::zero()),
-        })
+        });
     }
 }
 
@@ -305,7 +354,16 @@ impl ToComputedValue for OffsetRotate {
 
         ComputedOffsetRotate {
             auto: !self.direction.is_none(),
-            angle: if self.direction == OffsetRotateDirection::Reverse {
+            angle: if {
+                #[cfg(not(feature = "lynx"))]
+                {
+                    self.direction == OffsetRotateDirection::Reverse
+                }
+                #[cfg(feature = "lynx")]
+                {
+                    false
+                }
+            } {
                 // The computed value should always convert "reverse" into "auto".
                 // e.g. "reverse calc(20deg + 10deg)" => "auto 210deg"
                 self.angle.to_computed_value(context) + ComputedAngle::from_degrees(180.0)

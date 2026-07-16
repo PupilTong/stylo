@@ -120,6 +120,7 @@ pub fn parse_border<'i, 't>(
     ))
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod border_block {
     use super::*;
     pub use crate::properties::generated::shorthands::border_block::*;
@@ -231,6 +232,7 @@ pub mod border_radius {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod corner_shape {
     pub use crate::properties::generated::shorthands::corner_shape::*;
 
@@ -496,7 +498,6 @@ pub mod border {
             {
                 return Ok(());
             }
-
             let all_equal = {
                 let border_top_width = self.border_top_width;
                 let border_top_style = self.border_top_style;
@@ -822,6 +823,7 @@ pub mod offset {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod _webkit_perspective {
     pub use crate::properties::generated::shorthands::_webkit_perspective::*;
 
@@ -849,6 +851,7 @@ pub mod _webkit_perspective {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod _webkit_transform {
     pub use crate::properties::generated::shorthands::_webkit_transform::*;
 
@@ -865,6 +868,7 @@ pub mod _webkit_transform {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod columns {
     pub use crate::properties::generated::shorthands::columns::*;
 
@@ -1040,18 +1044,8 @@ pub mod white_space {
         ) -> Result<Longhands, ParseError<'i>> {
             let (mode, collapse) = try_match_ident_ignore_ascii_case! { input,
                 "normal" => (Wrap::Wrap, Collapse::Collapse),
-                // Lynx's white-space accepts only normal | nowrap
-                // (core/renderer/css/parser/enum_handler.cc ToWhiteSpaceType).
-                // Under `lynx`, `nowrap` is handled here rather than via the
-                // component-longhand fallback below (which is gated out), and the
-                // pre* family is gated out — so nothing else parses.
-                #[cfg(feature = "lynx")]
-                "nowrap" => (Wrap::Nowrap, Collapse::Collapse),
-                #[cfg(not(feature = "lynx"))]
                 "pre" => (Wrap::Nowrap, Collapse::Preserve),
-                #[cfg(not(feature = "lynx"))]
                 "pre-wrap" => (Wrap::Wrap, Collapse::Preserve),
-                #[cfg(not(feature = "lynx"))]
                 "pre-line" => (Wrap::Wrap, Collapse::PreserveBreaks),
             };
             Ok(expanded! {
@@ -1064,35 +1058,26 @@ pub mod white_space {
             return Ok(result);
         }
 
-        // The component-longhand fallback (`text-wrap-mode` / `white-space-collapse`
-        // values and their two-keyword combinations) is not part of Lynx's
-        // white-space grammar — normal | nowrap are both handled above — so it is
-        // gated out under `lynx`, leaving those two as the only accepted values.
-        #[cfg(not(feature = "lynx"))]
-        {
-            let mut wrap = None;
-            let mut collapse = None;
-            let mut parsed = 0;
+        let mut wrap = None;
+        let mut collapse = None;
+        let mut parsed = 0;
 
-            loop {
-                parsed += 1;
-                try_parse_one!(context, input, wrap, text_wrap_mode::parse);
-                try_parse_one!(context, input, collapse, white_space_collapse::parse);
-                parsed -= 1;
-                break;
-            }
-
-            if parsed != 0 {
-                return Ok(expanded! {
-                    text_wrap_mode: unwrap_or_initial!(text_wrap_mode, wrap),
-                    white_space_collapse: unwrap_or_initial!(white_space_collapse, collapse),
-                });
-            }
+        loop {
+            parsed += 1;
+            try_parse_one!(context, input, wrap, text_wrap_mode::parse);
+            try_parse_one!(context, input, collapse, white_space_collapse::parse);
+            parsed -= 1;
+            break;
         }
-        #[cfg(feature = "lynx")]
-        let _ = context;
 
-        Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError))
+        if parsed == 0 {
+            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+        }
+
+        Ok(expanded! {
+            text_wrap_mode: unwrap_or_initial!(text_wrap_mode, wrap),
+            white_space_collapse: unwrap_or_initial!(white_space_collapse, collapse),
+        })
     }
 
     impl<'a> ToCss for LonghandsToSerialize<'a> {
@@ -1180,6 +1165,7 @@ pub mod _webkit_text_stroke {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod list_style {
     pub use crate::properties::generated::shorthands::list_style::*;
 
@@ -1537,6 +1523,11 @@ pub mod place_self {
         let justify = match justify {
             Ok(v) => v,
             Err(..) => {
+                #[cfg(feature = "lynx")]
+                if !align.is_valid_on_both_axes() {
+                    return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                }
+                #[cfg(not(feature = "lynx"))]
                 debug_assert!(align.is_valid_on_both_axes());
                 align
             },
@@ -1574,9 +1565,20 @@ pub mod place_items {
         input: &mut Parser<'i, 't>,
     ) -> Result<Longhands, ParseError<'i>> {
         let align = ItemPlacement::parse_block(context, input)?;
+        #[cfg(not(feature = "lynx"))]
         let justify = input
             .try_parse(|input| ItemPlacement::parse_inline(context, input))
             .unwrap_or_else(|_| align.clone());
+        #[cfg(feature = "lynx")]
+        let justify = match input.try_parse(|input| ItemPlacement::parse_inline(context, input)) {
+            Ok(value) => value,
+            Err(..) => {
+                if !align.is_valid_on_both_axes() {
+                    return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+                }
+                align.clone()
+            },
+        };
 
         Ok(expanded! {
             align_items: align,
@@ -2185,6 +2187,7 @@ pub mod transition {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod outline {
     pub use crate::properties::generated::shorthands::outline::*;
 

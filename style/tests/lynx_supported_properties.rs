@@ -1,7 +1,4 @@
-// Verifies that the CSS properties LynxJS supports still parse from content
-// under the `lynx` feature (i.e. the allowlist in properties/data.py did not
-// disable anything Lynx exposes). Gated behind `lynx`; nothing to test without
-// it.
+// Verifies the project seed and shorthand/longhand closure generated for Lynx.
 #![cfg(feature = "lynx")]
 
 use style::properties::PropertyId;
@@ -12,142 +9,32 @@ fn is_content_enabled(name: &str) -> bool {
     PropertyId::parse_enabled_for_all_content(name).is_ok()
 }
 
-/// A representative slice of the Lynx-supported set: box model, flex, grid,
-/// backgrounds/borders (incl. the inline-logical longhands), text, effects and
-/// the Lynx-only linear-*/relative-* additions.
-const LYNX_SUPPORTED: &[&str] = &[
-    // Box / positioning / sizing.
-    "display",
-    "position",
-    "top",
-    "right",
-    "bottom",
-    "left",
-    "inset-inline-start",
-    "inset-inline-end",
-    "width",
-    "height",
-    "min-width",
-    "max-width",
-    "min-height",
-    "max-height",
-    "box-sizing",
-    "box-shadow",
-    "overflow",
-    "overflow-x",
-    "overflow-y",
-    "z-index",
-    "opacity",
-    "visibility",
-    "pointer-events",
-    "aspect-ratio",
-    // Flex + grid + alignment.
-    "flex",
-    "flex-basis",
-    "flex-direction",
-    "flex-grow",
-    "flex-shrink",
-    "flex-wrap",
-    "flex-flow",
-    "order",
-    "align-items",
-    "align-self",
-    "align-content",
-    "justify-content",
-    "justify-items",
-    "justify-self",
-    "gap",
-    "row-gap",
-    "column-gap",
-    // Margins / paddings (physical + inline-logical).
-    "margin",
-    "margin-top",
-    "margin-left",
-    "margin-inline-start",
-    "margin-inline-end",
-    "padding",
-    "padding-bottom",
-    "padding-inline-start",
-    "padding-inline-end",
-    // Color / backgrounds / borders.
-    "color",
-    "background",
-    "background-color",
-    "background-image",
-    "background-position",
-    "border",
-    "border-top-color",
-    "border-radius",
-    "border-inline-start-color",
-    "border-inline-end-width",
-    "border-start-start-radius",
-    "border-end-end-radius",
-    // Text.
-    "font-family",
-    "font-size",
-    "font-weight",
-    "font-style",
-    "line-height",
-    "letter-spacing",
-    "text-align",
-    "text-decoration",
-    "text-indent",
-    "text-shadow",
-    "word-break",
-    "white-space",
-    "direction",
-    "cursor",
-    // Unprefixed Lynx spellings that alias stylo's gecko-only -webkit-text-stroke*.
-    "text-stroke",
-    "text-stroke-color",
-    "text-stroke-width",
-    // Effects / transforms / motion.
-    "transform",
-    "transform-origin",
-    "perspective",
-    "filter",
-    "clip-path",
-    "image-rendering",
-    // Grid / mask / motion / text-overflow — Lynx-supported; the `lynx` feature
-    // drops the servo pref (`layout.grid.enabled`, `layout.unimplemented`) that
-    // keeps these experimental in a stock stylo build, so they parse from content.
-    "grid-template-columns",
-    "grid-template-rows",
-    "grid-auto-flow",
-    "grid-auto-columns",
-    "grid-auto-rows",
-    "grid-column",
-    "grid-row",
-    "mask",
-    "mask-image",
-    "mask-composite",
-    "offset-path",
-    "offset-distance",
-    "offset-rotate",
-    "text-overflow",
-    // Animation / transition.
-    "animation",
-    "animation-name",
-    "animation-duration",
-    "transition",
-    "transition-property",
-    "transition-duration",
-    // Lynx-only additions.
-    "linear-direction",
-    "linear-weight",
-    "linear-weight-sum",
-    "relative-id",
-    "relative-center",
-    "relative-layout-once",
-    "relative-align-top",
-    "relative-align-inline-start",
-    "relative-top-of",
-    "relative-inline-start-of",
+const LYNX_PROPERTY_SEEDS: &str = include_str!("../properties/lynx_properties.txt");
+const OMITTED_PROPERTIES: &[&str] = &[
+    "-x-auto-font-size",
+    "-x-auto-font-size-line-ranges",
+    "-x-auto-font-size-preset-sizes",
+    "-x-caret-gradient",
+    "-x-caret-height",
+    "-x-caret-radius",
+    "-x-caret-width",
+    "-x-handle-color",
+    "-x-handle-size",
+    "linear-cross-gravity",
+    "linear-gravity",
+    "linear-layout-gravity",
 ];
+
+fn lynx_property_seeds() -> impl Iterator<Item = &'static str> {
+    LYNX_PROPERTY_SEEDS.lines().filter_map(|raw| {
+        let name = raw.split('#').next().unwrap().trim();
+        (!name.is_empty()).then_some(name)
+    })
+}
 
 #[test]
 fn lynx_supported_properties_are_content_enabled() {
-    for &name in LYNX_SUPPORTED {
+    for name in lynx_property_seeds() {
         assert!(
             is_content_enabled(name),
             "`{name}` is Lynx-supported and must stay content-enabled under the `lynx` feature",
@@ -156,7 +43,71 @@ fn lynx_supported_properties_are_content_enabled() {
 }
 
 #[test]
+fn deliberately_omitted_properties_are_absent() {
+    for name in OMITTED_PROPERTIES {
+        assert!(
+            !is_content_enabled(name),
+            "`{name}` is deliberately omitted from the Lynx property source"
+        );
+    }
+}
+
+#[test]
+fn shorthand_longhand_closure_is_authorable() {
+    // Each representative starts outside the official seed list and is pulled
+    // in by a supported shorthand or longhand relation.
+    for name in [
+        "background-attachment",
+        "border-image",
+        "border-image-source",
+        "font",
+        "font-kerning",
+        "font-variant",
+        "grid",
+        "grid-area",
+        "grid-template",
+        "grid-template-areas",
+        "inset",
+        "mask-position",
+        "place-content",
+        "place-items",
+        "place-self",
+        "text-decoration-color",
+        "text-decoration-line",
+        "text-decoration-style",
+        "transition-behavior",
+    ] {
+        assert!(
+            is_content_enabled(name),
+            "`{name}` belongs to the shorthand closure"
+        );
+    }
+}
+
+#[test]
+fn undocumented_canonical_spellings_do_not_leak_through_aliases() {
+    // These declarations are compiled because the documented unprefixed alias
+    // maps to them, but only the Lynx spelling belongs in the name table.
+    for name in [
+        "-webkit-text-stroke",
+        "-webkit-text-stroke-color",
+        "-webkit-text-stroke-width",
+        "all",
+    ] {
+        assert!(!is_content_enabled(name), "`{name}` is not a Lynx spelling");
+    }
+}
+
+#[test]
 fn custom_properties_are_still_supported() {
     // Custom properties go through a different id space and must be unaffected.
     assert!(is_content_enabled("--lynx-custom"));
+}
+
+#[test]
+fn will_change_is_content_enabled() {
+    assert!(
+        is_content_enabled("will-change"),
+        "the standard `will-change` property must be content-enabled"
+    );
 }

@@ -6,6 +6,8 @@
 //!
 //! [length]: https://drafts.csswg.org/css-values/#lengths
 
+#[cfg(feature = "lynx")]
+use super::Percentage;
 use super::{AllowQuirks, Number, ToComputedValue};
 use crate::computed_value_flags::ComputedValueFlags;
 use crate::derives::*;
@@ -145,11 +147,17 @@ impl LengthUnit {
 
         Ok(match_ignore_ascii_case! { unit,
             "px" => Self::Px,
+            #[cfg(not(feature = "lynx"))]
             "in" => Self::In,
+            #[cfg(not(feature = "lynx"))]
             "cm" => Self::Cm,
+            #[cfg(not(feature = "lynx"))]
             "mm" => Self::Mm,
+            #[cfg(not(feature = "lynx"))]
             "q" => Self::Q,
+            #[cfg(not(feature = "lynx"))]
             "pt" => Self::Pt,
+            #[cfg(not(feature = "lynx"))]
             "pc" => Self::Pc,
             // The Lynx rpx unit is viewport-relative (1rpx = viewport
             // width / 750), so like vw/vh below it is only valid in contexts
@@ -158,49 +166,87 @@ impl LengthUnit {
             "rpx" if allows_computational_dependence => Self::Rpx,
             // font-relative
             "em" if allows_computational_dependence => Self::Em,
+            #[cfg(not(feature = "lynx"))]
             "ex" if allows_computational_dependence => Self::Ex,
+            #[cfg(not(feature = "lynx"))]
             "rex" if allows_computational_dependence => Self::Rex,
+            #[cfg(not(feature = "lynx"))]
             "ch" if allows_computational_dependence => Self::Ch,
+            #[cfg(not(feature = "lynx"))]
             "rch" if allows_computational_dependence => Self::Rch,
+            #[cfg(not(feature = "lynx"))]
             "cap" if allows_computational_dependence => Self::Cap,
+            #[cfg(not(feature = "lynx"))]
             "rcap" if allows_computational_dependence => Self::Rcap,
+            #[cfg(not(feature = "lynx"))]
             "ic" if allows_computational_dependence => Self::Ic,
+            #[cfg(not(feature = "lynx"))]
             "ric" if allows_computational_dependence => Self::Ric,
             "rem" if allows_computational_dependence => Self::Rem,
+            #[cfg(not(feature = "lynx"))]
             "lh" if allows_computational_dependence => Self::Lh,
+            #[cfg(not(feature = "lynx"))]
             "rlh" if allows_computational_dependence => Self::Rlh,
             // viewport percentages
             "vw" if !in_page_rule => Self::Vw,
+            #[cfg(not(feature = "lynx"))]
             "svw" if !in_page_rule => Self::Svw,
+            #[cfg(not(feature = "lynx"))]
             "lvw" if !in_page_rule => Self::Lvw,
+            #[cfg(not(feature = "lynx"))]
             "dvw" if !in_page_rule => Self::Dvw,
             "vh" if !in_page_rule => Self::Vh,
+            #[cfg(not(feature = "lynx"))]
             "svh" if !in_page_rule => Self::Svh,
+            #[cfg(not(feature = "lynx"))]
             "lvh" if !in_page_rule => Self::Lvh,
+            #[cfg(not(feature = "lynx"))]
             "dvh" if !in_page_rule => Self::Dvh,
+            #[cfg(not(feature = "lynx"))]
             "vmin" if !in_page_rule => Self::Vmin,
+            #[cfg(not(feature = "lynx"))]
             "svmin" if !in_page_rule => Self::Svmin,
+            #[cfg(not(feature = "lynx"))]
             "lvmin" if !in_page_rule => Self::Lvmin,
+            #[cfg(not(feature = "lynx"))]
             "dvmin" if !in_page_rule => Self::Dvmin,
+            #[cfg(not(feature = "lynx"))]
             "vmax" if !in_page_rule => Self::Vmax,
+            #[cfg(not(feature = "lynx"))]
             "svmax" if !in_page_rule => Self::Svmax,
+            #[cfg(not(feature = "lynx"))]
             "lvmax" if !in_page_rule => Self::Lvmax,
+            #[cfg(not(feature = "lynx"))]
             "dvmax" if !in_page_rule => Self::Dvmax,
+            #[cfg(not(feature = "lynx"))]
             "vb" if !in_page_rule => Self::Vb,
+            #[cfg(not(feature = "lynx"))]
             "svb" if !in_page_rule => Self::Svb,
+            #[cfg(not(feature = "lynx"))]
             "lvb" if !in_page_rule => Self::Lvb,
+            #[cfg(not(feature = "lynx"))]
             "dvb" if !in_page_rule => Self::Dvb,
+            #[cfg(not(feature = "lynx"))]
             "vi" if !in_page_rule => Self::Vi,
+            #[cfg(not(feature = "lynx"))]
             "svi" if !in_page_rule => Self::Svi,
+            #[cfg(not(feature = "lynx"))]
             "lvi" if !in_page_rule => Self::Lvi,
+            #[cfg(not(feature = "lynx"))]
             "dvi" if !in_page_rule => Self::Dvi,
             // Container query lengths. Inherit the limitation from viewport units since
             // we may fall back to them.
+            #[cfg(not(feature = "lynx"))]
             "cqw" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqw,
+            #[cfg(not(feature = "lynx"))]
             "cqh" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqh,
+            #[cfg(not(feature = "lynx"))]
             "cqi" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqi,
+            #[cfg(not(feature = "lynx"))]
             "cqb" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqb,
+            #[cfg(not(feature = "lynx"))]
             "cqmin" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqmin,
+            #[cfg(not(feature = "lynx"))]
             "cqmax" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqmax,
             _ => return Err(()),
         })
@@ -1458,6 +1504,29 @@ impl LengthPercentage {
         LengthPercentage::Percentage(NoCalcPercentage::hundred())
     }
 
+    /// Lynx's `offset-distance` grammar: a literal number in [0, 1] or a
+    /// literal percentage in [0%, 100%]. Both forms represent a path fraction,
+    /// so they are stored as the percentage arm of Stylo's standard computed
+    /// type. Lengths and calc() are not accepted.
+    #[cfg(feature = "lynx")]
+    pub fn parse_lynx_offset_distance<'i, 't>(
+        context: &ParserContext,
+        input: &mut Parser<'i, 't>,
+    ) -> Result<Self, ParseError<'i>> {
+        if let Ok(percentage) = input.try_parse(|i| Percentage::parse(context, i)) {
+            if matches!(percentage.get(), Some(value) if (0.0..=1.0).contains(&value)) {
+                return Ok(percentage.to_length_percentage());
+            }
+            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
+        }
+        let number = Number::parse(context, input)?;
+        let value = number
+            .get()
+            .filter(|value| (0.0..=1.0).contains(value))
+            .ok_or_else(|| input.new_custom_error(StyleParseErrorKind::UnspecifiedError))?;
+        Ok(Self::Percentage(NoCalcPercentage::new(value)))
+    }
+
     fn parse_internal<'i, 't>(
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
@@ -1994,6 +2063,16 @@ impl Parse for MaxSize {
 }
 
 impl MaxSize {
+    /// Lynx max-size grammar: a non-negative length or percentage. The
+    /// unbounded `None` variant remains the internal initial value only.
+    #[cfg(feature = "lynx")]
+    pub fn parse_lynx_max_size<'i, 't>(
+        context: &ParserContext,
+        input: &mut Parser<'i, 't>,
+    ) -> Result<Self, ParseError<'i>> {
+        NonNegativeLengthPercentage::parse(context, input).map(Self::LengthPercentage)
+    }
+
     /// Parses, with quirks.
     pub fn parse_quirky<'i, 't>(
         context: &ParserContext,

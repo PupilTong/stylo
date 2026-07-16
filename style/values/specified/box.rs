@@ -92,7 +92,9 @@ pub enum DisplayOutside {
     None = 0,
     Inline,
     Block,
+    #[cfg(not(feature = "lynx"))]
     TableCaption,
+    #[cfg(not(feature = "lynx"))]
     InternalTable,
     #[cfg(feature = "gecko")]
     InternalRuby,
@@ -103,24 +105,34 @@ pub enum DisplayOutside {
 #[repr(u8)]
 pub enum DisplayInside {
     None = 0,
+    #[cfg(not(feature = "lynx"))]
     Contents,
     Flow,
+    #[cfg(not(feature = "lynx"))]
     FlowRoot,
     Flex,
     #[cfg(feature = "lynx")]
     #[css(keyword = "linear")]
     LynxLinear,
     Grid,
+    #[cfg(not(feature = "lynx"))]
     Table,
     #[cfg(feature = "lynx")]
     #[css(keyword = "relative")]
     LynxRelative,
+    #[cfg(not(feature = "lynx"))]
     TableRowGroup,
+    #[cfg(not(feature = "lynx"))]
     TableColumn,
+    #[cfg(not(feature = "lynx"))]
     TableColumnGroup,
+    #[cfg(not(feature = "lynx"))]
     TableHeaderGroup,
+    #[cfg(not(feature = "lynx"))]
     TableFooterGroup,
+    #[cfg(not(feature = "lynx"))]
     TableRow,
+    #[cfg(not(feature = "lynx"))]
     TableCell,
     #[cfg(feature = "gecko")]
     Ruby,
@@ -136,6 +148,7 @@ pub enum DisplayInside {
     WebkitBox,
 }
 
+#[cfg(not(feature = "lynx"))]
 impl DisplayInside {
     fn is_valid_for_list_item(self) -> bool {
         match self {
@@ -189,14 +202,18 @@ impl Display {
     /// ::new() inlined so cbindgen can use it
     pub const None: Self =
         Self(((DisplayOutside::None as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::None as u16);
+    #[cfg(not(feature = "lynx"))]
     pub const Contents: Self = Self(
         ((DisplayOutside::None as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Contents as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const Inline: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16);
+    #[cfg(not(feature = "lynx"))]
     pub const InlineBlock: Self = Self(
         ((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::FlowRoot as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const Block: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16);
     #[cfg(feature = "gecko")]
@@ -209,10 +226,12 @@ impl Display {
     pub const Linear: Self = Self(
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::LynxLinear as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const InlineFlex: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flex as u16);
     pub const Grid: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
+    #[cfg(not(feature = "lynx"))]
     pub const InlineGrid: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
     #[cfg(feature = "lynx")]
@@ -220,11 +239,14 @@ impl Display {
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::LynxRelative as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const Table: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Table as u16);
+    #[cfg(not(feature = "lynx"))]
     pub const InlineTable: Self = Self(
         ((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Table as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableCaption: Self = Self(
         ((DisplayOutside::TableCaption as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16,
     );
@@ -242,30 +264,37 @@ impl Display {
 
     // Internal table boxes.
 
+    #[cfg(not(feature = "lynx"))]
     pub const TableRowGroup: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableRowGroup as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableHeaderGroup: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableHeaderGroup as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableFooterGroup: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableFooterGroup as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableColumn: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableColumn as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableColumnGroup: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableColumnGroup as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableRow: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableRow as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableCell: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableCell as u16,
@@ -301,6 +330,7 @@ impl Display {
 
     /// Make a display enum value from <display-outside> and <display-inside> values.
     #[inline]
+    #[cfg(not(feature = "lynx"))]
     fn from3(outside: DisplayOutside, inside: DisplayInside, list_item: bool) -> Self {
         let v = Self::new(outside, inside);
         if !list_item {
@@ -364,10 +394,25 @@ impl Display {
 
 /// Shared Display impl for both Gecko and Servo.
 impl Display {
-    /// The initial display value.
+    #[cfg(feature = "lynx")]
+    #[inline]
+    const fn internal_block() -> Self {
+        Self::new(DisplayOutside::Block, DisplayInside::Flow)
+    }
+
+    /// The CSS `inline` display value.
+    #[cfg(not(feature = "lynx"))]
     #[inline]
     pub fn inline() -> Self {
         Display::Inline
+    }
+
+    /// The upstream CSS initial value remains internally representable, but
+    /// Lynx does not expose an `Inline` associated constant or author value.
+    #[cfg(feature = "lynx")]
+    #[inline]
+    pub(crate) const fn inline() -> Self {
+        Self::new(DisplayOutside::Inline, DisplayInside::Flow)
     }
 
     /// Returns whether this `display` value is the display of a flex or
@@ -392,7 +437,7 @@ impl Display {
             return true;
         }
         match *self {
-            #[cfg(feature = "gecko")]
+            #[cfg(all(feature = "gecko", not(feature = "lynx")))]
             Display::Contents | Display::Ruby | Display::RubyBaseContainer => true,
             _ => false,
         }
@@ -403,21 +448,30 @@ impl Display {
     /// Also used for :root style adjustments.
     pub fn equivalent_block_display(&self, is_root_element: bool) -> Self {
         // Special handling for `contents` and `list-item`s on the root element.
+        #[cfg(not(feature = "lynx"))]
         if is_root_element && (self.is_contents() || self.is_list_item()) {
             return Display::Block;
         }
+        #[cfg(feature = "lynx")]
+        let _ = is_root_element;
 
         match self.outside() {
             DisplayOutside::Inline => {
+                #[cfg(feature = "lynx")]
+                return Self::internal_block();
+
+                #[cfg(not(feature = "lynx"))]
                 let inside = match self.inside() {
                     // `inline-block` blockifies to `block` rather than
                     // `flow-root`, for legacy reasons.
                     DisplayInside::FlowRoot => DisplayInside::Flow,
                     inside => inside,
                 };
+                #[cfg(not(feature = "lynx"))]
                 Display::from3(DisplayOutside::Block, inside, self.is_list_item())
             },
             DisplayOutside::Block | DisplayOutside::None => *self,
+            #[cfg(not(feature = "lynx"))]
             _ => Display::Block,
         }
     }
@@ -443,6 +497,10 @@ impl Display {
     /// Returns true if the value is `Contents`
     #[inline]
     pub fn is_contents(&self) -> bool {
+        #[cfg(feature = "lynx")]
+        return false;
+
+        #[cfg(not(feature = "lynx"))]
         match *self {
             Display::Contents => true,
             _ => false,
@@ -458,29 +516,24 @@ impl Display {
 
 enum DisplayKeyword {
     Full(Display),
+    #[cfg(not(feature = "lynx"))]
     Inside(DisplayInside),
+    #[cfg(not(feature = "lynx"))]
     Outside(DisplayOutside),
-    // Under `lynx` the `list-item` keyword is gated off, so this variant is
-    // never constructed there; its match arms stay so `Display::parse` is
-    // identical in both configs.
-    #[cfg_attr(feature = "lynx", allow(dead_code))]
+    #[cfg(not(feature = "lynx"))]
     ListItem,
 }
 
 impl DisplayKeyword {
     fn parse<'i>(input: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
         use self::DisplayKeyword::*;
-        // Under `lynx`, `display` accepts only none | block | flex | grid plus
-        // the Lynx-only `linear`/`relative` values
-        // (core/renderer/css/parser/enum_handler.cc ToDisplayType). All the
-        // inline-*, table*, list-item, contents and flow(-root) keywords below
-        // are `#[cfg(not(feature = "lynx"))]`-gated so they stop parsing; their
-        // Display variants stay defined for stylo's internal use.
-        //
-        // Residual: the multi-keyword `<display-outside> <display-inside>` form
-        // (e.g. `display: block flex`) is left intact, so such combinations still
-        // parse — harmlessly, since they compute to the same single-keyword
-        // Display the shorthand would produce.
+        // Lynx's display property chooses only an internal layout algorithm:
+        // none | flex | grid | linear | relative. It has no flow layout, and
+        // its documentation explicitly rejects block/inline and all compound
+        // <display-outside> <display-inside> forms. Unsupported public
+        // constants and inside variants compile out with the parser. Only the
+        // private inline-flow encoding required by Stylo's upstream initial
+        // value remains internally representable.
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
             #[cfg(not(feature = "lynx"))]
@@ -530,6 +583,7 @@ impl DisplayKeyword {
 
             /// <display-outside> = block | inline | run-in
             /// https://drafts.csswg.org/css-display/#typedef-display-outside
+            #[cfg(not(feature = "lynx"))]
             "block" => Outside(DisplayOutside::Block),
             #[cfg(not(feature = "lynx"))]
             "inline" => Outside(DisplayOutside::Inline),
@@ -541,11 +595,17 @@ impl DisplayKeyword {
             /// https://drafts.csswg.org/css-display/#typedef-display-inside
             #[cfg(not(feature = "lynx"))]
             "flow" => Inside(DisplayInside::Flow),
+            #[cfg(feature = "lynx")]
+            "flex" => Full(Display::Flex),
+            #[cfg(not(feature = "lynx"))]
             "flex" => Inside(DisplayInside::Flex),
             #[cfg(not(feature = "lynx"))]
             "flow-root" => Inside(DisplayInside::FlowRoot),
             #[cfg(not(feature = "lynx"))]
             "table" => Inside(DisplayInside::Table),
+            #[cfg(feature = "lynx")]
+            "grid" if grid_enabled() => Full(Display::Grid),
+            #[cfg(not(feature = "lynx"))]
             "grid" if grid_enabled() => Inside(DisplayInside::Grid),
             #[cfg(feature = "gecko")]
             "ruby" => Inside(DisplayInside::Ruby),
@@ -560,19 +620,33 @@ impl ToCss for Display {
     {
         let outside = self.outside();
         let inside = self.inside();
+        #[cfg(feature = "lynx")]
+        if self.is_inline_flow() {
+            return dest.write_str("inline");
+        }
+        #[cfg(feature = "lynx")]
+        if *self == Self::internal_block() {
+            return dest.write_str("block");
+        }
         match *self {
             #[cfg(feature = "lynx")]
             Display::Linear => dest.write_str("linear"),
             #[cfg(feature = "lynx")]
             Display::LynxRelative => dest.write_str("relative"),
+            #[cfg(not(feature = "lynx"))]
             Display::Block | Display::Inline => outside.to_css(dest),
+            #[cfg(not(feature = "lynx"))]
             Display::InlineBlock => dest.write_str("inline-block"),
             #[cfg(feature = "gecko")]
             Display::WebkitInlineBox => dest.write_str("-webkit-inline-box"),
+            #[cfg(not(feature = "lynx"))]
             Display::TableCaption => dest.write_str("table-caption"),
             _ => match (outside, inside) {
+                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Grid) => dest.write_str("inline-grid"),
+                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Flex) => dest.write_str("inline-flex"),
+                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Table) => dest.write_str("inline-table"),
                 #[cfg(feature = "gecko")]
                 (DisplayOutside::Block, DisplayInside::Ruby) => dest.write_str("block ruby"),
@@ -626,6 +700,19 @@ impl ToTyped for Display {
     }
 }
 
+#[cfg(feature = "lynx")]
+impl Parse for Display {
+    fn parse<'i, 't>(
+        _: &ParserContext,
+        input: &mut Parser<'i, 't>,
+    ) -> Result<Display, ParseError<'i>> {
+        match DisplayKeyword::parse(input)? {
+            DisplayKeyword::Full(display) => Ok(display),
+        }
+    }
+}
+
+#[cfg(not(feature = "lynx"))]
 impl Parse for Display {
     fn parse<'i, 't>(
         _: &ParserContext,
@@ -674,6 +761,9 @@ impl Parse for Display {
 
 impl SpecifiedValueInfo for Display {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
+        #[cfg(feature = "lynx")]
+        f(&["none", "linear", "flex", "grid", "relative"]);
+        #[cfg(not(feature = "lynx"))]
         f(&[
             "block",
             "contents",
@@ -1251,6 +1341,7 @@ bitflags! {
 fn change_bits_for_longhand(longhand: LonghandId) -> WillChangeBits {
     match longhand {
         LonghandId::Opacity => WillChangeBits::OPACITY | WillChangeBits::BACKDROP_ROOT,
+        #[cfg(not(feature = "lynx"))]
         LonghandId::Contain => WillChangeBits::CONTAIN,
         LonghandId::Perspective => WillChangeBits::PERSPECTIVE,
         LonghandId::Position => {
@@ -1263,11 +1354,18 @@ fn change_bits_for_longhand(longhand: LonghandId) -> WillChangeBits {
         | LonghandId::Rotate
         | LonghandId::Scale
         | LonghandId::OffsetPath => WillChangeBits::TRANSFORM,
-        LonghandId::Filter | LonghandId::BackdropFilter => {
+        LonghandId::Filter => {
             WillChangeBits::STACKING_CONTEXT_UNCONDITIONAL
                 | WillChangeBits::BACKDROP_ROOT
                 | WillChangeBits::FIXPOS_CB_NON_SVG
         },
+        #[cfg(not(feature = "lynx"))]
+        LonghandId::BackdropFilter => {
+            WillChangeBits::STACKING_CONTEXT_UNCONDITIONAL
+                | WillChangeBits::BACKDROP_ROOT
+                | WillChangeBits::FIXPOS_CB_NON_SVG
+        },
+        #[cfg(not(feature = "lynx"))]
         LonghandId::ViewTransitionName => {
             WillChangeBits::VIEW_TRANSITION_NAME | WillChangeBits::BACKDROP_ROOT
         },
@@ -2054,8 +2152,11 @@ impl BreakWithin {
 pub enum Overflow {
     Visible,
     Hidden,
+    #[cfg(not(feature = "lynx"))]
     Scroll,
+    #[cfg(not(feature = "lynx"))]
     Auto,
+    #[cfg(not(feature = "lynx"))]
     Clip,
 }
 
@@ -2069,10 +2170,8 @@ impl Parse for Overflow {
         Ok(try_match_ident_ignore_ascii_case! { input,
             "visible" => Self::Visible,
             "hidden" => Self::Hidden,
+            #[cfg(not(feature = "lynx"))]
             "scroll" => Self::Scroll,
-            // Lynx's overflow accepts only visible | hidden | scroll
-            // (core/renderer/css/parser/enum_handler.cc ToOverflowType); auto,
-            // overlay and clip are not part of its grammar.
             #[cfg(not(feature = "lynx"))]
             "auto" | "overlay" => Self::Auto,
             #[cfg(not(feature = "lynx"))]
@@ -2089,12 +2188,18 @@ impl Overflow {
     /// Return true if the value will create a scrollable box.
     #[inline]
     pub fn is_scrollable(&self) -> bool {
+        #[cfg(feature = "lynx")]
+        return matches!(*self, Self::Hidden);
+        #[cfg(not(feature = "lynx"))]
         matches!(*self, Self::Hidden | Self::Scroll | Self::Auto)
     }
     /// Convert the value to a scrollable value if it's not already scrollable.
     /// This maps `visible` to `auto` and `clip` to `hidden`.
     #[inline]
     pub fn to_scrollable(&self) -> Self {
+        #[cfg(feature = "lynx")]
+        return Self::Hidden;
+        #[cfg(not(feature = "lynx"))]
         match *self {
             Self::Hidden | Self::Scroll | Self::Auto => *self,
             Self::Visible => Self::Auto,
@@ -2169,3 +2274,18 @@ impl Zoom {
 }
 
 pub use crate::values::generics::box_::PositionProperty;
+
+#[cfg(feature = "lynx")]
+impl Parse for PositionProperty {
+    fn parse<'i, 't>(
+        _: &ParserContext,
+        input: &mut Parser<'i, 't>,
+    ) -> Result<Self, ParseError<'i>> {
+        Ok(try_match_ident_ignore_ascii_case! { input,
+            "relative" => Self::Relative,
+            "absolute" => Self::Absolute,
+            "fixed" => Self::Fixed,
+            "sticky" => Self::Sticky,
+        })
+    }
+}

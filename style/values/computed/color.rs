@@ -5,6 +5,8 @@
 //! Computed color values.
 
 use crate::color::AbsoluteColor;
+#[cfg(feature = "lynx")]
+use crate::derives::*;
 use crate::typed_om::{KeywordValue, ToTyped, TypedValue};
 use crate::values::animated::ToAnimatedZero;
 use crate::values::computed::percentage::Percentage;
@@ -17,8 +19,70 @@ use thin_vec::ThinVec;
 
 pub use crate::values::specified::color::{ColorScheme, ForcedColorAdjust, PrintColorAdjust};
 
-/// The computed value of the `color` property.
+/// The computed value of the standard `color` property.
+#[cfg(not(feature = "lynx"))]
 pub type ColorPropertyValue = AbsoluteColor;
+
+/// The computed value of Lynx's `color` property.
+///
+/// Lynx extends the property's grammar from `<color>` to
+/// `<color> | <gradient>`, so its computed representation must preserve the
+/// gradient for the text painter rather than collapsing it to a fallback
+/// solid color.
+#[cfg(feature = "lynx")]
+#[derive(Clone, Debug, MallocSizeOf, PartialEq, ToResolvedValue)]
+pub enum ColorPropertyValue {
+    /// A solid text color.
+    Color(AbsoluteColor),
+    /// A text gradient.
+    Gradient(Box<crate::values::computed::image::Gradient>),
+}
+
+#[cfg(feature = "lynx")]
+impl ColorPropertyValue {
+    /// Return the solid color used by Stylo internals that resolve
+    /// `currentcolor`. Lynx does not accept authored `currentcolor`; a
+    /// gradient therefore has no solid current-color and uses transparent as
+    /// the compatibility fallback. The actual CSS initial value remains
+    /// Stylo's standard black; Lynx defaults belong in the UA stylesheet.
+    #[inline]
+    pub fn solid_color(&self) -> AbsoluteColor {
+        match *self {
+            Self::Color(color) => color,
+            Self::Gradient(..) => AbsoluteColor::TRANSPARENT_BLACK,
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl From<AbsoluteColor> for ColorPropertyValue {
+    fn from(color: AbsoluteColor) -> Self {
+        Self::Color(color)
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToCss for ColorPropertyValue {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: fmt::Write,
+    {
+        match *self {
+            Self::Color(ref color) => color.to_css(dest),
+            Self::Gradient(ref gradient) => gradient.to_css(dest),
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToTyped for ColorPropertyValue {
+    fn to_typed(&self, dest: &mut ThinVec<TypedValue>) -> Result<(), ()> {
+        match *self {
+            Self::Color(ref color) => color.to_typed(dest),
+            Self::Gradient(..) => Err(()),
+        }
+    }
+}
 
 /// A computed value for `<color>`.
 pub type Color = GenericColor<Percentage>;

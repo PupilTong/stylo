@@ -17,6 +17,7 @@ use crate::values::generics::text::{
 use crate::values::generics::NumberOrAuto;
 use crate::values::specified::length::{Length, LengthPercentage};
 use crate::values::specified::{AllowQuirks, Integer, Number};
+#[cfg(not(feature = "lynx"))]
 use crate::Zero;
 use cssparser::Parser;
 use icu_segmenter::GraphemeClusterSegmenter;
@@ -32,6 +33,7 @@ pub type InitialLetter = GenericInitialLetter<Number, Integer>;
 #[derive(Clone, Debug, MallocSizeOf, PartialEq, SpecifiedValueInfo, ToCss, ToShmem, ToTyped)]
 pub enum Spacing {
     /// `normal`
+    #[cfg(not(feature = "lynx"))]
     Normal,
     /// `<value>`
     Value(LengthPercentage),
@@ -42,13 +44,20 @@ impl Parse for Spacing {
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<Self, ParseError<'i>> {
-        if input
-            .try_parse(|i| i.expect_ident_matching("normal"))
-            .is_ok()
+        #[cfg(not(feature = "lynx"))]
         {
-            return Ok(Spacing::Normal);
+            if input
+                .try_parse(|i| i.expect_ident_matching("normal"))
+                .is_ok()
+            {
+                return Ok(Spacing::Normal);
+            }
+            return LengthPercentage::parse_quirky(context, input, AllowQuirks::Yes)
+                .map(Spacing::Value);
         }
-        LengthPercentage::parse_quirky(context, input, AllowQuirks::Yes).map(Spacing::Value)
+
+        #[cfg(feature = "lynx")]
+        Length::parse(context, input).map(|length| Spacing::Value(length.into()))
     }
 }
 
@@ -64,12 +73,14 @@ impl ToComputedValue for LetterSpacing {
     fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
         use computed::text::GenericLetterSpacing;
         match self.0 {
+            #[cfg(not(feature = "lynx"))]
             Spacing::Normal => GenericLetterSpacing(computed::LengthPercentage::zero()),
             Spacing::Value(ref v) => GenericLetterSpacing(v.to_computed_value(context)),
         }
     }
 
     fn from_computed_value(computed: &Self::ComputedValue) -> Self {
+        #[cfg(not(feature = "lynx"))]
         if computed.0.is_zero() {
             return LetterSpacing(Spacing::Normal);
         }
@@ -90,6 +101,7 @@ impl ToComputedValue for WordSpacing {
 
     fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
         match self.0 {
+            #[cfg(not(feature = "lynx"))]
             Spacing::Normal => computed::LengthPercentage::zero(),
             Spacing::Value(ref v) => v.to_computed_value(context),
         }
@@ -183,13 +195,15 @@ impl Parse for InitialLetter {
     ToResolvedValue,
     ToShmem,
 )]
-#[repr(C, u8)]
+#[cfg_attr(feature = "lynx", repr(u8))]
+#[cfg_attr(not(feature = "lynx"), repr(C, u8))]
 pub enum TextOverflowSide {
     /// Clip inline content.
     Clip,
     /// Render ellipsis to represent clipped inline content.
     Ellipsis,
     /// Render a given string to represent clipped inline content.
+    #[cfg(not(feature = "lynx"))]
     String(crate::values::AtomString),
 }
 
@@ -229,7 +243,15 @@ impl Parse for TextOverflow {
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<TextOverflow, ParseError<'i>> {
-        let first = TextOverflowSide::parse(context, input)?;
+        let first = <TextOverflowSide as Parse>::parse(context, input)?;
+        #[cfg(feature = "lynx")]
+        return Ok(Self {
+            first: TextOverflowSide::Clip,
+            second: first,
+            sides_are_logical: true,
+        });
+
+        #[cfg(not(feature = "lynx"))]
         Ok(
             if let Ok(second) = input.try_parse(|input| TextOverflowSide::parse(context, input)) {
                 Self {
@@ -300,8 +322,12 @@ impl ToCss for TextOverflow {
     ))
 )]
 #[cfg_attr(
-    not(feature = "gecko"),
+    all(not(feature = "gecko"), not(feature = "lynx")),
     css(bitflags(single = "none", mixed = "underline,overline,line-through,blink",))
+)]
+#[cfg_attr(
+    feature = "lynx",
+    css(bitflags(single = "none,underline,line-through"))
 )]
 #[repr(C)]
 /// Specified keyword values for the text-decoration-line property.
@@ -313,10 +339,12 @@ bitflags! {
         /// underline
         const UNDERLINE = 1 << 0;
         /// overline
+        #[cfg(not(feature = "lynx"))]
         const OVERLINE = 1 << 1;
         /// line-through
         const LINE_THROUGH = 1 << 2;
         /// blink
+        #[cfg(not(feature = "lynx"))]
         const BLINK = 1 << 3;
         /// spelling-error
         const SPELLING_ERROR = 1 << 4;
@@ -531,12 +559,16 @@ pub enum TextAlignKeyword {
     Left,
     Right,
     Center,
+    #[cfg(not(feature = "lynx"))]
     Justify,
     End,
+    #[cfg(not(feature = "lynx"))]
     #[parse(aliases = "-webkit-center")]
     MozCenter,
+    #[cfg(not(feature = "lynx"))]
     #[parse(aliases = "-webkit-left")]
     MozLeft,
+    #[cfg(not(feature = "lynx"))]
     #[parse(aliases = "-webkit-right")]
     MozRight,
 }
@@ -561,6 +593,7 @@ pub enum TextAlign {
     Keyword(TextAlignKeyword),
     /// `match-parent` value of text-align property. It has a different handling
     /// unlike other keywords.
+    #[cfg(not(feature = "lynx"))]
     MatchParent,
     /// This is how we implement the following HTML behavior from
     /// https://html.spec.whatwg.org/#tables-2:
@@ -574,6 +607,7 @@ pub enum TextAlign {
     /// Since selectors can't depend on the ancestor styles, we implement it with a
     /// magic value that computes to the right thing. Since this is an
     /// implementation detail, it shouldn't be exposed to web content.
+    #[cfg(not(feature = "lynx"))]
     #[parse(condition = "ParserContext::chrome_rules_enabled")]
     MozCenterOrInherit,
 }
@@ -585,6 +619,7 @@ impl ToComputedValue for TextAlign {
     fn to_computed_value(&self, _context: &Context) -> Self::ComputedValue {
         match *self {
             TextAlign::Keyword(key) => key,
+            #[cfg(not(feature = "lynx"))]
             TextAlign::MatchParent => {
                 // on the root <html> element we should still respect the dir
                 // but the parent dir of that element is LTR even if it's <html dir=rtl>
@@ -608,6 +643,7 @@ impl ToComputedValue for TextAlign {
                     _ => parent,
                 }
             },
+            #[cfg(not(feature = "lynx"))]
             TextAlign::MozCenterOrInherit => {
                 let parent = _context
                     .builder

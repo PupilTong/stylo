@@ -551,7 +551,8 @@ affects = "paint"
 
 [color]
 type = "ColorPropertyValue"
-initial = "crate::color::AbsoluteColor::BLACK"
+initial = "crate::color::AbsoluteColor::BLACK.into()"
+lynx_animation_type = "discrete"
 struct = "inherited_text"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-color/#color"
@@ -1294,6 +1295,7 @@ affects = "layout"
 [relative-id]
 lynx_only = true
 type = "Integer"
+parse_method = "parse_positive"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1343,7 +1345,7 @@ affects = "layout"
 
 [relative-top-of]
 lynx_only = true
-type = "Integer"
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1353,7 +1355,7 @@ affects = "layout"
 
 [relative-right-of]
 lynx_only = true
-type = "Integer"
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1363,7 +1365,7 @@ affects = "layout"
 
 [relative-bottom-of]
 lynx_only = true
-type = "Integer"
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1373,7 +1375,7 @@ affects = "layout"
 
 [relative-left-of]
 lynx_only = true
-type = "Integer"
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1403,7 +1405,7 @@ affects = "layout"
 
 [relative-inline-start-of]
 lynx_only = true
-type = "Integer"
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1413,7 +1415,7 @@ affects = "layout"
 
 [relative-inline-end-of]
 lynx_only = true
-type = "Integer"
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1526,6 +1528,8 @@ affects = "layout"
 [max-height]
 type = "MaxSize"
 initial = "computed::MaxSize::none()"
+lynx_parse_method = "parse_lynx_max_size"
+lynx_allow_quirks = false
 struct = "position"
 logical_group = "max-size"
 allow_quirks = true
@@ -1548,6 +1552,8 @@ affects = "layout"
 [max-width]
 type = "MaxSize"
 initial = "computed::MaxSize::none()"
+lynx_parse_method = "parse_lynx_max_size"
+lynx_allow_quirks = false
 struct = "position"
 logical_group = "max-size"
 allow_quirks = true
@@ -1622,6 +1628,7 @@ affects = "overflow"
 [offset-distance]
 type = "LengthPercentage"
 initial = "computed::LengthPercentage::zero()"
+lynx_parse_method = "parse_lynx_offset_distance"
 struct = "box"
 # Lynx supports offset-distance; stylo ships it gecko-only. Expose it in servo
 # behind the same experimental pref as offset-path so the `lynx` feature can
@@ -2238,6 +2245,8 @@ affects = "layout"
 type = "SimpleShadow"
 struct = "inherited_text"
 vector = { simple_bindings = true, animation_type = "with_zero" }
+lynx_vector = { simple_bindings = true, single_item = true }
+lynx_animation_type = "none"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-text-decor-3/#text-shadow-property"
 servo_restyle_damage = "repaint"
@@ -2942,6 +2951,7 @@ struct = "text"
 servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 boxed = true
+lynx_boxed = false
 spec = "https://drafts.csswg.org/css-ui/#propdef-text-overflow"
 servo_restyle_damage = "rebuild_box"
 affects = "paint"
@@ -4021,7 +4031,7 @@ struct = "inherited_box"
 spec = "https://drafts.csswg.org/css-box/#propdef-visibility"
 affects = "paint"
 gecko_ffi_name = "mVisible"
-keyword = { values = ["visible", "hidden", "collapse"] }
+keyword = { values = ["visible", "hidden", "collapse"], lynx_values = ["visible", "hidden"] }
 
 [direction]
 struct = "inherited_box"
