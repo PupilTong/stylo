@@ -916,16 +916,14 @@ LYNX_SEED_PROPERTIES = _load_lynx_properties()
 
 # Non-authorable fields required by Stylo's cascade/style machinery. They are
 # compiled as storage/invariant state but are deliberately absent from the
-# Lynx property-name table. Keep this list narrow; shorthand-only storage is
-# derived automatically below rather than duplicated here.
+# Lynx property-name table. Keep this list disjoint from the authored
+# shorthand/longhand closure: closure members are compiled and exposed by the
+# fixed-point pass below and must not be duplicated here.
 LYNX_INTERNAL_LONGHANDS = frozenset(
     {
         "-moz-default-appearance",
         "-servo-top-layer",
         "animation-composition",
-        "animation-range-end",
-        "animation-range-start",
-        "animation-timeline",
         "appearance",
         "color-scheme",
         "column-count",
@@ -935,7 +933,6 @@ LYNX_INTERNAL_LONGHANDS = frozenset(
         "content",
         "float",
         "font-size-adjust",
-        "font-stretch",
         "forced-color-adjust",
         "isolation",
         "math-depth",
@@ -946,7 +943,6 @@ LYNX_INTERNAL_LONGHANDS = frozenset(
         "scale",
         "text-orientation",
         "transform-style",
-        "transition-behavior",
         "translate",
         "writing-mode",
         "zoom",
@@ -1042,7 +1038,11 @@ class PropertiesData(object):
 
             # Compute a fixed point over shorthand relations. `all` is a
             # special cascade sentinel rather than a normal relation and is
-            # intentionally not part of this closure.
+            # intentionally not part of this closure. Closure wins over the
+            # documentation seed: once either a shorthand or one of its
+            # longhands is supported, the complete upstream family remains
+            # authorable (including animation-timeline and
+            # transition-behavior).
             changed = True
             while changed:
                 changed = False
@@ -1073,6 +1073,12 @@ class PropertiesData(object):
             # Preserve documented aliases, but do not automatically expose
             # browser-prefixed aliases that happen to exist in upstream Stylo.
             exposed.update(LYNX_SEED_PROPERTIES)
+
+            internal_exposed = exposed.intersection(LYNX_INTERNAL_LONGHANDS)
+            assert not internal_exposed, (
+                "LYNX_INTERNAL_LONGHANDS must be disjoint from the authored "
+                f"shorthand/longhand closure: {sorted(internal_exposed)}"
+            )
 
             compiled = set(compiled_longhands)
             compiled.update(LYNX_INTERNAL_LONGHANDS)

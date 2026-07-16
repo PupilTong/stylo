@@ -985,7 +985,11 @@ impl<'a> Cascade<'a> {
                     #[cfg(feature = "gecko")]
                     Self::recompute_math_font_size_if_needed(context);
                 }
-                if self.seen.longhands.contains(LonghandId::FontFamily) {
+                let font_context_changed = self.seen.longhands.contains(LonghandId::FontFamily);
+                #[cfg(not(feature = "lynx"))]
+                let font_context_changed =
+                    font_context_changed || self.seen.longhands.contains(LonghandId::XLang);
+                if font_context_changed {
                     self.recompute_keyword_font_size_if_needed(context);
                 }
                 #[cfg(feature = "gecko")]
@@ -1401,7 +1405,11 @@ impl<'a> Cascade<'a> {
     fn recompute_keyword_font_size_if_needed(&self, context: &mut computed::Context) {
         use crate::values::computed::ToComputedValue;
 
-        if !self.seen.longhands.contains(LonghandId::FontFamily) {
+        let font_context_changed = self.seen.longhands.contains(LonghandId::FontFamily);
+        #[cfg(not(feature = "lynx"))]
+        let font_context_changed =
+            font_context_changed || self.seen.longhands.contains(LonghandId::XLang);
+        if !font_context_changed {
             return;
         }
 

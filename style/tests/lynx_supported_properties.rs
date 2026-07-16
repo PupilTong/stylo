@@ -57,11 +57,15 @@ fn shorthand_longhand_closure_is_authorable() {
     // Each representative starts outside the official seed list and is pulled
     // in by a supported shorthand or longhand relation.
     for name in [
+        "animation-range-end",
+        "animation-range-start",
+        "animation-timeline",
         "background-attachment",
         "border-image",
         "border-image-source",
         "font",
         "font-kerning",
+        "font-stretch",
         "font-variant",
         "grid",
         "grid-area",
@@ -80,6 +84,24 @@ fn shorthand_longhand_closure_is_authorable() {
         assert!(
             is_content_enabled(name),
             "`{name}` belongs to the shorthand closure"
+        );
+    }
+}
+
+#[test]
+fn internal_storage_longhands_are_not_authorable() {
+    // Internal storage exists only to satisfy Stylo invariants. Anything
+    // reached through the supported shorthand/longhand closure belongs in
+    // `shorthand_longhand_closure_is_authorable` instead.
+    for name in [
+        "-moz-default-appearance",
+        "-servo-top-layer",
+        "animation-composition",
+        "color-scheme",
+    ] {
+        assert!(
+            !is_content_enabled(name),
+            "internal storage property `{name}` must stay out of the Lynx name table"
         );
     }
 }
