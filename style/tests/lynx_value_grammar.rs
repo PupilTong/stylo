@@ -3,10 +3,13 @@
 //! stylesheets and inline style.
 #![cfg(feature = "lynx")]
 
+use style::color::AbsoluteColor;
 use style::context::QuirksMode;
 use style::properties::declaration_block::parse_one_declaration_into;
 use style::properties::{PropertyId, SourcePropertyDeclaration};
 use style::stylesheets::{CssRuleType, Origin, UrlExtraData};
+use style::values::animated::{Animate, Procedure};
+use style::values::computed::ColorPropertyValue;
 use style_traits::ParsingMode;
 
 fn url_data() -> UrlExtraData {
@@ -248,6 +251,21 @@ fn colors_images_and_gradients() {
         "background-clip",
         &["border-box", "padding-box", "content-box", "border-area"],
     );
+}
+
+#[test]
+fn solid_text_colors_remain_interpolable() {
+    let from = ColorPropertyValue::Color(AbsoluteColor::BLACK);
+    let to = ColorPropertyValue::Color(AbsoluteColor::WHITE);
+    let middle = from
+        .animate(&to, Procedure::Interpolate { progress: 0.5 })
+        .expect("solid Lynx text colors must interpolate");
+
+    let ColorPropertyValue::Color(middle) = middle else {
+        panic!("solid color interpolation must stay a solid color");
+    };
+    assert_ne!(middle, AbsoluteColor::BLACK);
+    assert_ne!(middle, AbsoluteColor::WHITE);
 }
 
 #[test]

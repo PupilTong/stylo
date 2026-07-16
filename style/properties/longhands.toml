@@ -552,7 +552,10 @@ affects = "paint"
 [color]
 type = "ColorPropertyValue"
 initial = "crate::color::AbsoluteColor::BLACK.into()"
-lynx_animation_type = "discrete"
+# Lynx extends `color` with text gradients, but its animation engine only
+# interpolates numeric solid colors. The Lynx computed value therefore keeps
+# normal color animation for solid-to-solid pairs and reports gradient pairs
+# as non-interpolable so Web Animations applies its discrete fallback.
 struct = "inherited_text"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-color/#color"

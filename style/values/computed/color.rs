@@ -41,15 +41,17 @@ pub enum ColorPropertyValue {
 #[cfg(feature = "lynx")]
 impl ColorPropertyValue {
     /// Return the solid color used by Stylo internals that resolve
-    /// `currentcolor`. Lynx does not accept authored `currentcolor`; a
-    /// gradient therefore has no solid current-color and uses transparent as
-    /// the compatibility fallback. The actual CSS initial value remains
-    /// Stylo's standard black; Lynx defaults belong in the UA stylesheet.
+    /// `currentcolor`. Lynx does not accept authored `currentcolor`; for a
+    /// text gradient its native style engine keeps `DEFAULT_TEXT_COLOR`
+    /// (opaque black) as the parallel solid value, and its default border
+    /// color is also opaque black. The actual CSS initial value remains
+    /// Stylo's standard black; other Lynx defaults belong in the UA
+    /// stylesheet.
     #[inline]
     pub fn solid_color(&self) -> AbsoluteColor {
         match *self {
             Self::Color(color) => color,
-            Self::Gradient(..) => AbsoluteColor::TRANSPARENT_BLACK,
+            Self::Gradient(..) => AbsoluteColor::BLACK,
         }
     }
 }

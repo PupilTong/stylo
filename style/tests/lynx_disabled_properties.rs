@@ -73,6 +73,19 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "caret-color",
     // Background pieces outside the supported subset.
     "background-blend-mode",
+    // SVG paint properties are now content-enabled upstream for Servo, but
+    // remain outside Lynx's author property surface.
+    "fill",
+    "fill-opacity",
+    "fill-rule",
+    "stroke",
+    "stroke-width",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "stroke-dasharray",
+    "stroke-dashoffset",
+    "stroke-miterlimit",
+    "stroke-opacity",
     // Servo itself does not expose this Gecko-only motion-path longhand.
     "offset-distance",
 ];

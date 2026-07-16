@@ -283,7 +283,17 @@ class Keyword(object):
         self.gecko_aliases = parse_aliases(gecko_aliases or [])
         self.servo_aliases = parse_aliases(servo_aliases or [])
         self.lynx_values = lynx_values
-        self.lynx_aliases = parse_aliases(lynx_aliases or [])
+        if self.lynx_values is not None:
+            assert self.lynx_values, f"{name}: lynx_values must not be empty"
+            assert self.lynx_values[0] == self.values[0], (
+                f"{name}: narrowing lynx_values must preserve the upstream "
+                "initial keyword; use the UA stylesheet for a different default"
+            )
+        # `None` inherits the engine aliases. An explicit empty list opts out,
+        # which lets a narrowed Lynx grammar reject upstream aliases.
+        self.lynx_aliases = (
+            None if lynx_aliases is None else parse_aliases(lynx_aliases)
+        )
         self.lynx = lynx
         self.gecko_inexhaustive = gecko_inexhaustive or self.gecko_constant_prefix is not None
 
@@ -298,7 +308,7 @@ class Keyword(object):
             raise Exception("Bad engine: " + engine)
 
     def aliases_for(self, engine):
-        if self.lynx:
+        if self.lynx and self.lynx_aliases is not None:
             return self.lynx_aliases
         if engine == "gecko":
             return self.gecko_aliases
