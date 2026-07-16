@@ -86,8 +86,6 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "stroke-dashoffset",
     "stroke-miterlimit",
     "stroke-opacity",
-    // Servo itself does not expose this Gecko-only motion-path longhand.
-    "offset-distance",
 ];
 
 #[test]

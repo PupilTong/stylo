@@ -135,6 +135,7 @@ max-height
 max-width
 min-height
 min-width
+offset-distance
 offset-path
 offset-rotate
 opacity
