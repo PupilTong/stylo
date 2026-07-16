@@ -283,8 +283,11 @@ spec = "https://drafts.csswg.org/css-logical/#propdef-inset-inline"
 rule_types_allowed = ["style", "keyframe", "scope", "position-try"]
 kind = "two_properties"
 
+# lynx-vello: un-`gecko`'d so the servo build declares the shorthand (its
+# `contain-intrinsic-width`/`-height` longhands are now servo-visible). Seeded in
+# properties/lynx_properties.txt so it parses from author CSS under the `lynx`
+# feature; the closure pass then exposes its physical longhands automatically.
 [contain-intrinsic-size]
-engine = "gecko"
 sub_properties = ["contain-intrinsic-width", "contain-intrinsic-height"]
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 kind = "two_properties"

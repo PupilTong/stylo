@@ -77,7 +77,19 @@ clip-path
 color
 column-gap
 grid-column-gap
+# CSS containment (css-contain-2) is a deliberate lynx-vello extension beyond
+# Lynx's own property index (Lynx has no containment property at all): a real
+# W3C feature (https://drafts.csswg.org/css-contain-2/) that the web-target
+# bundles already get via browser passthrough and the native engine wires up to
+# bound relayout / damage propagation. Seeding the `contain-intrinsic-size`
+# shorthand lets the closure pull in its contain-intrinsic-width/-height
+# longhands automatically; the logical contain-intrinsic-block-size/-inline-size
+# stay disabled-for-content (only un-gecko'd in longhands.toml to keep the
+# contain-intrinsic-size logical group balanced for the servo build).
+# css-contain-3 container queries (container-type/-name) stay out of scope.
 contain
+contain-intrinsic-size
+content-visibility
 cursor
 direction
 display

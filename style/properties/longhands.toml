@@ -632,14 +632,26 @@ initial = "specified::Contain::empty()"
 struct = "box"
 servo_pref = "layout.unimplemented"
 animation_type = "none"
+# lynx-vello: containment is a deliberate extension (see the containment note in
+# properties/lynx_properties.txt, https://drafts.csswg.org/css-contain-2/). A
+# `contain` change must force relayout; declared explicitly rather than relying
+# on the rebuild_box default so the intent is visible next to the enablement.
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-contain/#contain-property"
 affects = "layout"
 
+# lynx-vello: the logical `contain-intrinsic-block-size` / `-inline-size` pair is
+# un-`gecko`'d ONLY so the `contain-intrinsic-size` logical group stays balanced
+# for the servo build (data.py asserts logical_count * 2 == len(props)). They are
+# deliberately kept OUT of the lynx_properties.txt seed and its closure exposure,
+# so they stay disabled-for-content. No explicit servo_restyle_damage: logical
+# longhands have no own computed storage and are excluded from the servo damage
+# predicates (they resolve to the physical width/height whose rebuild_box damage
+# covers them).
 [contain-intrinsic-block-size]
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
 logical_group = "contain-intrinsic-size"
 logical = true
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -649,8 +661,8 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
 logical_group = "contain-intrinsic-size"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 affects = "layout"
 
@@ -658,7 +670,6 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
 logical_group = "contain-intrinsic-size"
 logical = true
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -668,8 +679,8 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
 logical_group = "contain-intrinsic-size"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 affects = "layout"
 
@@ -704,7 +715,14 @@ affects = "layout"
 type = "ContentVisibility"
 initial = "computed::ContentVisibility::Visible"
 struct = "box"
-engine = "gecko"
+# lynx-vello: discrete animation. Upstream stylo animates content-visibility with
+# a bespoke non-discrete interpolation, but its `Animate`/`ComputeSquaredDistance`
+# /`ToAnimatedZero` impls are `#[cfg(feature = "gecko")]`-only
+# (helpers/animated_properties.mako.rs), so `animation_type = "normal"` does not
+# compile for servo. Discrete keeps the property animatable via `animate_discrete`
+# (Clone only) without those impls, and is spec-reasonable for content-visibility.
+animation_type = "discrete"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-contain/#content-visibility"
 affects = "layout"
 
