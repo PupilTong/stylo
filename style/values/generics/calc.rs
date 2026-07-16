@@ -209,6 +209,7 @@ pub enum SortKey {
     Rex,
     Ric,
     Rlh,
+    #[cfg(feature = "lynx")]
     Rpx,
     S, // Sec
     Svb,

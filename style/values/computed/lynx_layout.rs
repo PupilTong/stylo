@@ -11,3 +11,6 @@ use crate::values::CSSInteger;
 /// `-1` is Lynx's no-reference sentinel, `0` is `parent`, and positive values
 /// reference sibling `relative-id` values.
 pub type RelativeAlign = CSSInteger;
+
+/// Computed `relative-*-of` value (`-1` means `none`).
+pub type RelativeReference = CSSInteger;

@@ -369,8 +369,16 @@ impl NonCustomPropertyId {
     #[inline]
     pub(super) fn enabled_for_all_content(self) -> bool {
         static EXPERIMENTAL: NonCustomPropertyIdSet = ${non_custom_property_id_set(lambda p: p.experimental(engine))};
+        // Under the `lynx` feature, a property Lynx exposes is content-enabled
+        // even when stylo keeps it behind an experimental servo pref
+        // (`layout.grid.enabled`, `layout.unimplemented`, ...): lynx-vello, not
+        // servo, provides its layout/paint, so the pref is meaningless here. We
+        // do this by forcing it into ALWAYS_ENABLED rather than by clearing the
+        // pref, so `servo_pref` (and hence shorthand `LonghandsToSerialize`
+        // `Option`-ness) is untouched. Unsupported names are absent from the
+        // generated property-name map rather than filtered at runtime.
         static ALWAYS_ENABLED: NonCustomPropertyIdSet = ${non_custom_property_id_set(
-            lambda p: (not p.experimental(engine)) and p.enabled_in_content()
+            lambda p: p.enabled_in_content() and ((not p.experimental(engine)) or (data.lynx and p.lynx_enabled))
         )};
 
         let passes_pref_check = || {
@@ -1126,7 +1134,9 @@ impl PropertyId {
         ::cssparser::ascii_case_insensitive_phf_map! {
             static_ids -> StaticId = {
                 % for i, property in enumerate(data.longhands + data.shorthands + data.all_aliases()):
+                % if not data.lynx or property.lynx_exposed:
                 "${property.name}" => StaticId::NonCustom(NonCustomPropertyId(${i})),
+                % endif
                 % endfor
                 % for property in data.counted_unknown_properties:
                 "${property.name}" => {
@@ -1844,7 +1854,10 @@ impl ComputedValues {
     ///   style.resolve_color(style.get_border().get_border_top_color());
     #[inline]
     pub fn resolve_color(&self, color: &computed::Color) -> crate::color::AbsoluteColor {
-        color.resolve_to_absolute(self.get_inherited_text().get_color())
+        let current_color = self.get_inherited_text().get_color();
+        #[cfg(feature = "lynx")]
+        let current_color = &current_color.solid_color();
+        color.resolve_to_absolute(current_color)
     }
 
     /// Returns which longhand properties have different values in the two
@@ -2834,16 +2847,16 @@ macro_rules! css_properties_accessors {
         $macro_name! {
             % for kind, props in [("Longhand", data.longhands), ("Shorthand", data.shorthands)]:
                 % for property in props:
-                    % if property.enabled_in_content():
                         % for prop in [property] + property.aliases:
+                            % if prop.enabled_in_content() and (not data.lynx or prop.lynx_exposed):
                             % if '-' in prop.name:
                                 [${prop.ident.capitalize()}, Set${prop.ident.capitalize()},
                                  PropertyId::NonCustom(${kind}Id::${property.camel_case}.into())],
                             % endif
                             [${prop.camel_case}, Set${prop.camel_case},
                              PropertyId::NonCustom(${kind}Id::${property.camel_case}.into())],
+                            % endif
                         % endfor
-                    % endif
                 % endfor
             % endfor
         }
@@ -2869,8 +2882,11 @@ macro_rules! longhand_properties_idents {
 // Large pages generate tens of thousands of ComputedValues.
 #[cfg(feature = "gecko")]
 size_of_test!(ComputedValues, 248);
-#[cfg(feature = "servo")]
+#[cfg(all(feature = "servo", not(feature = "lynx")))]
 size_of_test!(ComputedValues, 232);
+// Lynx intentionally compiles a smaller property/style-struct surface.
+#[cfg(feature = "lynx")]
+const_assert!(std::mem::size_of::<ComputedValues>() < 232);
 
 // FFI relies on this.
 size_of_test!(Option<Arc<ComputedValues>>, 8);
