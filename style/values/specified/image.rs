@@ -12,29 +12,75 @@ use crate::derives::*;
 use crate::parser::{Parse, ParserContext};
 use crate::stylesheets::CorsMode;
 use crate::typed_om::{ImageValue, KeywordValue, ToTyped, TypedValue};
-use crate::values::generics::color::{ColorMixFlags, GenericLightDark};
+use crate::values::generics::color::ColorMixFlags;
+#[cfg(not(feature = "lynx"))]
+use crate::values::generics::color::GenericLightDark;
 use crate::values::generics::image::{
     self as generic, Circle, Ellipse, GradientCompatMode, ShapeExtent,
 };
 use crate::values::generics::image::{GradientFlags, PaintWorklet};
+#[cfg(not(feature = "lynx"))]
 use crate::values::generics::position::Position as GenericPosition;
 use crate::values::generics::NonNegative;
+use crate::values::specified::position::Position;
 use crate::values::specified::position::{HorizontalPositionKeyword, VerticalPositionKeyword};
-use crate::values::specified::position::{Position, PositionComponent, Side};
+#[cfg(not(feature = "lynx"))]
+use crate::values::specified::position::{PositionComponent, Side};
 use crate::values::specified::url::SpecifiedUrl;
+#[cfg(feature = "lynx")]
+use crate::values::specified::NoCalcPercentage;
+#[cfg(not(feature = "lynx"))]
+use crate::values::specified::NumberOrPercentage;
 use crate::values::specified::{
     Angle, AngleOrPercentage, Color, Length, LengthPercentage, NonNegativeLength,
     NonNegativeLengthPercentage, Resolution,
 };
-use crate::values::specified::{Number, NumberOrPercentage, Percentage};
+use crate::values::specified::{Number, Percentage};
+#[cfg(any(feature = "gecko", not(feature = "lynx")))]
 use crate::Atom;
 use cssparser::{match_ignore_ascii_case, Delimiter, Parser, Token};
 use selectors::parser::SelectorParseErrorKind;
+#[cfg(not(feature = "lynx"))]
 use std::cmp::Ordering;
 use std::fmt::{self, Write};
 use style_traits::{CssString, CssType, CssWriter, KeywordsCollectFn, ParseError};
 use style_traits::{SpecifiedValueInfo, StyleParseErrorKind, ToCss};
 use thin_vec::ThinVec;
+
+#[cfg(feature = "lynx")]
+fn parse_lynx_gradient_fraction(
+    context: &ParserContext,
+    input: &mut Parser,
+) -> Result<f32, ParseError> {
+    if let Ok(percentage) = input.try_parse(|i| Percentage::parse(context, i)) {
+        return percentage
+            .get()
+            .ok_or_else(|| ParseError::custom(StyleParseErrorKind::UnspecifiedError));
+    }
+    let number = Number::parse(context, input)?;
+    let value = number
+        .get()
+        .ok_or_else(|| ParseError::custom(StyleParseErrorKind::UnspecifiedError))?;
+    Ok(value)
+}
+
+#[cfg(feature = "lynx")]
+fn parse_lynx_gradient_length_percentage(
+    context: &ParserContext,
+    input: &mut Parser,
+) -> Result<LengthPercentage, ParseError> {
+    parse_lynx_gradient_fraction(context, input)
+        .map(|value| LengthPercentage::Percentage(NoCalcPercentage::new(value)))
+}
+
+#[cfg(feature = "lynx")]
+fn parse_lynx_gradient_angle_percentage(
+    context: &ParserContext,
+    input: &mut Parser,
+) -> Result<AngleOrPercentage, ParseError> {
+    parse_lynx_gradient_fraction(context, input)
+        .map(|value| AngleOrPercentage::Percentage(Percentage::new(value)))
+}
 
 /// Specified values for an image according to CSS-IMAGES.
 /// <https://drafts.csswg.org/css-images/#image-values>
@@ -224,6 +270,7 @@ impl Image {
             return Ok(generic::Image::Url(url));
         }
 
+        #[cfg(not(feature = "lynx"))]
         if !flags.contains(ParseImageFlags::FORBID_IMAGE_SET) {
             if let Ok(is) =
                 input.try_parse(|input| ImageSet::parse(context, input, cors_mode, flags))
@@ -240,7 +287,12 @@ impl Image {
             return Ok(generic::Image::Gradient(Box::new(gradient)));
         }
 
+        #[cfg(feature = "lynx")]
+        return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
+
+        #[cfg(not(feature = "lynx"))]
         let function = input.expect_function()?.clone();
+        #[cfg(not(feature = "lynx"))]
         input.parse_nested_block(|input| Ok(match_ignore_ascii_case! { &function,
             #[cfg(feature = "servo")]
             "paint" => Self::PaintWorklet(Box::new(<PaintWorklet>::parse_args(context, input)?)),
@@ -315,6 +367,7 @@ impl Image {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 impl CrossFade {
     /// cross-fade() = cross-fade( <cf-image># )
     fn parse_args(
@@ -330,6 +383,7 @@ impl CrossFade {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 impl CrossFadeElement {
     fn parse_percentage(context: &ParserContext, input: &mut Parser) -> Option<Percentage> {
         // We clamp our values here as this is the way that Safari and Chrome's
@@ -365,6 +419,7 @@ impl CrossFadeElement {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 impl CrossFadeImage {
     fn parse(
         context: &ParserContext,
@@ -386,6 +441,7 @@ impl CrossFadeImage {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 impl ImageSet {
     fn parse(
         context: &ParserContext,
@@ -412,6 +468,7 @@ impl ImageSet {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 impl ImageSetItem {
     fn parse_type(p: &mut Parser) -> Result<crate::OwnedStr, ParseError> {
         p.expect_function_matching("type")?;
@@ -482,6 +539,7 @@ impl Parse for Gradient {
             "linear-gradient" => {
                 (Shape::Linear, false, GradientCompatMode::Modern)
             },
+            #[cfg(not(feature = "lynx"))]
             "-webkit-linear-gradient" => {
                 (Shape::Linear, false, GradientCompatMode::WebKit)
             },
@@ -489,9 +547,11 @@ impl Parse for Gradient {
             "-moz-linear-gradient" => {
                 (Shape::Linear, false, GradientCompatMode::Moz)
             },
+            #[cfg(not(feature = "lynx"))]
             "repeating-linear-gradient" => {
                 (Shape::Linear, true, GradientCompatMode::Modern)
             },
+            #[cfg(not(feature = "lynx"))]
             "-webkit-repeating-linear-gradient" => {
                 (Shape::Linear, true, GradientCompatMode::WebKit)
             },
@@ -502,6 +562,7 @@ impl Parse for Gradient {
             "radial-gradient" => {
                 (Shape::Radial, false, GradientCompatMode::Modern)
             },
+            #[cfg(not(feature = "lynx"))]
             "-webkit-radial-gradient" => {
                 (Shape::Radial, false, GradientCompatMode::WebKit)
             },
@@ -509,9 +570,11 @@ impl Parse for Gradient {
             "-moz-radial-gradient" => {
                 (Shape::Radial, false, GradientCompatMode::Moz)
             },
+            #[cfg(not(feature = "lynx"))]
             "repeating-radial-gradient" => {
                 (Shape::Radial, true, GradientCompatMode::Modern)
             },
+            #[cfg(not(feature = "lynx"))]
             "-webkit-repeating-radial-gradient" => {
                 (Shape::Radial, true, GradientCompatMode::WebKit)
             },
@@ -522,9 +585,11 @@ impl Parse for Gradient {
             "conic-gradient" => {
                 (Shape::Conic, false, GradientCompatMode::Modern)
             },
+            #[cfg(not(feature = "lynx"))]
             "repeating-conic-gradient" => {
                 (Shape::Conic, true, GradientCompatMode::Modern)
             },
+            #[cfg(not(feature = "lynx"))]
             "-webkit-gradient" => {
                 return input.parse_nested_block(|i| {
                     Self::parse_webkit_gradient_argument(context, i)
@@ -546,6 +611,7 @@ impl Parse for Gradient {
 }
 
 impl Gradient {
+    #[cfg(not(feature = "lynx"))]
     fn parse_webkit_gradient_argument(
         context: &ParserContext,
         input: &mut Parser,
@@ -715,6 +781,7 @@ impl Gradient {
         })
     }
 
+    #[cfg(not(feature = "lynx"))]
     fn parse_webkit_gradient_stops(
         context: &ParserContext,
         input: &mut Parser,
@@ -809,12 +876,40 @@ impl Gradient {
         context: &ParserContext,
         input: &mut Parser,
     ) -> Result<LengthPercentageItemList, ParseError> {
+        #[cfg(feature = "lynx")]
+        let items = generic::GradientItem::parse_comma_separated(
+            context,
+            input,
+            parse_lynx_gradient_length_percentage,
+        )?;
+        #[cfg(not(feature = "lynx"))]
         let items =
             generic::GradientItem::parse_comma_separated(context, input, LengthPercentage::parse)?;
+        #[cfg(feature = "lynx")]
+        if items.len() < 2 {
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
+        }
+        #[cfg(not(feature = "lynx"))]
         if items.is_empty() {
             return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         Ok(items)
+    }
+
+    /// Try to parse a color interpolation method.
+    fn try_parse_color_interpolation_method(
+        _context: &ParserContext,
+        _input: &mut Parser,
+    ) -> Option<ColorInterpolationMethod> {
+        #[cfg(feature = "lynx")]
+        return None;
+
+        #[cfg(not(feature = "lynx"))]
+        {
+            _input
+                .try_parse(|i| ColorInterpolationMethod::parse(_context, i))
+                .ok()
+        }
     }
 
     /// Parses a linear gradient.
@@ -980,12 +1075,24 @@ impl Gradient {
 
         let position = position.unwrap_or(Position::center());
 
+        #[cfg(feature = "lynx")]
+        let items = generic::GradientItem::parse_comma_separated(
+            context,
+            input,
+            parse_lynx_gradient_angle_percentage,
+        )?;
+        #[cfg(not(feature = "lynx"))]
         let items = generic::GradientItem::parse_comma_separated(
             context,
             input,
             AngleOrPercentage::parse_with_unitless,
         )?;
 
+        #[cfg(feature = "lynx")]
+        if items.len() < 2 {
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
+        }
+        #[cfg(not(feature = "lynx"))]
         if items.is_empty() {
             return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
@@ -1236,6 +1343,7 @@ impl<T> generic::GradientItem<Color, T> {
 
         loop {
             input.parse_until_before(Delimiter::Comma, |input| {
+                #[cfg(not(feature = "lynx"))]
                 if seen_stop {
                     if let Ok(hint) = input.try_parse(|i| parse_position(context, i)) {
                         seen_stop = false;
@@ -1246,6 +1354,7 @@ impl<T> generic::GradientItem<Color, T> {
 
                 let stop = generic::ColorStop::parse(context, input, parse_position)?;
 
+                #[cfg(not(feature = "lynx"))]
                 match input.try_parse(|i| parse_position(context, i)) {
                     Ok(multi_position) => {
                         let stop_color = stop.color.clone();
@@ -1262,6 +1371,9 @@ impl<T> generic::GradientItem<Color, T> {
                         items.push(stop.into_item());
                     },
                 }
+
+                #[cfg(feature = "lynx")]
+                items.push(stop.into_item());
 
                 seen_stop = true;
                 Ok(())
@@ -1295,8 +1407,11 @@ impl<T> generic::ColorStop<Color, T> {
 }
 
 impl PaintWorklet {
-    #[cfg(feature = "servo")]
-    fn parse_args(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
+    #[cfg(all(feature = "servo", not(feature = "lynx")))]
+    fn parse_args(
+        context: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
         use crate::custom_properties::SpecifiedValue;
         use servo_arc::Arc;
         let name = Atom::from(&**input.expect_ident()?);
@@ -1340,7 +1455,7 @@ pub enum ImageRendering {
     Auto,
     #[cfg(feature = "gecko")]
     Smooth,
-    #[parse(aliases = "-moz-crisp-edges")]
+    #[cfg_attr(not(feature = "lynx"), parse(aliases = "-moz-crisp-edges"))]
     CrispEdges,
     Pixelated,
     // From the spec:

@@ -157,6 +157,7 @@ pub mod image;
 pub mod length;
 pub mod length_percentage;
 pub mod list;
+#[cfg(feature = "lynx")]
 pub mod lynx_layout;
 pub mod motion;
 pub mod outline;
@@ -536,6 +537,10 @@ impl<'a> Context<'a> {
 
     /// Apply text-zoom if enabled.
     pub fn maybe_zoom_text(&self, size: CSSPixelLength) -> CSSPixelLength {
+        #[cfg(feature = "lynx")]
+        return size;
+
+        #[cfg(not(feature = "lynx"))]
         if self
             .style()
             .get_font()
@@ -993,6 +998,7 @@ impl From<GreaterThanOrEqualToOneNumber> for CSSFloat {
     ToCss,
     ToResolvedValue,
 )]
+#[cfg_attr(feature = "lynx", derive(ToTyped))]
 #[repr(C, u8)]
 pub enum NumberOrPercentage {
     Percentage(Percentage),

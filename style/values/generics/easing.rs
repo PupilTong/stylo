@@ -35,6 +35,16 @@ pub enum TimingFunction<Integer, Number, LinearStops> {
         x2: Number,
         y2: Number,
     },
+    /// Lynx's quadratic Bézier easing function.
+    #[cfg(feature = "lynx")]
+    #[css(comma, function = "square-bezier")]
+    #[typed(skip)]
+    SquareBezier {
+        /// The x coefficient of the quadratic Bezier curve.
+        x: Number,
+        /// The y coefficient of the quadratic Bezier curve.
+        y: Number,
+    },
     /// `step-start | step-end | steps(<integer>, [ <step-position> ]?)`
     /// `<step-position> = jump-start | jump-end | jump-none | jump-both | start | end`
     #[css(comma, function)]

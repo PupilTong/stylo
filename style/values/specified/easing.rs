@@ -4,14 +4,21 @@
 
 //! Specified types for CSS Easing functions.
 use crate::parser::{Parse, ParserContext};
-use crate::piecewise_linear::{PiecewiseLinearFunction, PiecewiseLinearFunctionBuilder};
+use crate::piecewise_linear::PiecewiseLinearFunction;
+#[cfg(not(feature = "lynx"))]
+use crate::piecewise_linear::PiecewiseLinearFunctionBuilder;
 use crate::values::computed::easing::TimingFunction as ComputedTimingFunction;
 use crate::values::computed::{Context, ToComputedValue};
 use crate::values::generics::easing::TimingFunction as GenericTimingFunction;
 use crate::values::generics::easing::{StepPosition, TimingKeyword};
+#[cfg(not(feature = "lynx"))]
 use crate::values::specified::percentage::ToPercentage;
-use crate::values::specified::{AnimationName, Integer, Number, Percentage};
-use cssparser::{match_ignore_ascii_case, Delimiter, Parser, Token};
+#[cfg(not(feature = "lynx"))]
+use crate::values::specified::Percentage;
+use crate::values::specified::{AnimationName, Integer, Number};
+use cssparser::{match_ignore_ascii_case, Parser};
+#[cfg(not(feature = "lynx"))]
+use cssparser::{Delimiter, Token};
 use selectors::parser::SelectorParseErrorKind;
 use style_traits::{ParseError, StyleParseErrorKind};
 
@@ -39,7 +46,10 @@ impl Parse for TimingFunction {
         input.parse_nested_block(move |i| {
             match_ignore_ascii_case! { &function,
                 "cubic-bezier" => Self::parse_cubic_bezier(context, i),
+                #[cfg(feature = "lynx")]
+                "square-bezier" => Self::parse_square_bezier(context, i),
                 "steps" => Self::parse_steps(context, i),
+                #[cfg(not(feature = "lynx"))]
                 "linear" => Self::parse_linear_function(context, i),
                 _ => Err(ParseError::custom(StyleParseErrorKind::UnexpectedFunction)),
             }
@@ -48,7 +58,24 @@ impl Parse for TimingFunction {
 }
 
 impl TimingFunction {
-    fn parse_cubic_bezier(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
+    #[cfg(feature = "lynx")]
+    fn parse_square_bezier(
+        context: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
+        let x = Number::parse(context, input)?;
+        input.expect_comma()?;
+        let y = Number::parse(context, input)?;
+        if x.resolve().is_none() || y.resolve().is_none() {
+            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
+        }
+        Ok(GenericTimingFunction::SquareBezier { x, y })
+    }
+
+    fn parse_cubic_bezier(
+        context: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
         let x1 = Number::parse(context, input)?;
         input.expect_comma()?;
         let y1 = Number::parse(context, input)?;
@@ -100,6 +127,7 @@ impl TimingFunction {
         Ok(GenericTimingFunction::Steps(steps, position))
     }
 
+    #[cfg(not(feature = "lynx"))]
     fn parse_linear_function(
         context: &ParserContext,
         input: &mut Parser,
@@ -179,6 +207,11 @@ impl TimingFunction {
     /// Generate the ComputedTimingFunction without Context.
     pub fn to_computed_value_without_context(&self) -> ComputedTimingFunction {
         match &self {
+            #[cfg(feature = "lynx")]
+            GenericTimingFunction::SquareBezier { x, y } => GenericTimingFunction::SquareBezier {
+                x: x.resolve().unwrap(),
+                y: y.resolve().unwrap(),
+            },
             GenericTimingFunction::Steps(steps, pos) => {
                 // Resolvable value was enforced at parse time
                 GenericTimingFunction::Steps(steps.resolve().unwrap(), *pos)
@@ -209,6 +242,11 @@ impl ToComputedValue for TimingFunction {
 
     fn from_computed_value(computed: &Self::ComputedValue) -> Self {
         match &computed {
+            #[cfg(feature = "lynx")]
+            ComputedTimingFunction::SquareBezier { x, y } => Self::SquareBezier {
+                x: Number::new(*x),
+                y: Number::new(*y),
+            },
             ComputedTimingFunction::Steps(steps, pos) => Self::Steps(Integer::new(*steps), *pos),
             ComputedTimingFunction::CubicBezier { x1, y1, x2, y2 } => Self::CubicBezier {
                 x1: Number::new(*x1),

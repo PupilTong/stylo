@@ -5,6 +5,7 @@
 //! Specified color values.
 
 use super::AllowQuirks;
+#[cfg(not(feature = "lynx"))]
 use crate::color::mix::ColorInterpolationMethod;
 use crate::color::{parsing, AbsoluteColor, ColorFunction, ColorMixItemList, ColorSpace};
 use crate::derives::*;
@@ -14,9 +15,10 @@ use crate::typed_om::{KeywordValue, ToTyped, TypedValue};
 use crate::values::computed::{
     Color as ComputedColor, Context, Percentage as ComputedPercentage, ToComputedValue,
 };
+#[cfg(not(feature = "lynx"))]
+use crate::values::generics::color::ColorMixFlags;
 use crate::values::generics::color::{
-    ColorMixFlags, GenericCaretColor, GenericColorMix, GenericColorMixItem, GenericColorOrAuto,
-    GenericLightDark,
+    GenericCaretColor, GenericColorMix, GenericColorMixItem, GenericColorOrAuto, GenericLightDark,
 };
 use crate::values::generics::Optional;
 use crate::values::specified::percentage::ToPercentage;
@@ -35,6 +37,7 @@ use thin_vec::ThinVec;
 pub type ColorMix = GenericColorMix<Color, Percentage>;
 
 impl ColorMix {
+    #[cfg(not(feature = "lynx"))]
     fn parse(
         context: &ParserContext,
         input: &mut Parser,
@@ -574,6 +577,7 @@ impl Color {
                 Ok(color)
             },
             Err(e) => {
+                #[cfg(not(feature = "lynx"))]
                 {
                     #[cfg(feature = "gecko")]
                     if let Ok(system) = input.try_parse(|i| SystemColor::parse(context, i)) {
@@ -584,11 +588,13 @@ impl Color {
                         return Ok(Color::System(system));
                     }
                 }
+                #[cfg(not(feature = "lynx"))]
                 if let Ok(mix) = input.try_parse(|i| ColorMix::parse(context, i, preserve_authored))
                 {
                     return Ok(Color::ColorMix(Box::new(mix)));
                 }
 
+                #[cfg(not(feature = "lynx"))]
                 if let Ok(ld) = input.try_parse(|i| {
                     GenericLightDark::parse_with(i, |i| {
                         Self::parse_internal(context, i, preserve_authored)
@@ -597,6 +603,7 @@ impl Color {
                     return Ok(Color::LightDark(Box::new(ld)));
                 }
 
+                #[cfg(not(feature = "lynx"))]
                 if let Ok(c) = input.try_parse(|i| {
                     i.expect_function_matching("contrast-color")?;
                     i.parse_nested_block(|i| Self::parse_internal(context, i, preserve_authored))
@@ -942,6 +949,9 @@ impl SpecifiedValueInfo for Color {
         // should probably be handled that way as well.
         // XXX `currentColor` should really be `currentcolor`. But let's
         // keep it consistent with the old system for now.
+        #[cfg(feature = "lynx")]
+        f(&["transparent", "rgb", "rgba", "hsl", "hsla"]);
+        #[cfg(not(feature = "lynx"))]
         f(&[
             "currentColor",
             "transparent",
@@ -965,9 +975,11 @@ impl SpecifiedValueInfo for Color {
 /// Specified value for the "color" property, which resolves the `currentcolor`
 /// keyword to the parent color instead of self's color.
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
+#[cfg(not(feature = "lynx"))]
 #[derive(Clone, Debug, PartialEq, SpecifiedValueInfo, ToCss, ToShmem, ToTyped)]
 pub struct ColorPropertyValue(pub Color);
 
+#[cfg(not(feature = "lynx"))]
 impl ToComputedValue for ColorPropertyValue {
     type ComputedValue = AbsoluteColor;
 
@@ -985,9 +997,108 @@ impl ToComputedValue for ColorPropertyValue {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 impl Parse for ColorPropertyValue {
     fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         Color::parse_quirky(context, input, AllowQuirks::Yes).map(ColorPropertyValue)
+    }
+}
+
+/// Lynx's specified `color` value.
+#[cfg(feature = "lynx")]
+#[derive(Clone, Debug, PartialEq, ToShmem)]
+pub enum ColorPropertyValue {
+    /// A solid text color.
+    Color(Color),
+    /// A text gradient.
+    Gradient(Box<crate::values::specified::image::Gradient>),
+}
+
+#[cfg(feature = "lynx")]
+impl ToComputedValue for ColorPropertyValue {
+    type ComputedValue = crate::values::computed::ColorPropertyValue;
+
+    fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
+        use crate::values::computed::ColorPropertyValue as Computed;
+
+        match *self {
+            Self::Color(ref color) => {
+                let current_color = context
+                    .builder
+                    .get_parent_inherited_text()
+                    .clone_color()
+                    .solid_color();
+                Computed::Color(
+                    color
+                        .to_computed_value(context)
+                        .resolve_to_absolute(&current_color),
+                )
+            },
+            Self::Gradient(ref gradient) => {
+                Computed::Gradient(ToComputedValue::to_computed_value(gradient, context))
+            },
+        }
+    }
+
+    fn from_computed_value(computed: &Self::ComputedValue) -> Self {
+        use crate::values::computed::ColorPropertyValue as Computed;
+
+        match *computed {
+            Computed::Color(color) => Self::Color(Color::from_absolute_color(color).into()),
+            Computed::Gradient(ref gradient) => {
+                Self::Gradient(ToComputedValue::from_computed_value(gradient))
+            },
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl Parse for ColorPropertyValue {
+    fn parse(
+        context: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
+        if let Ok(color) =
+            input.try_parse(|input| Color::parse_quirky(context, input, AllowQuirks::Yes))
+        {
+            return Ok(Self::Color(color));
+        }
+        crate::values::specified::image::Gradient::parse(context, input)
+            .map(Box::new)
+            .map(Self::Gradient)
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToCss for ColorPropertyValue {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        match *self {
+            Self::Color(ref color) => color.to_css(dest),
+            Self::Gradient(ref gradient) => gradient.to_css(dest),
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToTyped for ColorPropertyValue {
+    fn to_typed(&self, dest: &mut ThinVec<TypedValue>) -> Result<(), ()> {
+        match *self {
+            Self::Color(ref color) => color.to_typed(dest),
+            Self::Gradient(..) => Err(()),
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl SpecifiedValueInfo for ColorPropertyValue {
+    const SUPPORTED_TYPES: u8 = CssType::COLOR | CssType::GRADIENT;
+
+    fn collect_completion_keywords(f: KeywordsCollectFn) {
+        Color::collect_completion_keywords(f);
+        crate::values::specified::image::Gradient::collect_completion_keywords(f);
     }
 }
 

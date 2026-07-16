@@ -1,3 +1,7 @@
+// The rpx unit this suite exercises is gated behind the `lynx` cargo feature;
+// without it there is nothing to test.
+#![cfg(feature = "lynx")]
+
 use cssparser::{Parser as CssParser, ParserInput};
 use euclid::{Scale, Size2D};
 use style::context::QuirksMode;
