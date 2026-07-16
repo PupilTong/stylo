@@ -358,6 +358,8 @@ fn effects_and_motion_grammars() {
             "polygon(0 0, 100% 100%)",
         ],
     );
+    accepts("offset-distance", &["0", "0%", "50%", "100%", "10px"]);
+    rejects("offset-distance", &["1", "100% foo", "auto"]);
     accepts("offset-rotate", &["auto", "0deg", "180deg", "1turn"]);
     rejects(
         "offset-rotate",
