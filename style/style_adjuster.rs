@@ -151,9 +151,13 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         if !self.style.is_absolutely_positioned() {
             self.style.mutate_box().set_position(Position::Absolute);
         }
-        #[cfg(not(feature = "lynx"))]
-        if self.style.get_box().clone_display().is_contents() {
-            self.style.mutate_box().set_display(Display::Block);
+        let display = self.style.get_box().clone_display();
+        if display.is_contents() {
+            #[cfg(feature = "lynx")]
+            let block_display = display.equivalent_block_display(true);
+            #[cfg(not(feature = "lynx"))]
+            let block_display = Display::Block;
+            self.style.mutate_box().set_display(block_display);
         }
     }
 

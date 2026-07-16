@@ -56,7 +56,6 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "object-fit",
     "object-position",
     "isolation",
-    "contain",
     "appearance",
     "user-select",
     "zoom",
@@ -74,6 +73,8 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "caret-color",
     // Background pieces outside the supported subset.
     "background-blend-mode",
+    // Servo itself does not expose this Gecko-only motion-path longhand.
+    "offset-distance",
 ];
 
 #[test]

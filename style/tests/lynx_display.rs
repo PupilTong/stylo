@@ -32,6 +32,10 @@ fn parse_display(css: &str) -> Result<Display, ()> {
 
 #[test]
 fn parses_and_serializes_lynx_display_keywords() {
+    let contents = parse_display("contents").unwrap();
+    assert_eq!(contents, Display::Contents);
+    assert_eq!(contents.to_css_string(), "contents");
+
     let linear = parse_display("linear").unwrap();
     assert_eq!(linear, Display::Linear);
     assert_eq!(linear.to_css_string(), "linear");
@@ -48,8 +52,24 @@ fn display_inside_serializes_lynx_keywords() {
     // fallback) must agree — it kebab-cases the variant NAME unless
     // overridden with `#[css(keyword = ...)]`, which would leak
     // "lynx-linear"/"lynx-relative".
+    assert_eq!(DisplayInside::Contents.to_css_string(), "contents");
     assert_eq!(DisplayInside::LynxLinear.to_css_string(), "linear");
     assert_eq!(DisplayInside::LynxRelative.to_css_string(), "relative");
+}
+
+#[test]
+fn contents_keeps_upstream_box_generation_and_root_fixup_semantics() {
+    let contents = parse_display("contents").unwrap();
+
+    assert_eq!(contents.outside(), DisplayOutside::None);
+    assert_eq!(contents.inside(), DisplayInside::Contents);
+    assert!(contents.is_contents());
+    assert_eq!(contents.equivalent_block_display(false), Display::Contents);
+
+    let root_display = contents.equivalent_block_display(true);
+    assert_eq!(root_display.outside(), DisplayOutside::Block);
+    assert_eq!(root_display.inside(), DisplayInside::Flow);
+    assert_eq!(root_display.to_css_string(), "block");
 }
 
 #[test]

@@ -6,8 +6,6 @@
 //!
 //! [length]: https://drafts.csswg.org/css-values/#lengths
 
-#[cfg(feature = "lynx")]
-use super::Percentage;
 use super::{AllowQuirks, Number, ToComputedValue};
 use crate::computed_value_flags::ComputedValueFlags;
 use crate::derives::*;
@@ -1502,29 +1500,6 @@ impl LengthPercentage {
     /// Returns a `100%` value.
     pub fn hundred_percent() -> LengthPercentage {
         LengthPercentage::Percentage(NoCalcPercentage::hundred())
-    }
-
-    /// Lynx's `offset-distance` grammar: a literal number in [0, 1] or a
-    /// literal percentage in [0%, 100%]. Both forms represent a path fraction,
-    /// so they are stored as the percentage arm of Stylo's standard computed
-    /// type. Lengths and calc() are not accepted.
-    #[cfg(feature = "lynx")]
-    pub fn parse_lynx_offset_distance<'i, 't>(
-        context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Self, ParseError<'i>> {
-        if let Ok(percentage) = input.try_parse(|i| Percentage::parse(context, i)) {
-            if matches!(percentage.get(), Some(value) if (0.0..=1.0).contains(&value)) {
-                return Ok(percentage.to_length_percentage());
-            }
-            return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-        }
-        let number = Number::parse(context, input)?;
-        let value = number
-            .get()
-            .filter(|value| (0.0..=1.0).contains(value))
-            .ok_or_else(|| input.new_custom_error(StyleParseErrorKind::UnspecifiedError))?;
-        Ok(Self::Percentage(NoCalcPercentage::new(value)))
     }
 
     fn parse_internal<'i, 't>(

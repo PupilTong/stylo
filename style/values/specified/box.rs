@@ -105,7 +105,6 @@ pub enum DisplayOutside {
 #[repr(u8)]
 pub enum DisplayInside {
     None = 0,
-    #[cfg(not(feature = "lynx"))]
     Contents,
     Flow,
     #[cfg(not(feature = "lynx"))]
@@ -202,7 +201,6 @@ impl Display {
     /// ::new() inlined so cbindgen can use it
     pub const None: Self =
         Self(((DisplayOutside::None as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::None as u16);
-    #[cfg(not(feature = "lynx"))]
     pub const Contents: Self = Self(
         ((DisplayOutside::None as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Contents as u16,
     );
@@ -447,13 +445,20 @@ impl Display {
     ///
     /// Also used for :root style adjustments.
     pub fn equivalent_block_display(&self, is_root_element: bool) -> Self {
-        // Special handling for `contents` and `list-item`s on the root element.
-        #[cfg(not(feature = "lynx"))]
-        if is_root_element && (self.is_contents() || self.is_list_item()) {
+        // Special handling for `contents` on the root element.
+        if is_root_element && self.is_contents() {
+            #[cfg(feature = "lynx")]
+            return Self::internal_block();
+
+            #[cfg(not(feature = "lynx"))]
             return Display::Block;
         }
-        #[cfg(feature = "lynx")]
-        let _ = is_root_element;
+
+        // Special handling for `list-item`s on the root element.
+        #[cfg(not(feature = "lynx"))]
+        if is_root_element && self.is_list_item() {
+            return Display::Block;
+        }
 
         match self.outside() {
             DisplayOutside::Inline => {
@@ -497,10 +502,6 @@ impl Display {
     /// Returns true if the value is `Contents`
     #[inline]
     pub fn is_contents(&self) -> bool {
-        #[cfg(feature = "lynx")]
-        return false;
-
-        #[cfg(not(feature = "lynx"))]
         match *self {
             Display::Contents => true,
             _ => false,
@@ -528,7 +529,7 @@ impl DisplayKeyword {
     fn parse<'i>(input: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
         use self::DisplayKeyword::*;
         // Lynx's display property chooses only an internal layout algorithm:
-        // none | flex | grid | linear | relative. It has no flow layout, and
+        // none | contents | flex | grid | linear | relative. It has no flow layout, and
         // its documentation explicitly rejects block/inline and all compound
         // <display-outside> <display-inside> forms. Unsupported public
         // constants and inside variants compile out with the parser. Only the
@@ -536,7 +537,6 @@ impl DisplayKeyword {
         // value remains internally representable.
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
-            #[cfg(not(feature = "lynx"))]
             "contents" => Full(Display::Contents),
             #[cfg(feature = "lynx")]
             "linear" => Full(Display::Linear),
@@ -1341,7 +1341,6 @@ bitflags! {
 fn change_bits_for_longhand(longhand: LonghandId) -> WillChangeBits {
     match longhand {
         LonghandId::Opacity => WillChangeBits::OPACITY | WillChangeBits::BACKDROP_ROOT,
-        #[cfg(not(feature = "lynx"))]
         LonghandId::Contain => WillChangeBits::CONTAIN,
         LonghandId::Perspective => WillChangeBits::PERSPECTIVE,
         LonghandId::Position => {

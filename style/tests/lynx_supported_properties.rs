@@ -105,9 +105,11 @@ fn custom_properties_are_still_supported() {
 }
 
 #[test]
-fn will_change_is_content_enabled() {
-    assert!(
-        is_content_enabled("will-change"),
-        "the standard `will-change` property must be content-enabled"
-    );
+fn containment_hints_are_content_enabled() {
+    for name in ["contain", "will-change"] {
+        assert!(
+            is_content_enabled(name),
+            "the standard `{name}` property must be content-enabled"
+        );
+    }
 }

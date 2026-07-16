@@ -2091,23 +2091,6 @@ pub type ZIndex = GenericZIndex<Integer>;
 /// A specified value for the `aspect-ratio` property.
 pub type AspectRatio = GenericAspectRatio<NonNegativeNumber>;
 
-#[cfg(feature = "lynx")]
-impl Parse for AspectRatio {
-    fn parse<'i, 't>(
-        context: &ParserContext,
-        input: &mut Parser<'i, 't>,
-    ) -> Result<Self, ParseError<'i>> {
-        use crate::values::generics::position::PreferredRatio;
-        use crate::values::specified::Ratio;
-
-        Ratio::parse(context, input).map(|ratio| AspectRatio {
-            auto: false,
-            ratio: PreferredRatio::Ratio(ratio),
-        })
-    }
-}
-
-#[cfg(not(feature = "lynx"))]
 impl Parse for AspectRatio {
     fn parse<'i, 't>(
         context: &ParserContext,

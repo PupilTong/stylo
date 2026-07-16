@@ -57,11 +57,11 @@ fn custom_properties_and_var_references_remain_enabled() {
 
 #[test]
 fn display_keyword_gating() {
-    // Lynx: none | flex | grid, plus the Lynx-only linear | relative.
+    // Lynx: none | contents | flex | grid, plus the Lynx-only linear | relative.
     // `grid` is force-enabled under `lynx` (grid_enabled() returns true), so it
     // parses out of the box — matching its grid-* longhands, which are enabled
     // the same way — without needing stylo's `layout.grid.enabled` pref.
-    for value in ["none", "flex", "grid", "linear", "relative"] {
+    for value in ["none", "contents", "flex", "grid", "linear", "relative"] {
         assert_accepts("display", value);
     }
     // Everything else in stylo's `display` grammar is gated out.
@@ -74,7 +74,6 @@ fn display_keyword_gating() {
         "inline-table",
         "flow-root",
         "list-item",
-        "contents",
         "table",
         "table-row",
         "table-cell",

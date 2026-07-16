@@ -53,8 +53,11 @@ fn sizing_position_and_numeric_grammars() {
     rejects("position", &["static"]);
     accepts("visibility", &["visible", "hidden"]);
     rejects("visibility", &["collapse"]);
-    accepts("aspect-ratio", &["1", "16 / 9"]);
-    rejects("aspect-ratio", &["auto"]);
+    accepts(
+        "aspect-ratio",
+        &["auto", "1", "16 / 9", "auto 16 / 9", "16 / 9 auto"],
+    );
+    rejects("aspect-ratio", &["none", "auto auto"]);
 
     accepts(
         "width",
@@ -323,11 +326,6 @@ fn effects_and_motion_grammars() {
             "polygon(0 0, 100% 100%)",
         ],
     );
-    accepts("offset-distance", &["0", "0.5", "1", "50%", "100%"]);
-    rejects(
-        "offset-distance",
-        &["-0.1", "1.1", "101%", "10px", "calc(50%)"],
-    );
     accepts("offset-rotate", &["auto", "0deg", "180deg", "1turn"]);
     rejects(
         "offset-rotate",
@@ -423,11 +421,27 @@ fn grid_and_lynx_layout_grammars() {
 #[test]
 fn w3c_will_change_grammar() {
     accepts(
+        "contain",
+        &[
+            "none",
+            "strict",
+            "content",
+            "size",
+            "inline-size",
+            "layout",
+            "style",
+            "paint",
+            "layout paint",
+        ],
+    );
+    rejects("contain", &["none layout", "strict paint", "content size"]);
+    accepts(
         "will-change",
         &[
             "auto",
             "transform",
             "opacity",
+            "contain",
             "scroll-position",
             "contents",
             "transform, opacity",
