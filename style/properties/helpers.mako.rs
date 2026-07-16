@@ -193,8 +193,26 @@ pub mod ${property.ident} {
     pub mod computed_value {
         #[allow(unused_imports)]
         use crate::derives::*;
-        #[cfg_attr(feature = "servo", derive(Deserialize, Hash, Serialize))]
-        #[derive(Clone, Copy, Debug, Eq, FromPrimitive, MallocSizeOf, Parse, PartialEq, SpecifiedValueInfo, ToAnimatedValue, ToComputedValue, ToCss, ToResolvedValue, ToShmem, ToTyped)]
+        #[derive(
+            Clone,
+            Copy,
+            Debug,
+            Deserialize,
+            Eq,
+            FromPrimitive,
+            Hash,
+            MallocSizeOf,
+            Parse,
+            PartialEq,
+            Serialize,
+            SpecifiedValueInfo,
+            ToAnimatedValue,
+            ToComputedValue,
+            ToCss,
+            ToResolvedValue,
+            ToShmem,
+            ToTyped,
+        )]
         pub enum T {
         % for variant in property.keyword.values_for(engine):
         <%
@@ -212,11 +230,11 @@ pub mod ${property.ident} {
     }
     #[inline]
     pub fn get_initial_value() -> computed_value::T {
-        computed_value::T::${to_camel_case(property.keyword.values[0])}
+        computed_value::T::${to_camel_case(property.keyword.values_for(engine)[0])}
     }
     #[inline]
     pub fn get_initial_specified_value() -> SpecifiedValue {
-        SpecifiedValue::${to_camel_case(property.keyword.values[0])}
+        SpecifiedValue::${to_camel_case(property.keyword.values_for(engine)[0])}
     }
     #[inline]
     pub fn parse<'i, 't>(_context: &ParserContext, input: &mut Parser<'i, 't>)
@@ -474,7 +492,9 @@ pub mod ${property.ident} {
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<SpecifiedValue, ParseError<'i>> {
+        % if not property.vector.single_item:
         use style_traits::Separator;
+        % endif
 
         % if allow_empty or property.vector.none_value:
         if input.try_parse(|input| input.expect_ident_matching("none")).is_ok() {
@@ -486,10 +506,15 @@ pub mod ${property.ident} {
         }
         % endif
 
+        % if property.vector.single_item:
+        let value = single_value::parse(context, input)?;
+        Ok(SpecifiedValue(crate::OwnedSlice::from(vec![value])))
+        % else:
         let v = style_traits::${property.vector.separator}::parse(input, |parser| {
             single_value::parse(context, parser)
         })?;
         Ok(SpecifiedValue(v.into()))
+        % endif
     }
 
     pub use self::single_value::SpecifiedValue as SingleSpecifiedValue;

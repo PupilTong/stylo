@@ -9,6 +9,8 @@ use style_traits::owned_slice::OwnedSlice;
 use crate::color::mix::ColorInterpolationMethod;
 use crate::color::AbsoluteColor;
 use crate::values::animated::{Animate, Procedure, ToAnimatedZero};
+#[cfg(feature = "lynx")]
+use crate::values::computed::ColorPropertyValue as LynxColorPropertyValue;
 use crate::values::computed::Percentage;
 use crate::values::distance::{ComputeSquaredDistance, SquaredDistance};
 use crate::values::generics::color::{
@@ -53,6 +55,43 @@ impl ComputeSquaredDistance for AbsoluteColor {
             .zip(&end)
             .map(|(this, other)| this.compute_squared_distance(other))
             .sum()
+    }
+}
+
+/// Lynx text colors interpolate normally while both endpoints are solid.
+/// Text gradients are not numeric color values in Lynx's animation pipeline,
+/// so any pair involving a gradient is non-interpolable and uses the standard
+/// discrete fallback.
+#[cfg(feature = "lynx")]
+impl Animate for LynxColorPropertyValue {
+    #[inline]
+    fn animate(&self, other: &Self, procedure: Procedure) -> Result<Self, ()> {
+        match (self, other) {
+            (Self::Color(from), Self::Color(to)) => Ok(Self::Color(from.animate(to, procedure)?)),
+            _ => Err(()),
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ComputeSquaredDistance for LynxColorPropertyValue {
+    #[inline]
+    fn compute_squared_distance(&self, other: &Self) -> Result<SquaredDistance, ()> {
+        match (self, other) {
+            (Self::Color(from), Self::Color(to)) => from.compute_squared_distance(to),
+            _ => Err(()),
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToAnimatedZero for LynxColorPropertyValue {
+    #[inline]
+    fn to_animated_zero(&self) -> Result<Self, ()> {
+        match self {
+            Self::Color(color) => Ok(Self::Color(color.to_animated_zero()?)),
+            Self::Gradient(..) => Err(()),
+        }
     }
 }
 

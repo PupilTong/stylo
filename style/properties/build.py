@@ -36,7 +36,11 @@ def main():
     if engine not in ["servo", "gecko"]:
         abort(usage)
 
-    properties = data.PropertiesData(engine)
+    # Set by build.rs from the `lynx` cargo feature: emits the documented Lynx
+    # seed plus the shorthand/longhand closure computed in data.py.
+    lynx = os.environ.get("STYLO_LYNX") == "1"
+
+    properties = data.PropertiesData(engine, lynx=lynx)
     properties_template = os.path.join(BASE, "properties.mako.rs")
     properties_file = render(
         properties_template,
@@ -54,7 +58,7 @@ def main():
         kind: {
             p.name: {"pref": getattr(p, "servo_pref")}
             for prop in properties_list
-            if prop.enabled_in_content()
+            if prop.enabled_in_content() and (not lynx or prop.lynx_exposed)
             for p in [prop] + prop.aliases
         }
         for kind, properties_list in [

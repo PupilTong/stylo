@@ -551,7 +551,11 @@ affects = "paint"
 
 [color]
 type = "ColorPropertyValue"
-initial = "crate::color::AbsoluteColor::BLACK"
+initial = "crate::color::AbsoluteColor::BLACK.into()"
+# Lynx extends `color` with text gradients, but its animation engine only
+# interpolates numeric solid colors. The Lynx computed value therefore keeps
+# normal color animation for solid-to-solid pairs and reports gradient pairs
+# as non-interpolable so Web Animations applies its discrete fallback.
 struct = "inherited_text"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-color/#color"
@@ -764,7 +768,6 @@ affects = "layout"
 type = "SVGPaint"
 initial = "crate::values::computed::SVGPaint::BLACK"
 struct = "inherited_svg"
-engine = "gecko"
 boxed = true
 spec = "https://svgwg.org/svg2-draft/painting.html#SpecifyingFillPaint"
 affects = "paint"
@@ -773,7 +776,6 @@ affects = "paint"
 type = "SVGOpacity"
 initial = "Default::default()"
 struct = "inherited_svg"
-engine = "gecko"
 spec = "https://svgwg.org/svg2-draft/painting.html#FillOpacity"
 affects = "paint"
 
@@ -781,7 +783,6 @@ affects = "paint"
 type = "FillRule"
 initial = "Default::default()"
 struct = "inherited_svg"
-engine = "gecko"
 animation_type = "discrete"
 spec = "https://svgwg.org/svg2-draft/painting.html#FillRuleProperty"
 affects = "paint"
@@ -1263,6 +1264,7 @@ affects = "layout"
 # box-level `display: linear` layout mode; reusing Box keeps this patch small
 # and gives ComputedValues generated clone_* accessors without a new style struct.
 [linear-direction]
+lynx_only = true
 struct = "box"
 spec = "Nonstandard Lynx linear layout property"
 animation_type = "none"
@@ -1271,6 +1273,7 @@ affects = "layout"
 keyword = { values = ["column", "row", "column-reverse", "row-reverse"] }
 
 [linear-weight]
+lynx_only = true
 type = "NonNegativeNumber"
 initial = "From::from(0.)"
 struct = "box"
@@ -1280,6 +1283,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [linear-weight-sum]
+lynx_only = true
 type = "NonNegativeNumber"
 initial = "From::from(0.)"
 struct = "box"
@@ -1292,7 +1296,9 @@ affects = "layout"
 # linear layout knobs above: they parameterize the box-level `display: relative`
 # layout mode while keeping this fork patch mechanical and accessor-compatible.
 [relative-id]
+lynx_only = true
 type = "Integer"
+parse_method = "parse_positive"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1301,6 +1307,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-top]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1310,6 +1317,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-right]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1319,6 +1327,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-bottom]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1328,6 +1337,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-left]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1337,7 +1347,8 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-top-of]
-type = "Integer"
+lynx_only = true
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1346,7 +1357,8 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-right-of]
-type = "Integer"
+lynx_only = true
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1355,7 +1367,8 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-bottom-of]
-type = "Integer"
+lynx_only = true
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1364,7 +1377,8 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-left-of]
-type = "Integer"
+lynx_only = true
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1373,6 +1387,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-inline-start]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1382,6 +1397,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-align-inline-end]
+lynx_only = true
 type = "lynx_layout::RelativeAlign"
 initial = "-1"
 struct = "box"
@@ -1391,7 +1407,8 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-inline-start-of]
-type = "Integer"
+lynx_only = true
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1400,7 +1417,8 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-inline-end-of]
-type = "Integer"
+lynx_only = true
+type = "lynx_layout::RelativeReference"
 initial = "-1"
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
@@ -1409,6 +1427,7 @@ servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
 [relative-center]
+lynx_only = true
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
 animation_type = "none"
@@ -1417,6 +1436,7 @@ affects = "layout"
 keyword = { values = ["none", "vertical", "horizontal", "both"] }
 
 [relative-layout-once]
+lynx_only = true
 struct = "box"
 spec = "Nonstandard Lynx relative layout property"
 animation_type = "none"
@@ -1511,6 +1531,8 @@ affects = "layout"
 [max-height]
 type = "MaxSize"
 initial = "computed::MaxSize::none()"
+lynx_parse_method = "parse_lynx_max_size"
+lynx_allow_quirks = false
 struct = "position"
 logical_group = "max-size"
 allow_quirks = true
@@ -1533,6 +1555,8 @@ affects = "layout"
 [max-width]
 type = "MaxSize"
 initial = "computed::MaxSize::none()"
+lynx_parse_method = "parse_lynx_max_size"
+lynx_allow_quirks = false
 struct = "position"
 logical_group = "max-size"
 allow_quirks = true
@@ -1639,7 +1663,9 @@ affects = "overflow"
 type = "OffsetRotate"
 initial = "computed::OffsetRotate::auto()"
 struct = "box"
-engine = "gecko"
+# Lynx-supported; gecko-only in stylo. Expose in servo behind the experimental
+# pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 flags = "CAN_ANIMATE_ON_COMPOSITOR"
 spec = "https://drafts.fxtf.org/motion-1/#offset-rotate-property"
 servo_restyle_damage = "rebuild_box"
@@ -1771,7 +1797,7 @@ affects = "layout"
 type = "OverscrollBehavior"
 initial = "computed::OverscrollBehavior::Auto"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "overscroll-behavior"
 logical = true
 spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properties"
@@ -1782,7 +1808,7 @@ affects = "paint"
 type = "OverscrollBehavior"
 initial = "computed::OverscrollBehavior::Auto"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "overscroll-behavior"
 logical = true
 spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properties"
@@ -1793,7 +1819,7 @@ affects = "paint"
 type = "OverscrollBehavior"
 initial = "computed::OverscrollBehavior::Auto"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "overscroll-behavior"
 spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properties"
 animation_type = "discrete"
@@ -1803,7 +1829,7 @@ affects = "paint"
 type = "OverscrollBehavior"
 initial = "computed::OverscrollBehavior::Auto"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "overscroll-behavior"
 spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properties"
 animation_type = "discrete"
@@ -2141,7 +2167,6 @@ affects = "paint"
 type = "SVGPaint"
 initial = "Default::default()"
 struct = "inherited_svg"
-engine = "gecko"
 boxed = true
 spec = "https://svgwg.org/svg2-draft/painting.html#SpecifyingStrokePaint"
 affects = "paint"
@@ -2150,7 +2175,6 @@ affects = "paint"
 type = "SVGStrokeDashArray"
 initial = "Default::default()"
 struct = "inherited_svg"
-engine = "gecko"
 spec = "https://svgwg.org/svg2-draft/painting.html#StrokeDashing"
 affects = "paint"
 
@@ -2158,7 +2182,6 @@ affects = "paint"
 type = "SVGLength"
 initial = "computed::SVGLength::zero()"
 struct = "inherited_svg"
-engine = "gecko"
 spec = "https://svgwg.org/svg2-draft/painting.html#StrokeDashing"
 affects = "paint"
 
@@ -2166,7 +2189,6 @@ affects = "paint"
 type = "NonNegativeNumber"
 initial = "From::from(4.0)"
 struct = "inherited_svg"
-engine = "gecko"
 spec = "https://svgwg.org/svg2-draft/painting.html#StrokeMiterlimitProperty"
 affects = "layout"
 
@@ -2174,7 +2196,6 @@ affects = "layout"
 type = "SVGOpacity"
 initial = "Default::default()"
 struct = "inherited_svg"
-engine = "gecko"
 spec = "https://svgwg.org/svg2-draft/painting.html#StrokeOpacity"
 affects = "paint"
 
@@ -2182,7 +2203,6 @@ affects = "paint"
 type = "SVGWidth"
 initial = "computed::SVGWidth::one()"
 struct = "inherited_svg"
-engine = "gecko"
 spec = "https://svgwg.org/svg2-draft/painting.html#StrokeWidth"
 affects = "layout"
 
@@ -2224,6 +2244,8 @@ affects = "layout"
 type = "SimpleShadow"
 struct = "inherited_text"
 vector = { simple_bindings = true, animation_type = "with_zero" }
+lynx_vector = { simple_bindings = true, single_item = true }
+lynx_animation_type = "none"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-text-decor-3/#text-shadow-property"
 servo_restyle_damage = "repaint"
@@ -2688,7 +2710,11 @@ affects = "paint"
 type = "Color"
 initial = "computed_value::T::currentcolor()"
 struct = "inherited_text"
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke-color`; stylo ships it gecko-only
+# under the -webkit- name. Expose it in servo behind the experimental pref (so
+# the `lynx` feature force-enables it) and register the unprefixed Lynx alias.
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke-color"]
 ignored_when_colors_disabled = true
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke-color"
 affects = "paint"
@@ -2697,7 +2723,9 @@ affects = "paint"
 type = "LineWidth"
 initial = "app_units::Au(0)"
 struct = "inherited_text"
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke-width` (see -webkit-text-stroke-color).
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke-width"]
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke-width"
 animation_type = "discrete"
 affects = "overflow"
@@ -2922,6 +2950,7 @@ struct = "text"
 servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 boxed = true
+lynx_boxed = false
 spec = "https://drafts.csswg.org/css-ui/#propdef-text-overflow"
 servo_restyle_damage = "rebuild_box"
 affects = "paint"
@@ -3834,7 +3863,6 @@ gecko_inexhaustive = true
 
 [box-decoration-break]
 struct = "border"
-engine = "gecko"
 spec = "https://drafts.csswg.org/css-break/#propdef-box-decoration-break"
 animation_type = "discrete"
 affects = "layout"
@@ -3870,7 +3898,7 @@ keyword = { values = ["none", "top"] }
 
 [scroll-behavior]
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/cssom-view/#propdef-scroll-behavior"
 animation_type = "discrete"
 affects = ""
@@ -4002,7 +4030,7 @@ struct = "inherited_box"
 spec = "https://drafts.csswg.org/css-box/#propdef-visibility"
 affects = "paint"
 gecko_ffi_name = "mVisible"
-keyword = { values = ["visible", "hidden", "collapse"] }
+keyword = { values = ["visible", "hidden", "collapse"], lynx_values = ["visible", "hidden"] }
 
 [direction]
 struct = "inherited_box"
@@ -4071,7 +4099,6 @@ keyword = { values = ["auto", "optimizespeed", "crispedges", "geometricprecision
 
 [stroke-linecap]
 struct = "inherited_svg"
-engine = "gecko"
 spec = "https://svgwg.org/svg2-draft/painting.html#StrokeLinecapProperty"
 animation_type = "discrete"
 affects = "layout"
@@ -4079,7 +4106,6 @@ keyword = { values = ["butt", "round", "square"] }
 
 [stroke-linejoin]
 struct = "inherited_svg"
-engine = "gecko"
 spec = "https://svgwg.org/svg2-draft/painting.html#StrokeLinejoinProperty"
 animation_type = "discrete"
 affects = "layout"

@@ -169,6 +169,7 @@ impl Parse for BackgroundRepeat {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 fn background_clip_border_area_enabled(context: &ParserContext) -> bool {
     context.chrome_rules_enabled()
         || static_prefs::pref!("layout.css.background-clip.border-area.enabled")
@@ -220,7 +221,10 @@ pub enum BackgroundClip {
     // TODO: text and border-area are supposed to combine in backgrounds-4...
     #[cfg(feature = "gecko")]
     Text,
-    #[parse(condition = "background_clip_border_area_enabled")]
+    #[cfg_attr(
+        not(feature = "lynx"),
+        parse(condition = "background_clip_border_area_enabled")
+    )]
     #[value_info(skip)]
     BorderArea,
 }
@@ -260,7 +264,7 @@ impl BackgroundClip {
         context: &ParserContext,
         input: &mut Parser<'i, '_>,
     ) -> Result<Self, ParseError<'i>> {
-        let clip = Self::parse(context, input)?;
+        let clip = <Self as Parse>::parse(context, input)?;
         if !clip.validity().intersects(ClipValidity::BACKGROUND) {
             return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
         }
@@ -272,7 +276,7 @@ impl BackgroundClip {
         context: &ParserContext,
         input: &mut Parser<'i, '_>,
     ) -> Result<Self, ParseError<'i>> {
-        let clip = Self::parse(context, input)?;
+        let clip = <Self as Parse>::parse(context, input)?;
         if !clip.validity().intersects(ClipValidity::MASK) {
             return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
         }
