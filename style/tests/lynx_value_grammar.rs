@@ -197,13 +197,27 @@ fn alignment_and_text_keyword_grammars() {
     rejects("text-align", &["justify", "match-parent", "-webkit-center"]);
     accepts("text-overflow", &["clip", "ellipsis"]);
     rejects("text-overflow", &["clip ellipsis", "\"more\""]);
+    // Line keywords combine (W3C `mixed` grammar; the C++ handler stores both
+    // flags for "underline line-through"), but `none` only appears alone.
     accepts(
         "text-decoration-line",
-        &["none", "underline", "line-through"],
+        &[
+            "none",
+            "underline",
+            "line-through",
+            "underline line-through",
+            "line-through underline",
+        ],
     );
     rejects(
         "text-decoration-line",
-        &["overline", "blink", "underline line-through"],
+        &[
+            "overline",
+            "blink",
+            "underline overline",
+            "underline underline",
+            "none underline",
+        ],
     );
 }
 
