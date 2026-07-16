@@ -70,6 +70,14 @@ impl ComputedTimingFunction {
     /// The output of the timing function given the progress ratio of this animation.
     pub fn calculate_output(&self, progress: f64, before_flag: BeforeFlag, epsilon: f64) -> f64 {
         let progress = match self {
+            #[cfg(feature = "lynx")]
+            TimingFunction::SquareBezier { x, y } => {
+                let x1 = *x * (2.0 / 3.0);
+                let y1 = *y * (2.0 / 3.0);
+                let x2 = 1.0 + (*x - 1.0) * (2.0 / 3.0);
+                let y2 = 1.0 + (*y - 1.0) * (2.0 / 3.0);
+                Bezier::calculate_bezier_output(progress, epsilon, x1, y1, x2, y2)
+            },
             TimingFunction::CubicBezier { x1, y1, x2, y2 } => {
                 Bezier::calculate_bezier_output(progress, epsilon, *x1, *y1, *x2, *y2)
             },
