@@ -288,6 +288,7 @@ kind = "two_properties"
 # properties/lynx_properties.txt so it parses from author CSS under the `lynx`
 # feature; the closure pass then exposes its physical longhands automatically.
 [contain-intrinsic-size]
+servo_pref = "layout.unimplemented"
 sub_properties = ["contain-intrinsic-width", "contain-intrinsic-height"]
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 kind = "two_properties"

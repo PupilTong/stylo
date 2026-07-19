@@ -652,6 +652,7 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
 logical = true
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -661,6 +662,7 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
 servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -670,6 +672,7 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
 logical = true
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -679,6 +682,7 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
 servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -715,13 +719,12 @@ affects = "layout"
 type = "ContentVisibility"
 initial = "computed::ContentVisibility::Visible"
 struct = "box"
-# lynx-vello: discrete animation. Upstream stylo animates content-visibility with
-# a bespoke non-discrete interpolation, but its `Animate`/`ComputeSquaredDistance`
-# /`ToAnimatedZero` impls are `#[cfg(feature = "gecko")]`-only
-# (helpers/animated_properties.mako.rs), so `animation_type = "normal"` does not
-# compile for servo. Discrete keeps the property animatable via `animate_discrete`
-# (Clone only) without those impls, and is spec-reasonable for content-visibility.
-animation_type = "discrete"
+# lynx-vello: ported to servo behind the experimental pref (the
+# -webkit-text-stroke*/offset-distance pattern); the `lynx` feature
+# force-enables it. Animation stays the default `normal`: the css-contain-2
+# §4.1 bespoke interpolation (hidden never appears mid-transition) lives in
+# helpers/animated_properties.mako.rs and is shared by gecko and servo.
+servo_pref = "layout.unimplemented"
 servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-contain/#content-visibility"
 affects = "layout"
