@@ -44,6 +44,12 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "border-block-start-color",
     "block-size",
     "inline-size",
+    // Logical contain-intrinsic longhands: un-gecko'd for the servo build so the
+    // `contain-intrinsic-size` logical group stays balanced, but deliberately
+    // kept OUT of the lynx_properties.txt seed (only the physical
+    // contain-intrinsic-width/-height are exposed, via the shorthand closure).
+    "contain-intrinsic-block-size",
+    "contain-intrinsic-inline-size",
     // Logical properties outside both the project seed and its shorthand
     // closure.
     "padding-block",
