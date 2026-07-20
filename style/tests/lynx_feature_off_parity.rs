@@ -74,3 +74,24 @@ fn lynx_only_names_and_values_do_not_exist() {
         );
     }
 }
+
+#[test]
+fn ported_containment_surface_stays_pref_gated() {
+    // The css-contain-2 family is ported to servo for the `lynx` feature's
+    // benefit, but a stock Servo build keeps it behind the experimental
+    // `layout.unimplemented` pref (the -webkit-text-stroke*/offset-distance
+    // pattern): none of it may reach the author surface — or `@supports` —
+    // without the pref.
+    for (name, value) in [
+        ("contain", "strict"),
+        ("content-visibility", "hidden"),
+        ("contain-intrinsic-size", "auto 100px"),
+        ("contain-intrinsic-width", "50px"),
+        ("contain-intrinsic-height", "none"),
+    ] {
+        assert!(
+            !parses(name, value),
+            "stock servo must keep `{name}: {value}` pref-gated"
+        );
+    }
+}
