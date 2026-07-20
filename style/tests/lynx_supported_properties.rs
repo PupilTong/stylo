@@ -63,6 +63,11 @@ fn shorthand_longhand_closure_is_authorable() {
         "background-attachment",
         "border-image",
         "border-image-source",
+        // The `contain-intrinsic-size` shorthand is seeded; its physical
+        // longhands are pulled in by the closure (the logical block/inline pair
+        // stays disabled — see lynx_disabled_properties / lynx_containment).
+        "contain-intrinsic-height",
+        "contain-intrinsic-width",
         "font",
         "font-kerning",
         "font-stretch",
