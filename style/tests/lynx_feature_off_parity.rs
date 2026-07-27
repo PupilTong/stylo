@@ -95,3 +95,19 @@ fn ported_containment_surface_stays_pref_gated() {
         );
     }
 }
+
+#[test]
+fn background_clip_text_stays_pref_gated() {
+    // `background-clip: text` is un-gated from gecko for the `lynx`
+    // feature's benefit (Lynx supports it as a Core value); a stock Servo
+    // build keeps it behind gecko's backgrounds-4 pref name
+    // (`layout.css.background-clip-text.enabled`), like `border-area`.
+    assert!(
+        !parses("background-clip", "text"),
+        "stock servo must keep `background-clip: text` pref-gated"
+    );
+    assert!(
+        !parses("mask-clip", "text"),
+        "`text` is background-only in the shared clip grammar"
+    );
+}

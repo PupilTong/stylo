@@ -2092,7 +2092,6 @@ pub mod transition {
     }
 }
 
-#[cfg(not(feature = "lynx"))]
 pub mod outline {
     pub use crate::properties::generated::shorthands::outline::*;
 

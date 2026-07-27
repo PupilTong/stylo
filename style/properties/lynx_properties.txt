@@ -152,6 +152,10 @@ offset-path
 offset-rotate
 opacity
 order
+outline               # outline-offset is deliberately absent: Lynx outlines are flush rings
+outline-color
+outline-style
+outline-width
 overflow-x
 overflow-y
 overflow
