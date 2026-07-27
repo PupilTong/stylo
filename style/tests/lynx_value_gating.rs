@@ -132,3 +132,17 @@ fn direction_follows_the_w3c_grammar() {
     assert_rejects("direction", "normal");
     assert_rejects("direction", "lynx-rtl");
 }
+
+#[test]
+fn background_clip_accepts_the_lynx_value_surface() {
+    // Lynx's background-clip surface: the three standard boxes, the
+    // backgrounds-4 `text` value (Core in Lynx — also the lowering target
+    // for Lynx's gradient-valued `color` sugar), and the Lynx-only
+    // `border-area` (v3.6).
+    for value in ["border-box", "padding-box", "content-box", "text", "border-area"] {
+        assert_accepts("background-clip", value);
+    }
+    // mask-clip keeps rejecting the background-only values.
+    assert_rejects("mask-clip", "text");
+    assert_rejects("mask-clip", "border-area");
+}
