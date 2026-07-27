@@ -146,3 +146,23 @@ fn background_clip_accepts_the_lynx_value_surface() {
     assert_rejects("mask-clip", "text");
     assert_rejects("mask-clip", "border-area");
 }
+
+#[test]
+fn outline_accepts_the_w3c_grammar_without_offset() {
+    // The lynx grammar seeds `outline`/`outline-color`/`outline-style`/
+    // `outline-width` (Lynx Core rows); `outline-offset` stays out — Lynx
+    // outlines are flush rings (lynx/core/style/outline_data.h has no
+    // offset field).
+    assert_accepts("outline", "1px solid red");
+    assert_accepts("outline", "medium auto");
+    assert_accepts("outline-style", "auto");
+    assert_accepts("outline-style", "dashed");
+    assert_accepts("outline-width", "thick");
+    assert_accepts("outline-color", "rebeccapurple");
+    // The lynx color grammar has no `currentcolor` keyword (Lynx's own
+    // color parser: keyword/hex/rgb/rgba/hsl/hsla) — outline-color follows
+    // the shared trim; its *initial* value is still the currentcolor
+    // computed value internally.
+    assert_rejects("outline-color", "currentcolor");
+    assert_rejects("outline-offset", "2px");
+}
