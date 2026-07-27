@@ -44,7 +44,10 @@ fn generate_properties(engine: &str) {
     for entry in WalkDir::new("properties") {
         let entry = entry.unwrap();
         match entry.path().extension().and_then(|e| e.to_str()) {
-            Some("mako") | Some("rs") | Some("py") | Some("zip") | Some("toml") => {
+            // `txt` covers lynx_properties.txt — the lynx property seed
+            // list feeds codegen through data.py, so editing it must
+            // regenerate.
+            Some("mako") | Some("rs") | Some("py") | Some("zip") | Some("toml") | Some("txt") => {
                 println!("cargo:rerun-if-changed={}", entry.path().display());
             },
             _ => {},

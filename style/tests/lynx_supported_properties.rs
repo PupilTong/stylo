@@ -23,6 +23,10 @@ const OMITTED_PROPERTIES: &[&str] = &[
     "linear-cross-gravity",
     "linear-gravity",
     "linear-layout-gravity",
+    // Lynx has no outline-offset (outlines are flush rings; see
+    // lynx/core/style/outline_data.h) and it is not part of the `outline`
+    // shorthand's closure — pin it out so a codegen change cannot expose it.
+    "outline-offset",
 ];
 
 fn lynx_property_seeds() -> impl Iterator<Item = &'static str> {
