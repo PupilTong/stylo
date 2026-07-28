@@ -59,8 +59,6 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "backface-visibility",
     "perspective-origin",
     "transform-style",
-    "object-fit",
-    "object-position",
     "isolation",
     "appearance",
     "user-select",
