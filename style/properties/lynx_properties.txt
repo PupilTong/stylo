@@ -147,6 +147,8 @@ max-height
 max-width
 min-height
 min-width
+object-fit
+object-position
 offset-distance
 offset-path
 offset-rotate
