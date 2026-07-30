@@ -2278,11 +2278,9 @@ impl BreakWithin {
 pub enum Overflow {
     Visible,
     Hidden,
-    #[cfg(not(feature = "lynx"))]
     Scroll,
     #[cfg(not(feature = "lynx"))]
     Auto,
-    #[cfg(not(feature = "lynx"))]
     Clip,
 }
 
@@ -2293,11 +2291,9 @@ impl Parse for Overflow {
         Ok(try_match_ident_ignore_ascii_case! { input,
             "visible" => Self::Visible,
             "hidden" => Self::Hidden,
-            #[cfg(not(feature = "lynx"))]
             "scroll" => Self::Scroll,
             #[cfg(not(feature = "lynx"))]
             "auto" | "overlay" => Self::Auto,
-            #[cfg(not(feature = "lynx"))]
             "clip" => Self::Clip,
             "-moz-hidden-unscrollable" if crate::pref!("layout.css.overflow-moz-hidden-unscrollable.enabled") => {
                 Overflow::Clip
@@ -2311,20 +2307,40 @@ impl Overflow {
     #[inline]
     pub fn is_scrollable(&self) -> bool {
         #[cfg(feature = "lynx")]
-        return matches!(*self, Self::Hidden);
+        return matches!(*self, Self::Hidden | Self::Scroll);
         #[cfg(not(feature = "lynx"))]
         matches!(*self, Self::Hidden | Self::Scroll | Self::Auto)
+    }
+    /// Return true if the value lets the user scroll the box directly.
+    ///
+    /// `hidden` is a scroll container but is not user-scrollable: it only
+    /// scrolls programmatically (css-overflow-3 §3). `clip` is not even a
+    /// scroll container.
+    #[inline]
+    pub fn is_user_scrollable(&self) -> bool {
+        #[cfg(feature = "lynx")]
+        return matches!(*self, Self::Scroll);
+        #[cfg(not(feature = "lynx"))]
+        matches!(*self, Self::Scroll | Self::Auto)
     }
     /// Convert the value to a scrollable value if it's not already scrollable.
     /// This maps `visible` to `auto` and `clip` to `hidden`.
     #[inline]
     pub fn to_scrollable(&self) -> Self {
-        #[cfg(feature = "lynx")]
-        return Self::Hidden;
-        #[cfg(not(feature = "lynx"))]
         match *self {
-            Self::Hidden | Self::Scroll | Self::Auto => *self,
+            Self::Hidden | Self::Scroll => *self,
+            #[cfg(not(feature = "lynx"))]
+            Self::Auto => *self,
+            #[cfg(not(feature = "lynx"))]
             Self::Visible => Self::Auto,
+            // The lynx grammar has no `auto` to pair a `visible` axis into, so
+            // it pairs into `hidden`: a clip that scrolls only
+            // programmatically. That is how `auto` renders on an axis with
+            // nothing to overflow, and it never leaves an axis spuriously
+            // user-scrollable — but it does mean an axis that *does* overflow
+            // is not draggable, which `auto` would have allowed.
+            #[cfg(feature = "lynx")]
+            Self::Visible => Self::Hidden,
             Self::Clip => Self::Hidden,
         }
     }
