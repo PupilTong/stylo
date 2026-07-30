@@ -1,7 +1,7 @@
 // Verifies the curated per-keyword value trimming under the `lynx` feature:
-// `display` and `overflow{,-x,-y}` use Lynx value sets. `white-space` is a
-// supported shorthand and therefore keeps Stylo's complete shorthand grammar,
-// together with both component longhands.
+// `display` uses a Lynx value set, and `overflow{,-x,-y}` keeps the CSS one
+// minus `auto`. `white-space` is a supported shorthand and therefore keeps
+// Stylo's complete shorthand grammar, together with both component longhands.
 #![cfg(feature = "lynx")]
 
 use style::context::QuirksMode;
@@ -85,14 +85,23 @@ fn display_keyword_gating() {
 
 #[test]
 fn overflow_keyword_gating() {
-    // Lynx overflow / overflow-x / overflow-y: visible | hidden.
+    // overflow / overflow-x / overflow-y: visible | hidden | scroll | clip.
+    // Lynx's own CSS grammar ships only `visible | hidden`, but `overflow` is a
+    // real CSS feature and the web target this is compiled for uses the other
+    // two directly — `web-elements`' own `scroll-view.css` authors
+    // `overflow-y: scroll` and `overflow-x: clip`.
+    //
+    // `auto` stays out (and with it the legacy `overlay` alias): it is the
+    // "scrollbars only when needed" value, and this engine paints no
+    // scrollbars, so it would be indistinguishable from `scroll` except in the
+    // one place it is load-bearing — pairing a `visible` axis in
+    // `to_scrollable()`, which now pairs into `hidden` instead.
     for prop in ["overflow", "overflow-x", "overflow-y"] {
-        for value in ["visible", "hidden"] {
+        for value in ["visible", "hidden", "scroll", "clip"] {
             assert_accepts(prop, value);
         }
-        for value in ["scroll", "auto", "clip", "overlay"] {
-            assert_rejects(prop, value);
-        }
+        assert_rejects(prop, "auto");
+        assert_rejects(prop, "overlay");
     }
 }
 
@@ -139,7 +148,13 @@ fn background_clip_accepts_the_lynx_value_surface() {
     // backgrounds-4 `text` value (Core in Lynx — also the lowering target
     // for Lynx's gradient-valued `color` sugar), and the Lynx-only
     // `border-area` (v3.6).
-    for value in ["border-box", "padding-box", "content-box", "text", "border-area"] {
+    for value in [
+        "border-box",
+        "padding-box",
+        "content-box",
+        "text",
+        "border-area",
+    ] {
         assert_accepts("background-clip", value);
     }
     // mask-clip keeps rejecting the background-only values.
