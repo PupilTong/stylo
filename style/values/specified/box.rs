@@ -224,17 +224,24 @@ impl Display {
     pub const Linear: Self = Self(
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::LynxLinear as u16,
     );
-    #[cfg(not(feature = "lynx"))]
     pub const InlineFlex: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flex as u16);
+    #[cfg(feature = "lynx")]
+    pub const InlineLinear: Self = Self(
+        ((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::LynxLinear as u16,
+    );
     pub const Grid: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
-    #[cfg(not(feature = "lynx"))]
     pub const InlineGrid: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
     #[cfg(feature = "lynx")]
     pub const LynxRelative: Self = Self(
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT)
+            | DisplayInside::LynxRelative as u16,
+    );
+    #[cfg(feature = "lynx")]
+    pub const InlineRelative: Self = Self(
+        ((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::LynxRelative as u16,
     );
     #[cfg(not(feature = "lynx"))]
@@ -463,7 +470,7 @@ impl Display {
         match self.outside() {
             DisplayOutside::Inline => {
                 #[cfg(feature = "lynx")]
-                return Self::internal_block();
+                return Self::new(DisplayOutside::Block, self.inside());
 
                 #[cfg(not(feature = "lynx"))]
                 let inside = match self.inside() {
@@ -528,13 +535,11 @@ enum DisplayKeyword {
 impl DisplayKeyword {
     fn parse<'i>(input: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
         use self::DisplayKeyword::*;
-        // Lynx's display property chooses only an internal layout algorithm:
-        // none | contents | flex | grid | linear | relative. It has no flow layout, and
-        // its documentation explicitly rejects block/inline and all compound
-        // <display-outside> <display-inside> forms. Unsupported public
-        // constants and inside variants compile out with the parser. Only the
-        // private inline-flow encoding required by Stylo's upstream initial
-        // value remains internally representable.
+        // Lynx's display property chooses one precomposed layout value. It has
+        // no author-exposed flow layout, and rejects block/inline and all
+        // compound <display-outside> <display-inside> forms. Only the private
+        // inline-flow encoding required by Stylo's upstream initial value
+        // remains internally representable.
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
             "contents" => Full(Display::Contents),
@@ -548,8 +553,16 @@ impl DisplayKeyword {
             "inline-table" => Full(Display::InlineTable),
             #[cfg(not(feature = "lynx"))]
             "-webkit-flex" => Full(Display::Flex),
+            #[cfg(feature = "lynx")]
+            "inline-flex" => Full(Display::InlineFlex),
             #[cfg(not(feature = "lynx"))]
             "inline-flex" | "-webkit-inline-flex" => Full(Display::InlineFlex),
+            #[cfg(feature = "lynx")]
+            "inline-linear" => Full(Display::InlineLinear),
+            #[cfg(feature = "lynx")]
+            "inline-relative" => Full(Display::InlineRelative),
+            #[cfg(feature = "lynx")]
+            "inline-grid" if grid_enabled() => Full(Display::InlineGrid),
             #[cfg(not(feature = "lynx"))]
             "inline-grid" if grid_enabled() => Full(Display::InlineGrid),
             #[cfg(not(feature = "lynx"))]
@@ -642,10 +655,16 @@ impl ToCss for Display {
             #[cfg(not(feature = "lynx"))]
             Display::TableCaption => dest.write_str("table-caption"),
             _ => match (outside, inside) {
-                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Grid) => dest.write_str("inline-grid"),
-                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Flex) => dest.write_str("inline-flex"),
+                #[cfg(feature = "lynx")]
+                (DisplayOutside::Inline, DisplayInside::LynxLinear) => {
+                    dest.write_str("inline-linear")
+                },
+                #[cfg(feature = "lynx")]
+                (DisplayOutside::Inline, DisplayInside::LynxRelative) => {
+                    dest.write_str("inline-relative")
+                },
                 #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Table) => dest.write_str("inline-table"),
                 #[cfg(feature = "gecko")]
@@ -762,7 +781,17 @@ impl Parse for Display {
 impl SpecifiedValueInfo for Display {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
         #[cfg(feature = "lynx")]
-        f(&["none", "linear", "flex", "grid", "relative"]);
+        f(&[
+            "none",
+            "linear",
+            "flex",
+            "grid",
+            "relative",
+            "inline-flex",
+            "inline-grid",
+            "inline-linear",
+            "inline-relative",
+        ]);
         #[cfg(not(feature = "lynx"))]
         f(&[
             "block",
