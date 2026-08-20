@@ -6,6 +6,7 @@ use cssparser::{Parser as CssParser, ParserInput};
 use style::context::QuirksMode;
 use style::custom_properties::AttrTaint;
 use style::parser::{Parse, ParserContext};
+use style::properties::{longhands, style_structs, ComputedValues};
 use style::stylesheets::{Origin, UrlExtraData};
 use style::values::specified::box_::{Display, DisplayInside, DisplayOutside};
 use style_traits::{ParsingMode, ToCss};
@@ -28,6 +29,21 @@ fn parse_display(css: &str) -> Result<Display, ()> {
     parser
         .parse_entirely(|input| Display::parse(&context, input))
         .map_err(|_| ())
+}
+
+#[test]
+fn display_initial_value_is_flex() {
+    assert_eq!(Display::initial(), Display::Flex);
+    assert_eq!(longhands::display::get_initial_value(), Display::Flex);
+    assert_eq!(
+        longhands::display::get_initial_specified_value(),
+        Display::Flex
+    );
+
+    let values =
+        ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
+    assert_eq!(values.clone_display(), Display::Flex);
+    assert_eq!(values.get_box().original_display, Display::Flex);
 }
 
 #[test]
