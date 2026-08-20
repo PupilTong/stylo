@@ -781,7 +781,7 @@ affects = "layout"
 
 [display]
 type = "Display"
-initial = "computed::Display::inline()"
+initial = "computed::Display::initial()"
 struct = "box"
 spec = "https://drafts.csswg.org/css-display/#propdef-display"
 servo_restyle_damage = "rebuild_box"
