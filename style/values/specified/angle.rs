@@ -25,6 +25,7 @@ const DEG_PER_RAD: f32 = 180.0 / PI;
 /// Number of degrees per turn.
 const DEG_PER_TURN: f32 = 360.0;
 /// Number of degrees per gradian.
+#[cfg(not(feature = "lynx"))]
 const DEG_PER_GRAD: f32 = 180.0 / 200.0;
 
 /// The unit of a `<angle>` value.
@@ -34,6 +35,7 @@ pub enum AngleUnit {
     /// `deg`
     Deg,
     /// `grad`
+    #[cfg(not(feature = "lynx"))]
     Grad,
     /// `rad`
     Rad,
@@ -47,6 +49,7 @@ impl AngleUnit {
     pub fn from_str(unit: &str) -> Result<Self, ()> {
         Ok(match_ignore_ascii_case! { unit,
             "deg" => Self::Deg,
+            #[cfg(not(feature = "lynx"))]
             "grad" => Self::Grad,
             "turn" => Self::Turn,
             "rad" => Self::Rad,
@@ -59,6 +62,7 @@ impl AngleUnit {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Deg => "deg",
+            #[cfg(not(feature = "lynx"))]
             Self::Grad => "grad",
             Self::Rad => "rad",
             Self::Turn => "turn",
@@ -145,6 +149,7 @@ impl NoCalcAngle {
             AngleUnit::Deg => self.value,
             AngleUnit::Rad => self.value * DEG_PER_RAD,
             AngleUnit::Turn => self.value * DEG_PER_TURN,
+            #[cfg(not(feature = "lynx"))]
             AngleUnit::Grad => self.value * DEG_PER_GRAD,
         }
     }
@@ -185,6 +190,7 @@ impl NoCalcAngle {
         let unit = AngleUnit::from_str(unit)?;
         let divisor = match unit {
             AngleUnit::Deg => 1.0,
+            #[cfg(not(feature = "lynx"))]
             AngleUnit::Grad => DEG_PER_GRAD,
             AngleUnit::Turn => DEG_PER_TURN,
             AngleUnit::Rad => DEG_PER_RAD,

@@ -240,12 +240,14 @@ class Vector(object):
         separator='Comma',
         animation_type=None,
         simple_bindings=False,
+        single_item=False,
     ):
         self.need_index = need_index
         self.none_value = none_value
         self.separator = separator
         self.animation_type = animation_type
         self.simple_bindings = simple_bindings
+        self.single_item = single_item
 
 
 class Keyword(object):
@@ -260,6 +262,9 @@ class Keyword(object):
         gecko_aliases=None,
         servo_aliases=None,
         gecko_inexhaustive=None,
+        lynx_values=None,
+        lynx_aliases=None,
+        lynx=False,
     ):
         self.name = name
         self.values = values;
@@ -277,9 +282,24 @@ class Keyword(object):
         self.extra_servo_values = extra_servo_values or []
         self.gecko_aliases = parse_aliases(gecko_aliases or [])
         self.servo_aliases = parse_aliases(servo_aliases or [])
+        self.lynx_values = lynx_values
+        if self.lynx_values is not None:
+            assert self.lynx_values, f"{name}: lynx_values must not be empty"
+            assert self.lynx_values[0] == self.values[0], (
+                f"{name}: narrowing lynx_values must preserve the upstream "
+                "initial keyword; use the UA stylesheet for a different default"
+            )
+        # `None` inherits the engine aliases. An explicit empty list opts out,
+        # which lets a narrowed Lynx grammar reject upstream aliases.
+        self.lynx_aliases = (
+            None if lynx_aliases is None else parse_aliases(lynx_aliases)
+        )
+        self.lynx = lynx
         self.gecko_inexhaustive = gecko_inexhaustive or self.gecko_constant_prefix is not None
 
     def values_for(self, engine):
+        if self.lynx and self.lynx_values is not None:
+            return self.lynx_values
         if engine == "gecko":
             return self.values + self.extra_gecko_values
         elif engine == "servo":
@@ -288,6 +308,8 @@ class Keyword(object):
             raise Exception("Bad engine: " + engine)
 
     def aliases_for(self, engine):
+        if self.lynx and self.lynx_aliases is not None:
+            return self.lynx_aliases
         if engine == "gecko":
             return self.gecko_aliases
         elif engine == "servo":
@@ -373,6 +395,14 @@ class Property(object):
         self.aliases = parse_property_aliases(aliases)
         self.extra_prefixes = parse_property_aliases(extra_prefixes)
         self.flags = flags.split() if flags else []
+        # Build-time author-surface marker. The Lynx generator uses this while
+        # emitting parser/name tables; it is never represented in generated
+        # Rust and therefore is not a runtime property filter.
+        self.lynx_exposed = True
+        # Whether this declaration id has at least one author-facing spelling.
+        # This differs from `lynx_exposed` for a hidden canonical property with
+        # a documented alias (for example `text-stroke-color`).
+        self.lynx_enabled = True
 
     def rule_types_allowed_names(self):
         for name in RULE_VALUES:
@@ -785,6 +815,8 @@ class Alias(object):
         self.idl_method = idl_method(name, self.camel_case)
         self.original = original
         self.enabled_in = original.enabled_in
+        self.lynx_exposed = getattr(original, "lynx_exposed", True)
+        self.lynx_enabled = getattr(original, "lynx_enabled", True)
         self.animatable = original.animatable
         self.servo_pref = original.servo_pref
         self.gecko_pref = gecko_pref
@@ -870,9 +902,71 @@ class Descriptor(object):
         self.camel_case = to_camel_case(name)
 
 
+# Author-facing property names accepted by the `lynx` configuration. Keep the
+# canonical project surface in a plain data file so tests and code generation
+# consume the same source of truth. The list starts from Lynx's property index
+# and applies this project's explicit W3C/Lynx-extension policy:
+#
+#   https://lynxjs.org/next/api/css/properties.md
+#
+# This is the seed set. The actual authored surface is its
+# shorthand/longhand closure: supporting either side of a shorthand relation
+# makes the shorthand and all of its component longhands authorable.
+def _load_lynx_properties():
+    path = os.path.join(os.path.dirname(__file__), "lynx_properties.txt")
+    with open(path, encoding="utf-8") as source:
+        return frozenset(
+            line
+            for raw_line in source
+            if (line := raw_line.partition("#")[0].strip())
+        )
+
+
+LYNX_SEED_PROPERTIES = _load_lynx_properties()
+
+# Non-authorable fields required by Stylo's cascade/style machinery. They are
+# compiled as storage/invariant state but are deliberately absent from the
+# Lynx property-name table. Keep this list disjoint from the authored
+# shorthand/longhand closure: closure members are compiled and exposed by the
+# fixed-point pass below and must not be duplicated here.
+LYNX_INTERNAL_LONGHANDS = frozenset(
+    {
+        "-moz-default-appearance",
+        "-servo-top-layer",
+        "animation-composition",
+        "appearance",
+        "color-scheme",
+        "column-count",
+        "column-width",
+        "container-name",
+        "container-type",
+        "content",
+        "float",
+        "font-size-adjust",
+        "forced-color-adjust",
+        "isolation",
+        "math-depth",
+        "math-style",
+        "mix-blend-mode",
+        "position-try-fallbacks",
+        "rotate",
+        "scale",
+        "text-orientation",
+        "transform-style",
+        "translate",
+        "writing-mode",
+        "zoom",
+    }
+)
+
+
 class PropertiesData(object):
-    def __init__(self, engine):
+    def __init__(self, engine, lynx=False):
         self.engine = engine
+        # Whether the `lynx` cargo feature is on: enables the Lynx-only
+        # additions (properties tagged `lynx_only` in longhands.toml) and emits
+        # a Lynx-specific author parser/property-ID surface.
+        self.lynx = lynx
         self.longhands = []
         self.longhands_by_name = {}
         self.logical_groups = {}
@@ -911,7 +1005,124 @@ class PropertiesData(object):
         ]
 
         longhands_toml = toml.loads(open(os.path.join(os.path.dirname(__file__), "longhands.toml")).read())
+        shorthands_toml = toml.loads(open(os.path.join(os.path.dirname(__file__), "shorthands.toml")).read())
+
+        if self.lynx:
+            available_longhands = {
+                name: args
+                for name, args in longhands_toml.items()
+                if args.get("engine") in (None, self.engine)
+            }
+            available_shorthands = {
+                name: args
+                for name, args in shorthands_toml.items()
+                if args.get("engine") in (None, self.engine)
+                and (
+                    not name.startswith("-webkit-")
+                    or name == "-webkit-text-stroke"
+                )
+            }
+
+            longhand_aliases = {
+                alias: name
+                for name, args in available_longhands.items()
+                for alias, _ in parse_property_aliases(args.get("aliases"))
+            }
+            shorthand_aliases = {
+                alias: name
+                for name, args in available_shorthands.items()
+                for alias, _ in parse_property_aliases(args.get("aliases"))
+            }
+
+            compiled_longhands = {
+                longhand_aliases.get(name, name)
+                for name in LYNX_SEED_PROPERTIES
+                if name in available_longhands or name in longhand_aliases
+            }
+            compiled_shorthands = {
+                shorthand_aliases.get(name, name)
+                for name in LYNX_SEED_PROPERTIES
+                if name in available_shorthands or name in shorthand_aliases
+            }
+            exposed = set(LYNX_SEED_PROPERTIES)
+
+            # Compute a fixed point over shorthand relations. `all` is a
+            # special cascade sentinel rather than a normal relation and is
+            # intentionally not part of this closure. Closure wins over the
+            # documentation seed: once either a shorthand or one of its
+            # longhands is supported, the complete upstream family remains
+            # authorable (including animation-timeline and
+            # transition-behavior).
+            changed = True
+            while changed:
+                changed = False
+                for name, args in available_shorthands.items():
+                    sub_properties = set(args["sub_properties"])
+                    if name not in compiled_shorthands and not sub_properties.intersection(compiled_longhands):
+                        continue
+
+                    if name not in compiled_shorthands:
+                        compiled_shorthands.add(name)
+                        # Canonical -webkit-text-stroke* names are Stylo
+                        # implementation details; Lynx authors use the
+                        # documented unprefixed aliases.
+                        if not name.startswith("-webkit-text-stroke"):
+                            exposed.add(name)
+                        changed = True
+
+                    new_longhands = sub_properties - compiled_longhands
+                    if new_longhands:
+                        compiled_longhands.update(new_longhands)
+                        exposed.update(
+                            longhand
+                            for longhand in new_longhands
+                            if not longhand.startswith("-webkit-text-stroke")
+                        )
+                        changed = True
+
+            # Preserve documented aliases, but do not automatically expose
+            # browser-prefixed aliases that happen to exist in upstream Stylo.
+            exposed.update(LYNX_SEED_PROPERTIES)
+
+            internal_exposed = exposed.intersection(LYNX_INTERNAL_LONGHANDS)
+            assert not internal_exposed, (
+                "LYNX_INTERNAL_LONGHANDS must be disjoint from the authored "
+                f"shorthand/longhand closure: {sorted(internal_exposed)}"
+            )
+
+            compiled = set(compiled_longhands)
+            compiled.update(LYNX_INTERNAL_LONGHANDS)
+
+            logical_groups = {}
+            for name, args in longhands_toml.items():
+                if args.get("engine") not in (None, self.engine):
+                    continue
+                if group := args.get("logical_group"):
+                    logical_groups.setdefault(group, set()).add(name)
+            for members in logical_groups.values():
+                if compiled.intersection(members):
+                    compiled.update(members)
+
+            self.lynx_compiled_longhands = frozenset(compiled)
+            self.lynx_compiled_shorthands = frozenset(compiled_shorthands)
+            self.lynx_exposed_properties = frozenset(exposed)
+        else:
+            self.lynx_compiled_longhands = None
+            self.lynx_compiled_shorthands = None
+            self.lynx_exposed_properties = None
+
         for name, args in longhands_toml.items():
+            # A `lynx_*` key replaces the corresponding declaration key only
+            # in the Lynx build. This changes the generated Rust type/parser/
+            # initial value at build time; it does not generate a runtime mode
+            # switch. `lynx_only` is declaration metadata and is handled by
+            # declare_longhand() below.
+            for key in list(args):
+                if not key.startswith("lynx_") or key == "lynx_only":
+                    continue
+                value = args.pop(key)
+                if self.lynx:
+                    args[key.removeprefix("lynx_")] = value
             style_struct = self.style_struct_by_name_lower(args["struct"])
             del args['struct']
 
@@ -921,7 +1132,7 @@ class PropertiesData(object):
                 if 'values' not in keyword_dict:
                     raise TypeError(f"{name}: keyword should have 'values'")
                 values = keyword_dict.pop('values')
-                keyword = Keyword(name, values, **keyword_dict)
+                keyword = Keyword(name, values, lynx=self.lynx, **keyword_dict)
                 self.declare_longhand(style_struct, name, keyword=keyword, **args)
             else:
                 # Handle predefined_type properties
@@ -998,16 +1209,31 @@ class PropertiesData(object):
             self.declaration_variants.append(v)
             groups[v["type"]] = [v]
 
-        shorthands_toml = toml.loads(open(os.path.join(os.path.dirname(__file__), "shorthands.toml")).read())
         for name, args in shorthands_toml.items():
+            for key in list(args):
+                if not key.startswith("lynx_"):
+                    continue
+                value = args.pop(key)
+                if self.lynx:
+                    args[key.removeprefix("lynx_")] = value
             self.declare_shorthand(name, **args)
         self.declare_all_shorthand()
+
+        if self.lynx:
+            exposed = {
+                prop.name
+                for prop in self.all_properties_and_aliases()
+                if prop.lynx_exposed
+            }
+            missing = sorted(self.lynx_exposed_properties - exposed)
+            extra = sorted(exposed - self.lynx_exposed_properties)
+            assert not missing, "Lynx property closure not declared: %r" % missing
+            assert not extra, "properties outside the Lynx closure exposed: %r" % extra
 
         self.font_face_descriptors = self._load_descriptors("font_face_descriptors.toml")
         self.counter_style_descriptors = self._load_descriptors("counter_style_descriptors.toml")
         self.property_descriptors = self._load_descriptors("property_descriptors.toml")
         self.view_transition_descriptors = self._load_descriptors("view_transition_descriptors.toml")
-
 
     def declare_all_shorthand(self):
         # We don't define the 'all' shorthand using the regular helpers:shorthand
@@ -1076,11 +1302,31 @@ class PropertiesData(object):
     def declare_longhand(self, style_struct, name, extra_gecko_aliases=None, engine=None, **kwargs):
         if engine and self.engine != engine:
             return
+        # Lynx-only additions (the linear-*/relative-* longhands) exist only
+        # under the `lynx` feature; skip declaring them otherwise, since their
+        # value types are `#[cfg(feature = "lynx")]`-gated out of the crate.
+        lynx_only = kwargs.pop("lynx_only", False)
+        if lynx_only and not self.lynx:
+            return
+        if self.lynx and name not in self.lynx_compiled_longhands:
+            return
         if extra_gecko_aliases and self.engine == "gecko":
             kwargs.setdefault('aliases', []).extend(extra_gecko_aliases)
         longhand = Longhand(style_struct, name, **kwargs)
         self.add_prefixed_aliases(longhand)
+        longhand.lynx_enabled = not self.lynx or name in self.lynx_compiled_longhands
+        longhand.lynx_exposed = not self.lynx or name in self.lynx_exposed_properties
+        if self.lynx:
+            longhand.aliases = [
+                alias
+                for alias in longhand.aliases
+                if alias[0] in self.lynx_exposed_properties
+            ]
         longhand.aliases = [Alias(xp[0], longhand, xp[1]) for xp in longhand.aliases]
+        if self.lynx:
+            for alias in longhand.aliases:
+                alias.lynx_exposed = True
+                alias.lynx_enabled = True
         self.longhand_aliases += longhand.aliases
         style_struct.longhands.append(longhand)
         self.longhands.append(longhand)
@@ -1100,10 +1346,30 @@ class PropertiesData(object):
                 sub_properties.extend(extra_gecko_sub_properties)
             if extra_gecko_aliases:
                 kwargs.setdefault('aliases', []).extend(extra_gecko_aliases)
+        if self.lynx and name != "all":
+            if name not in self.lynx_compiled_shorthands:
+                return
         sub_properties = [self.longhands_by_name[s] for s in sub_properties]
         shorthand = Shorthand(name, sub_properties, *args, **kwargs)
         self.add_prefixed_aliases(shorthand)
+        shorthand.lynx_enabled = not self.lynx or name in self.lynx_compiled_shorthands
+        shorthand.lynx_exposed = not self.lynx or name in self.lynx_exposed_properties
+        if self.lynx:
+            shorthand.aliases = [
+                alias
+                for alias in shorthand.aliases
+                if alias[0] in self.lynx_exposed_properties
+            ]
         shorthand.aliases = [Alias(xp[0], shorthand, xp[1]) for xp in shorthand.aliases]
+        if self.lynx:
+            for alias in shorthand.aliases:
+                alias.lynx_exposed = True
+                alias.lynx_enabled = True
+            # `all` is an internal cascade sentinel throughout Stylo. Keep its
+            # generated enum/struct entry, but omit its author-facing parser
+            # name because Lynx does not expose the property.
+            if name != "all" and not shorthand.lynx_exposed and not shorthand.aliases:
+                return
         self.shorthand_aliases += shorthand.aliases
         self.shorthands.append(shorthand)
         self.shorthands_by_name[name] = shorthand
@@ -1136,22 +1402,22 @@ def _add_logical_props(data, props):
 # These are probably Gecko bugs and should be supported per spec.
 def _remove_common_first_line_and_first_letter_properties(props, engine):
     if engine == "gecko":
-        props.remove("tab-size")
-        props.remove("hyphens")
-        props.remove("line-break")
-        props.remove("text-align-last")
-        props.remove("text-emphasis-position")
-        props.remove("text-emphasis-style")
-        props.remove("text-emphasis-color")
-        props.remove("text-wrap-style")
+        props.discard("tab-size")
+        props.discard("hyphens")
+        props.discard("line-break")
+        props.discard("text-align-last")
+        props.discard("text-emphasis-position")
+        props.discard("text-emphasis-style")
+        props.discard("text-emphasis-color")
+        props.discard("text-wrap-style")
 
-    props.remove("overflow-wrap")
-    props.remove("text-align")
-    props.remove("text-justify")
-    props.remove("white-space-collapse")
-    props.remove("text-wrap-mode")
-    props.remove("word-break")
-    props.remove("text-indent")
+    props.discard("overflow-wrap")
+    props.discard("text-align")
+    props.discard("text-justify")
+    props.discard("white-space-collapse")
+    props.discard("text-wrap-mode")
+    props.discard("word-break")
+    props.discard("text-indent")
 
 
 class PropertyRestrictions:
@@ -1265,10 +1531,10 @@ class PropertyRestrictions:
 
         # These are probably Gecko bugs and should be supported per spec.
         for prop in PropertyRestrictions.shorthand(data, "border"):
-            props.remove(prop)
+            props.discard(prop)
         for prop in PropertyRestrictions.shorthand(data, "border-radius"):
-            props.remove(prop)
-        props.remove("box-shadow")
+            props.discard(prop)
+        props.discard("box-shadow")
 
         _remove_common_first_line_and_first_letter_properties(props, data.engine)
         return props
@@ -1292,7 +1558,7 @@ class PropertyRestrictions:
         # ::placeholder can't be SVG text
         props -= PropertyRestrictions.svg_text_properties()
         # Historically ::placeholder's line-height was !important in the UA sheet.
-        props.remove("line-height")
+        props.discard("line-height")
 
         return props
 
