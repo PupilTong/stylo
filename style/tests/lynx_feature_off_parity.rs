@@ -7,8 +7,11 @@
 
 use style::context::QuirksMode;
 use style::properties::declaration_block::parse_one_declaration_into;
-use style::properties::{PropertyId, SourcePropertyDeclaration};
+use style::properties::{
+    longhands, style_structs, ComputedValues, PropertyId, SourcePropertyDeclaration,
+};
 use style::stylesheets::{CssRuleType, Origin, UrlExtraData};
+use style::values::specified::box_::Display;
 use style_traits::ParsingMode;
 
 fn url_data() -> UrlExtraData {
@@ -32,6 +35,21 @@ fn parses(name: &str, value: &str) -> bool {
         CssRuleType::Style,
     )
     .is_ok()
+}
+
+#[test]
+fn upstream_display_initial_value_remains_inline() {
+    assert_eq!(Display::initial(), Display::Inline);
+    assert_eq!(longhands::display::get_initial_value(), Display::Inline);
+    assert_eq!(
+        longhands::display::get_initial_specified_value(),
+        Display::Inline
+    );
+
+    let values =
+        ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
+    assert_eq!(values.clone_display(), Display::Inline);
+    assert_eq!(values.get_box().original_display, Display::Inline);
 }
 
 #[test]

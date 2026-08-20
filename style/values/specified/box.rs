@@ -392,6 +392,20 @@ impl Display {
 
 /// Shared Display impl for both Gecko and Servo.
 impl Display {
+    /// The initial computed value of the `display` property.
+    #[cfg(feature = "lynx")]
+    #[inline]
+    pub const fn initial() -> Self {
+        Self::Flex
+    }
+
+    /// The initial computed value of the `display` property.
+    #[cfg(not(feature = "lynx"))]
+    #[inline]
+    pub const fn initial() -> Self {
+        Self::Inline
+    }
+
     #[cfg(feature = "lynx")]
     #[inline]
     const fn internal_block() -> Self {
@@ -403,14 +417,6 @@ impl Display {
     #[inline]
     pub fn inline() -> Self {
         Display::Inline
-    }
-
-    /// The upstream CSS initial value remains internally representable, but
-    /// Lynx does not expose an `Inline` associated constant or author value.
-    #[cfg(feature = "lynx")]
-    #[inline]
-    pub(crate) const fn inline() -> Self {
-        Self::new(DisplayOutside::Inline, DisplayInside::Flow)
     }
 
     /// Returns whether this `display` value is the display of a flex or
@@ -532,9 +538,9 @@ impl DisplayKeyword {
         // none | contents | flex | grid | linear | relative. It has no flow layout, and
         // its documentation explicitly rejects block/inline and all compound
         // <display-outside> <display-inside> forms. Unsupported public
-        // constants and inside variants compile out with the parser. Only the
-        // private inline-flow encoding required by Stylo's upstream initial
-        // value remains internally representable.
+        // constants and inside variants compile out with the parser. The
+        // shared outside/inside representation can still encode upstream-only
+        // combinations internally, but Lynx never accepts them from authors.
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
             "contents" => Full(Display::Contents),
