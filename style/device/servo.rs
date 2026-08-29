@@ -40,7 +40,7 @@ use crate::device::Device;
 
 /// A trait used to query font metrics in clients of Stylo. This is used by Device to
 /// query font metrics in a way that is specific to the client using Stylo.
-pub trait FontMetricsProvider: Debug + Sync + Send {
+pub trait FontMetricsProvider: Debug + Sync {
     /// Query the font metrics for the given font and the given base font size.
     fn query_font_metrics(
         &self,
