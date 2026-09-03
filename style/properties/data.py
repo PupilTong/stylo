@@ -929,6 +929,19 @@ LYNX_SEED_PROPERTIES = _load_lynx_properties()
 # Lynx property-name table. Keep this list disjoint from the authored
 # shorthand/longhand closure: closure members are compiled and exposed by the
 # fixed-point pass below and must not be duplicated here.
+# Properties a Lynx **user-agent sheet** may set although no page may. They are
+# compiled AND nameable — unlike LYNX_INTERNAL_LONGHANDS, which is neither —
+# but each carries `lynx_enabled_in = "ua"`, so `allowed_in` admits them only
+# for `Origin::UserAgent` and author CSS is rejected at parse time.
+#
+# `container-name` is here because Lynx has no container queries, so the
+# property is not author-facing, yet naming a subtree's role is exactly what a
+# UA sheet needs: a Lynx text block must distinguish its inline-truncation
+# content from a nested text scope, and both are `display: -lynx-text`. Keeping
+# it out of the author surface is what stops a page forging a truncation
+# subtree.
+LYNX_UA_ONLY_PROPERTIES = frozenset({"container-name"})
+
 LYNX_INTERNAL_LONGHANDS = frozenset(
     {
         "-moz-default-appearance",
@@ -938,7 +951,6 @@ LYNX_INTERNAL_LONGHANDS = frozenset(
         "color-scheme",
         "column-count",
         "column-width",
-        "container-name",
         "container-type",
         "content",
         "float",
@@ -1089,9 +1101,18 @@ class PropertiesData(object):
                 "LYNX_INTERNAL_LONGHANDS must be disjoint from the authored "
                 f"shorthand/longhand closure: {sorted(internal_exposed)}"
             )
+            seeded_ua_only = LYNX_SEED_PROPERTIES.intersection(LYNX_UA_ONLY_PROPERTIES)
+            assert not seeded_ua_only, (
+                "LYNX_UA_ONLY_PROPERTIES is for properties no page may set, so "
+                f"it must not name an author-facing seed: {sorted(seeded_ua_only)}"
+            )
+            # Nameable, so a user-agent sheet can mention them; `enabled_in`
+            # is what keeps author CSS out.
+            exposed.update(LYNX_UA_ONLY_PROPERTIES)
 
             compiled = set(compiled_longhands)
             compiled.update(LYNX_INTERNAL_LONGHANDS)
+            compiled.update(LYNX_UA_ONLY_PROPERTIES)
 
             logical_groups = {}
             for name, args in longhands_toml.items():

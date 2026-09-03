@@ -696,6 +696,14 @@ animation_type = "none"
 servo_pref = "layout.container-queries.enabled"
 spec = "https://drafts.csswg.org/css-contain-3/#container-name"
 affects = ""
+# Lynx has no container queries, so this stays out of the authorable property
+# table (LYNX_INTERNAL_LONGHANDS). It is nevertheless the natural way for a
+# user-agent sheet to *name* a subtree's role — which is what the Lynx text
+# block needs in order to tell its inline-truncation content from a nested
+# text scope, both of which are `display: -lynx-text`. `ua` exposes it to
+# user-agent sheets only: author CSS still cannot set it, so a page cannot
+# forge a truncation subtree.
+lynx_enabled_in = "ua"
 
 [container-type]
 type = "ContainerType"

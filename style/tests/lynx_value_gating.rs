@@ -34,6 +34,41 @@ fn parse_value(name: &str, value: &str) -> Result<SourcePropertyDeclaration, ()>
     Ok(declarations)
 }
 
+/// Parse `name: value` in `origin`, through the origin-aware property lookup
+/// rather than the content-only one — the path a stylesheet actually takes.
+fn parse_value_in(name: &str, value: &str, origin: Origin) -> Result<SourcePropertyDeclaration, ()> {
+    use style::custom_properties::AttrTaint;
+    use style::parser::ParserContext;
+
+    let url_data = url_data();
+    let context = ParserContext::new(
+        origin,
+        &url_data,
+        Some(CssRuleType::Style),
+        ParsingMode::DEFAULT,
+        QuirksMode::NoQuirks,
+        Default::default(),
+        None,
+        None,
+        AttrTaint::default(),
+    );
+    let id = PropertyId::parse(name, &context).map_err(|_| ())?;
+    let mut declarations = SourcePropertyDeclaration::default();
+    parse_one_declaration_into(
+        &mut declarations,
+        id,
+        value,
+        origin,
+        &url_data,
+        None,
+        ParsingMode::DEFAULT,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    )
+    .map_err(|_| ())?;
+    Ok(declarations)
+}
+
 fn assert_accepts(name: &str, value: &str) {
     assert!(
         parse_value(name, value).is_ok(),
@@ -93,6 +128,34 @@ fn display_keyword_gating() {
     ] {
         assert_rejects("display", value);
     }
+}
+
+/// `container-name` is nameable in a user-agent sheet and nowhere else.
+///
+/// Lynx has no container queries, so the property is not author-facing — but a
+/// UA sheet needs to name a subtree's role, because a Lynx text block has to
+/// tell its inline-truncation content from a nested text scope and both are
+/// `display: -lynx-text`. Author CSS being rejected is the load-bearing half:
+/// it is what stops a page forging a truncation subtree.
+#[test]
+fn container_name_is_a_user_agent_only_property() {
+    assert!(
+        PropertyId::parse_enabled_for_all_content("container-name").is_err(),
+        "`container-name` must not reach the author-facing property table"
+    );
+    assert!(
+        parse_value_in("container-name", "truncation", Origin::UserAgent).is_ok(),
+        "a user-agent sheet must be able to name a subtree's role"
+    );
+    assert!(
+        parse_value_in("container-name", "truncation", Origin::Author).is_err(),
+        "author CSS must not be able to forge a role a UA sheet assigns"
+    );
+    // The sibling property moved with nothing: container queries stay absent.
+    assert!(
+        parse_value_in("container-type", "inline-size", Origin::UserAgent).is_err(),
+        "`container-type` stays internal — this change exposes one property, not a feature"
+    );
 }
 
 #[test]
