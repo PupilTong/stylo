@@ -25,17 +25,26 @@ pub type CursorImage = generics::GenericCursorImage<Image, Number>;
 impl Parse for Cursor {
     /// cursor: [<url> [<number> <number>]?]# [auto | default | ...]
     fn parse<'i, 't>(
-        context: &ParserContext,
+        _context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<Self, ParseError<'i>> {
+        #[cfg(feature = "lynx")]
+        return Ok(Self {
+            images: Default::default(),
+            keyword: CursorKind::parse(input)?,
+        });
+
+        #[cfg(not(feature = "lynx"))]
         let mut images = vec![];
+        #[cfg(not(feature = "lynx"))]
         loop {
-            match input.try_parse(|input| CursorImage::parse(context, input)) {
+            match input.try_parse(|input| CursorImage::parse(_context, input)) {
                 Ok(image) => images.push(image),
                 Err(_) => break,
             }
             input.expect_comma()?;
         }
+        #[cfg(not(feature = "lynx"))]
         Ok(Self {
             images: images.into(),
             keyword: CursorKind::parse(input)?,
@@ -210,9 +219,9 @@ pub enum CursorKind {
     Move,
     NoDrop,
     NotAllowed,
-    #[parse(aliases = "-moz-grab")]
+    #[cfg_attr(not(feature = "lynx"), parse(aliases = "-moz-grab"))]
     Grab,
-    #[parse(aliases = "-moz-grabbing")]
+    #[cfg_attr(not(feature = "lynx"), parse(aliases = "-moz-grabbing"))]
     Grabbing,
     EResize,
     NResize,
@@ -229,9 +238,9 @@ pub enum CursorKind {
     ColResize,
     RowResize,
     AllScroll,
-    #[parse(aliases = "-moz-zoom-in")]
+    #[cfg_attr(not(feature = "lynx"), parse(aliases = "-moz-zoom-in"))]
     ZoomIn,
-    #[parse(aliases = "-moz-zoom-out")]
+    #[cfg_attr(not(feature = "lynx"), parse(aliases = "-moz-zoom-out"))]
     ZoomOut,
     Auto,
 }

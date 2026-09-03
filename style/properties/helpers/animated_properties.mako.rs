@@ -12,14 +12,14 @@
 #[cfg(feature = "gecko")] use crate::gecko_bindings::structs::NonCustomCSSPropertyId;
 use crate::properties::{
     longhands::{
-        self, visibility::computed_value::T as Visibility,
+        self, content_visibility::computed_value::T as ContentVisibility,
+        visibility::computed_value::T as Visibility,
     },
     CSSWideKeyword, LonghandId,
     PropertyDeclaration, PropertyDeclarationId,
 };
 #[cfg(feature = "gecko")] use crate::properties::{
     gecko,
-    longhands::content_visibility::computed_value::T as ContentVisibility,
     NonCustomPropertyId,
 };
 use std::ptr;
@@ -459,7 +459,11 @@ impl AnimationValue {
             % for prop in data.longhands:
             % if prop.animatable and not prop.logical:
             LonghandId::${prop.camel_case} => {
+                % if data.lynx and prop.name == "color":
+                let computed = style.clone_color_value();
+                % else:
                 let computed = style.clone_${prop.ident}();
+                % endif
                 AnimationValue::${prop.camel_case}(
                 % if prop.animation_type == "discrete":
                     computed
@@ -651,7 +655,6 @@ impl ToAnimatedZero for Visibility {
 }
 
 /// <https://drafts.csswg.org/css-contain-3/#content-visibility-animation>
-#[cfg(feature = "gecko")]
 impl Animate for ContentVisibility {
     #[inline]
     fn animate(&self, other: &Self, procedure: Procedure) -> Result<Self, ()> {
@@ -673,7 +676,6 @@ impl Animate for ContentVisibility {
     }
 }
 
-#[cfg(feature = "gecko")]
 impl ComputeSquaredDistance for ContentVisibility {
     #[inline]
     fn compute_squared_distance(&self, other: &Self) -> Result<SquaredDistance, ()> {
@@ -681,7 +683,6 @@ impl ComputeSquaredDistance for ContentVisibility {
     }
 }
 
-#[cfg(feature = "gecko")]
 impl ToAnimatedZero for ContentVisibility {
     #[inline]
     fn to_animated_zero(&self) -> Result<Self, ()> {

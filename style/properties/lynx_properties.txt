@@ -1,0 +1,214 @@
+# Author-facing CSS property spellings supported by lynx-vello's Stylo
+# `lynx` configuration.
+#
+# Seed source: https://lynxjs.org/next/api/css/properties.md
+# Synced: 2026-07-16
+#
+# This is the project surface after applying the W3C-vs-Lynx-extension policy,
+# not a byte-for-byte mirror of the Lynx index. Keep it as data rather than
+# duplicating the list in generated Rust. The property generator intersects it
+# with the properties available in Stylo.
+# Custom properties (`--*`) use Stylo's separate custom-property path and are
+# therefore not represented by a literal entry here.
+#
+# The Lynx overview explicitly documents grid-column-gap/grid-row-gap as
+# alternate spellings, so both aliases are included.
+
+align-content
+align-items
+align-self
+animation-delay
+animation-direction
+animation-duration
+animation-fill-mode
+animation-iteration-count
+animation-name
+animation-play-state
+animation-timing-function
+animation
+aspect-ratio
+background-clip
+background-color
+background-image
+background-origin
+background-position
+background-repeat
+background-size
+background
+border-bottom-color
+border-bottom-left-radius
+border-bottom-right-radius
+border-bottom-style
+border-bottom-width
+border-bottom
+border-color
+border-end-end-radius
+border-end-start-radius
+border-inline-end-color
+border-inline-end-style
+border-inline-end-width
+border-inline-start-color
+border-inline-start-style
+border-inline-start-width
+border-left-color
+border-left-style
+border-left-width
+border-left
+border-radius
+border-right-color
+border-right-style
+border-right-width
+border-right
+border-start-end-radius
+border-start-start-radius
+border-style
+border-top-color
+border-top-left-radius
+border-top-right-radius
+border-top-style
+border-top-width
+border-top
+border-width
+border
+bottom
+box-shadow
+box-sizing
+clip-path
+color
+column-gap
+grid-column-gap
+# CSS containment (css-contain-2) is a deliberate lynx-vello extension beyond
+# Lynx's own property index (Lynx has no containment property at all): a real
+# W3C feature (https://drafts.csswg.org/css-contain-2/) that the web-target
+# bundles already get via browser passthrough and the native engine wires up to
+# bound relayout / damage propagation. Seeding the `contain-intrinsic-size`
+# shorthand lets the closure pull in its contain-intrinsic-width/-height
+# longhands automatically; the logical contain-intrinsic-block-size/-inline-size
+# stay disabled-for-content (only un-gecko'd in longhands.toml to keep the
+# contain-intrinsic-size logical group balanced for the servo build).
+# css-contain-3 container queries (container-type/-name) stay out of scope.
+contain
+contain-intrinsic-size
+content-visibility
+cursor
+direction
+display
+filter
+flex-basis
+flex-direction
+flex-flow
+flex-grow
+flex-shrink
+flex-wrap
+flex
+font-family
+font-feature-settings
+font-optical-sizing
+font-size
+font-style
+font-variation-settings
+font-weight
+gap
+grid-auto-columns
+grid-auto-flow
+grid-auto-rows
+grid-column-end
+grid-column-start
+grid-column
+grid-row-end
+grid-row-start
+grid-row
+grid-template-columns
+grid-template-rows
+height
+image-rendering
+inset-inline-end
+inset-inline-start
+justify-content
+justify-items
+justify-self
+left
+letter-spacing
+line-height
+linear-direction
+linear-weight-sum
+linear-weight
+margin-bottom
+margin-inline-end
+margin-inline-start
+margin-left
+margin-right
+margin-top
+margin
+mask-composite
+mask-image
+mask
+max-height
+max-width
+min-height
+min-width
+object-fit
+object-position
+offset-distance
+offset-path
+offset-rotate
+opacity
+order
+outline               # outline-offset is deliberately absent: Lynx outlines are flush rings
+outline-color
+outline-style
+outline-width
+overflow-x
+overflow-y
+overflow
+padding-bottom
+padding-inline-end
+padding-inline-start
+padding-left
+padding-right
+padding-top
+padding
+perspective
+pointer-events
+position
+relative-align-bottom
+relative-align-inline-end
+relative-align-inline-start
+relative-align-left
+relative-align-right
+relative-align-top
+relative-bottom-of
+relative-center
+relative-id
+relative-inline-end-of
+relative-inline-start-of
+relative-layout-once
+relative-left-of
+relative-right-of
+relative-top-of
+right
+row-gap
+grid-row-gap
+text-align
+text-decoration
+text-indent
+text-overflow
+text-shadow
+text-stroke-color
+text-stroke-width
+text-stroke
+top
+transform-origin
+transform
+transition-delay
+transition-duration
+transition-property
+transition-timing-function
+transition
+vertical-align
+visibility
+white-space
+width
+will-change
+word-break
+z-index

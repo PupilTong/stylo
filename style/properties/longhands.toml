@@ -551,7 +551,11 @@ affects = "paint"
 
 [color]
 type = "ColorPropertyValue"
-initial = "crate::color::AbsoluteColor::BLACK"
+initial = "crate::color::AbsoluteColor::BLACK.into()"
+# Lynx extends `color` with text gradients, but its animation engine only
+# interpolates numeric solid colors. The Lynx computed value therefore keeps
+# normal color animation for solid-to-solid pairs and reports gradient pairs
+# as non-interpolable so Web Animations applies its discrete fallback.
 struct = "inherited_text"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-color/#color"
@@ -628,14 +632,27 @@ initial = "specified::Contain::empty()"
 struct = "box"
 servo_pref = "layout.unimplemented"
 animation_type = "none"
+# lynx-vello: containment is a deliberate extension (see the containment note in
+# properties/lynx_properties.txt, https://drafts.csswg.org/css-contain-2/). A
+# `contain` change must force relayout; declared explicitly rather than relying
+# on the rebuild_box default so the intent is visible next to the enablement.
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-contain/#contain-property"
 affects = "layout"
 
+# lynx-vello: the logical `contain-intrinsic-block-size` / `-inline-size` pair is
+# un-`gecko`'d ONLY so the `contain-intrinsic-size` logical group stays balanced
+# for the servo build (data.py asserts logical_count * 2 == len(props)). They are
+# deliberately kept OUT of the lynx_properties.txt seed and its closure exposure,
+# so they stay disabled-for-content. No explicit servo_restyle_damage: logical
+# longhands have no own computed storage and are excluded from the servo damage
+# predicates (they resolve to the physical width/height whose rebuild_box damage
+# covers them).
 [contain-intrinsic-block-size]
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
 logical = true
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -645,8 +662,9 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 affects = "layout"
 
@@ -654,7 +672,7 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
 logical = true
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -664,8 +682,9 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 affects = "layout"
 
@@ -700,7 +719,13 @@ affects = "layout"
 type = "ContentVisibility"
 initial = "computed::ContentVisibility::Visible"
 struct = "box"
-engine = "gecko"
+# lynx-vello: ported to servo behind the experimental pref (the
+# -webkit-text-stroke*/offset-distance pattern); the `lynx` feature
+# force-enables it. Animation stays the default `normal`: the css-contain-2
+# §4.1 bespoke interpolation (hidden never appears mid-transition) lives in
+# helpers/animated_properties.mako.rs and is shared by gecko and servo.
+servo_pref = "layout.unimplemented"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-contain/#content-visibility"
 affects = "layout"
 
@@ -752,7 +777,7 @@ affects = "layout"
 
 [display]
 type = "Display"
-initial = "computed::Display::inline()"
+initial = "computed::Display::initial()"
 struct = "box"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-display/#propdef-display"
@@ -1254,6 +1279,190 @@ spec = "https://drafts.csswg.org/css2/visudet.html#propdef-line-height"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
+# Lynx linear layout knobs are stored in Box because they parameterize the
+# box-level `display: linear` layout mode; reusing Box keeps this patch small
+# and gives ComputedValues generated clone_* accessors without a new style struct.
+[linear-direction]
+lynx_only = true
+struct = "box"
+spec = "Nonstandard Lynx linear layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+keyword = { values = ["column", "row", "column-reverse", "row-reverse"] }
+
+[linear-weight]
+lynx_only = true
+type = "NonNegativeNumber"
+initial = "From::from(0.)"
+struct = "box"
+spec = "Nonstandard Lynx linear layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[linear-weight-sum]
+lynx_only = true
+type = "NonNegativeNumber"
+initial = "From::from(0.)"
+struct = "box"
+spec = "Nonstandard Lynx linear layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+# Lynx relative layout knobs are stored in Box for the same reason as the
+# linear layout knobs above: they parameterize the box-level `display: relative`
+# layout mode while keeping this fork patch mechanical and accessor-compatible.
+[relative-id]
+lynx_only = true
+type = "Integer"
+parse_method = "parse_positive"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-top]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-right]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-bottom]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-left]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-top-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-right-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-bottom-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-left-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-inline-start]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-inline-end]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-inline-start-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-inline-end-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-center]
+lynx_only = true
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+keyword = { values = ["none", "vertical", "horizontal", "both"] }
+
+[relative-layout-once]
+lynx_only = true
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+keyword = { values = ["true", "false"] }
+
 [link-parameters]
 type = "LinkParameters"
 initial = "computed::LinkParameters::none()"
@@ -1341,6 +1550,8 @@ affects = "layout"
 [max-height]
 type = "MaxSize"
 initial = "computed::MaxSize::none()"
+lynx_parse_method = "parse_lynx_max_size"
+lynx_allow_quirks = false
 struct = "position"
 logical_group = "max-size"
 allow_quirks = true
@@ -1363,6 +1574,8 @@ affects = "layout"
 [max-width]
 type = "MaxSize"
 initial = "computed::MaxSize::none()"
+lynx_parse_method = "parse_lynx_max_size"
+lynx_allow_quirks = false
 struct = "position"
 logical_group = "max-size"
 allow_quirks = true
@@ -1438,7 +1651,9 @@ affects = "overflow"
 type = "LengthPercentage"
 initial = "computed::LengthPercentage::zero()"
 struct = "box"
-engine = "gecko"
+# Lynx-supported; gecko-only in stylo. Expose in servo behind the experimental
+# pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 flags = "CAN_ANIMATE_ON_COMPOSITOR"
 spec = "https://drafts.fxtf.org/motion-1/#offset-distance-property"
 servo_restyle_damage = "rebuild_box"
@@ -1469,7 +1684,9 @@ affects = "overflow"
 type = "OffsetRotate"
 initial = "computed::OffsetRotate::auto()"
 struct = "box"
-engine = "gecko"
+# Lynx-supported; gecko-only in stylo. Expose in servo behind the experimental
+# pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 flags = "CAN_ANIMATE_ON_COMPOSITOR"
 spec = "https://drafts.fxtf.org/motion-1/#offset-rotate-property"
 servo_restyle_damage = "rebuild_box"
@@ -2048,6 +2265,8 @@ affects = "layout"
 type = "SimpleShadow"
 struct = "inherited_text"
 vector = { simple_bindings = true, animation_type = "with_zero" }
+lynx_vector = { simple_bindings = true, single_item = true }
+lynx_animation_type = "none"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-text-decor-3/#text-shadow-property"
 servo_restyle_damage = "repaint"
@@ -2503,7 +2722,11 @@ affects = "paint"
 type = "Color"
 initial = "computed_value::T::currentcolor()"
 struct = "inherited_text"
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke-color`; stylo ships it gecko-only
+# under the -webkit- name. Expose it in servo behind the experimental pref (so
+# the `lynx` feature force-enables it) and register the unprefixed Lynx alias.
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke-color"]
 ignored_when_colors_disabled = true
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke-color"
 affects = "paint"
@@ -2512,7 +2735,9 @@ affects = "paint"
 type = "LineWidth"
 initial = "app_units::Au(0)"
 struct = "inherited_text"
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke-width` (see -webkit-text-stroke-color).
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke-width"]
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke-width"
 animation_type = "discrete"
 affects = "overflow"
@@ -2739,6 +2964,7 @@ struct = "text"
 servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 boxed = true
+lynx_boxed = false
 spec = "https://drafts.csswg.org/css-ui/#propdef-text-overflow"
 servo_restyle_damage = "rebuild_box"
 affects = "paint"
@@ -3819,7 +4045,7 @@ struct = "inherited_box"
 spec = "https://drafts.csswg.org/css-box/#propdef-visibility"
 affects = "paint"
 gecko_ffi_name = "mVisible"
-keyword = { values = ["visible", "hidden", "collapse"] }
+keyword = { values = ["visible", "hidden", "collapse"], lynx_values = ["visible", "hidden"] }
 
 [direction]
 struct = "inherited_box"

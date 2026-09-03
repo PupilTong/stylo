@@ -544,6 +544,7 @@ fn tweak_when_ignoring_colors(
             declarations_to_apply_unless_overridden
                 .push(PropertyDeclaration::BackgroundColor(color.into()))
         },
+        #[cfg(not(feature = "lynx"))]
         PropertyDeclaration::Color(ref color) => {
             // We honor color: transparent and system colors.
             if color
@@ -968,6 +969,7 @@ impl<'a> Cascade<'a> {
                     self.recompute_font_size_for_zoom_change(&mut context.builder);
                 }
             },
+            #[cfg(not(feature = "lynx"))]
             XLang => {
                 #[cfg(feature = "gecko")]
                 self.recompute_initial_font_family_if_needed(&mut context.builder);
@@ -983,18 +985,22 @@ impl<'a> Cascade<'a> {
                     #[cfg(feature = "gecko")]
                     Self::recompute_math_font_size_if_needed(context);
                 }
-                if self.seen.longhands.contains(LonghandId::XLang)
-                    || self.seen.longhands.contains(LonghandId::FontFamily)
-                {
+                let font_context_changed = self.seen.longhands.contains(LonghandId::FontFamily);
+                #[cfg(not(feature = "lynx"))]
+                let font_context_changed =
+                    font_context_changed || self.seen.longhands.contains(LonghandId::XLang);
+                if font_context_changed {
                     self.recompute_keyword_font_size_if_needed(context);
                 }
                 #[cfg(feature = "gecko")]
                 self.constrain_font_size_if_needed(&mut context.builder);
             },
+            #[cfg(not(feature = "lynx"))]
             XTextScale => {
                 #[cfg(feature = "gecko")]
                 self.unzoom_fonts_if_needed(&mut context.builder);
             },
+            #[cfg(not(feature = "lynx"))]
             MozMinFontSizeRatio => {
                 #[cfg(feature = "gecko")]
                 self.constrain_font_size_if_needed(&mut context.builder);
@@ -1399,9 +1405,11 @@ impl<'a> Cascade<'a> {
     fn recompute_keyword_font_size_if_needed(&self, context: &mut computed::Context) {
         use crate::values::computed::ToComputedValue;
 
-        if !self.seen.longhands.contains(LonghandId::XLang)
-            && !self.seen.longhands.contains(LonghandId::FontFamily)
-        {
+        let font_context_changed = self.seen.longhands.contains(LonghandId::FontFamily);
+        #[cfg(not(feature = "lynx"))]
+        let font_context_changed =
+            font_context_changed || self.seen.longhands.contains(LonghandId::XLang);
+        if !font_context_changed {
             return;
         }
 
