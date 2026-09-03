@@ -169,6 +169,9 @@ pub enum DisplayInside {
     #[cfg(feature = "lynx")]
     #[css(keyword = "relative")]
     LynxRelative,
+    #[cfg(feature = "lynx")]
+    #[css(keyword = "-lynx-text")]
+    LynxText,
     #[cfg(not(feature = "lynx"))]
     TableRowGroup,
     #[cfg(not(feature = "lynx"))]
@@ -294,6 +297,10 @@ impl Display {
     pub const LynxRelative: Self = Self(
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::LynxRelative as u16,
+    );
+    #[cfg(feature = "lynx")]
+    pub const LynxText: Self = Self(
+        ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::LynxText as u16,
     );
     #[cfg(not(feature = "lynx"))]
     pub const Table: Self =
@@ -606,6 +613,8 @@ impl DisplayKeyword {
             "linear" => Full(Display::Linear),
             #[cfg(feature = "lynx")]
             "relative" => Full(Display::LynxRelative),
+            #[cfg(feature = "lynx")]
+            "-lynx-text" => Full(Display::LynxText),
             #[cfg(not(feature = "lynx"))]
             "inline-block" => Full(Display::InlineBlock),
             #[cfg(not(feature = "lynx"))]
@@ -701,6 +710,8 @@ impl ToCss for Display {
             Display::Linear => dest.write_str("linear"),
             #[cfg(feature = "lynx")]
             Display::LynxRelative => dest.write_str("relative"),
+            #[cfg(feature = "lynx")]
+            Display::LynxText => dest.write_str("-lynx-text"),
             #[cfg(not(feature = "lynx"))]
             Display::Block | Display::Inline => outside.to_css(dest),
             #[cfg(not(feature = "lynx"))]
@@ -831,7 +842,7 @@ impl Parse for Display {
 impl SpecifiedValueInfo for Display {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
         #[cfg(feature = "lynx")]
-        f(&["none", "linear", "flex", "grid", "relative"]);
+        f(&["none", "linear", "flex", "grid", "relative", "-lynx-text"]);
         #[cfg(not(feature = "lynx"))]
         f(&[
             "block",

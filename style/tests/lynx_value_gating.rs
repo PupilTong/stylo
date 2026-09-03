@@ -57,11 +57,20 @@ fn custom_properties_and_var_references_remain_enabled() {
 
 #[test]
 fn display_keyword_gating() {
-    // Lynx: none | contents | flex | grid, plus the Lynx-only linear | relative.
+    // Lynx: none | contents | flex | grid, plus the Lynx-only
+    // linear | relative | -lynx-text.
     // `grid` is force-enabled under `lynx` (grid_enabled() returns true), so it
     // parses out of the box — matching its grid-* longhands, which are enabled
     // the same way — without needing stylo's `layout.grid.enabled` pref.
-    for value in ["none", "contents", "flex", "grid", "linear", "relative"] {
+    for value in [
+        "none",
+        "contents",
+        "flex",
+        "grid",
+        "linear",
+        "relative",
+        "-lynx-text",
+    ] {
         assert_accepts("display", value);
     }
     // Everything else in stylo's `display` grammar is gated out.
@@ -78,6 +87,9 @@ fn display_keyword_gating() {
         "table-row",
         "table-cell",
         "table-caption",
+        // The vendor prefix is part of the keyword, not decoration on it.
+        "lynx-text",
+        "text",
     ] {
         assert_rejects("display", value);
     }

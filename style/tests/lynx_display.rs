@@ -1,5 +1,5 @@
-// display:linear|relative are gated behind the `lynx` cargo feature; without it
-// there is nothing to test.
+// display:linear|relative|-lynx-text are gated behind the `lynx` cargo feature;
+// without it there is nothing to test.
 #![cfg(feature = "lynx")]
 
 use cssparser::{Parser as CssParser, ParserInput};
@@ -59,6 +59,15 @@ fn parses_and_serializes_lynx_display_keywords() {
     let relative = parse_display("relative").unwrap();
     assert_eq!(relative, Display::LynxRelative);
     assert_eq!(relative.to_css_string(), "relative");
+
+    let text = parse_display("-lynx-text").unwrap();
+    assert_eq!(text, Display::LynxText);
+    assert_eq!(text.to_css_string(), "-lynx-text");
+
+    // The keyword is a CSS ident, so it matches ASCII-case-insensitively the
+    // way every other display keyword does — the vendor prefix is not a
+    // separate token.
+    assert_eq!(parse_display("-LYNX-TEXT").unwrap(), Display::LynxText);
 }
 
 #[test]
@@ -67,10 +76,13 @@ fn display_inside_serializes_lynx_keywords() {
     // derived `ToCss` on `DisplayInside` (reachable via the multi-keyword
     // fallback) must agree — it kebab-cases the variant NAME unless
     // overridden with `#[css(keyword = ...)]`, which would leak
-    // "lynx-linear"/"lynx-relative".
+    // "lynx-linear"/"lynx-relative". `LynxText` is the sharpest case: the
+    // kebab-cased variant name is "lynx-text", which differs from the real
+    // keyword only by the leading dash.
     assert_eq!(DisplayInside::Contents.to_css_string(), "contents");
     assert_eq!(DisplayInside::LynxLinear.to_css_string(), "linear");
     assert_eq!(DisplayInside::LynxRelative.to_css_string(), "relative");
+    assert_eq!(DisplayInside::LynxText.to_css_string(), "-lynx-text");
 }
 
 #[test]
@@ -113,8 +125,34 @@ fn relative_behaves_like_block_without_becoming_css_block() {
     );
 }
 
+/// A Lynx text block is block-level like every other Lynx display value, but
+/// it is deliberately **not** an item container: a `<text>` establishes one
+/// flattened paragraph, and its subtree is inline content — runs, nested text
+/// scopes and atomic inline boxes — not flex/grid items. `LynxLinear` opts in
+/// to `is_item_container()`; `LynxRelative` and `LynxText` do not.
+#[test]
+fn lynx_text_is_block_level_and_not_an_item_container() {
+    let display = parse_display("-lynx-text").unwrap();
+
+    assert_eq!(display.outside(), DisplayOutside::Block);
+    assert_eq!(display.inside(), DisplayInside::LynxText);
+    assert!(!display.is_item_container());
+    assert!(!display.is_inline_flow());
+    assert!(!display.is_contents());
+    assert!(!display.is_none());
+    assert_eq!(display.equivalent_block_display(false), Display::LynxText);
+    // Blockification is identity for every Block-outside Lynx value, so a
+    // text block at the root is still a text block.
+    assert_eq!(display.equivalent_block_display(true), Display::LynxText);
+}
+
 #[test]
 fn lynx_display_keywords_are_single_keyword_values() {
     assert!(parse_display("inline linear").is_err());
     assert!(parse_display("relative list-item").is_err());
+    assert!(parse_display("inline -lynx-text").is_err());
+    assert!(parse_display("-lynx-text list-item").is_err());
+    // The unprefixed spelling is not the keyword.
+    assert!(parse_display("lynx-text").is_err());
+    assert!(parse_display("text").is_err());
 }
