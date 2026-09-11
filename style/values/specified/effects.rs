@@ -322,6 +322,34 @@ impl Parse for Filter {
             Err(e) => return Err(e.into()),
         };
         input.parse_nested_block(|i| {
+            #[cfg(feature = "lynx")]
+            return match_ignore_ascii_case! { &*function,
+                "blur" => Ok(GenericFilter::Blur(
+                    i.try_parse(|i| NonNegativeLength::parse(context, i))
+                     .unwrap_or(Zero::zero()),
+                )),
+                "brightness" => Ok(GenericFilter::Brightness(
+                    i.try_parse(|i| NonNegativeFactor::parse(context, i))
+                     .unwrap_or(NonNegativeFactor::one()),
+                )),
+                "contrast" => Ok(GenericFilter::Contrast(
+                    i.try_parse(|i| NonNegativeFactor::parse(context, i))
+                     .unwrap_or(NonNegativeFactor::one()),
+                )),
+                "grayscale" => Ok(GenericFilter::Grayscale(
+                    i.try_parse(|i| ZeroToOneFactor::parse(context, i))
+                     .unwrap_or(ZeroToOneFactor::one()),
+                )),
+                "saturate" => Ok(GenericFilter::Saturate(
+                    i.try_parse(|i| NonNegativeFactor::parse(context, i))
+                     .unwrap_or(NonNegativeFactor::one()),
+                )),
+                _ => Err(location.new_custom_error(
+                    ValueParseErrorKind::InvalidFilter(Token::Function(function.clone()))
+                )),
+            };
+
+            #[cfg(not(feature = "lynx"))]
             match_ignore_ascii_case! { &*function,
                 "blur" => Ok(GenericFilter::Blur(
                     i.try_parse(|i| NonNegativeLength::parse(context, i))
@@ -394,15 +422,36 @@ impl Parse for SimpleShadow {
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<Self, ParseError<'i>> {
+        #[cfg(feature = "lynx")]
+        {
+            let horizontal = Length::parse(context, input)?;
+            let vertical = Length::parse(context, input)?;
+            let blur = NonNegativeLength::parse(context, input)?;
+            let color = Color::parse(context, input)?;
+            return Ok(SimpleShadow {
+                color: Some(color),
+                horizontal,
+                vertical,
+                blur: Some(blur),
+            });
+        }
+
+        #[cfg(not(feature = "lynx"))]
         let color = input.try_parse(|i| Color::parse(context, i)).ok();
+        #[cfg(not(feature = "lynx"))]
         let horizontal = Length::parse(context, input)?;
+        #[cfg(not(feature = "lynx"))]
         let vertical = Length::parse(context, input)?;
+        #[cfg(not(feature = "lynx"))]
         let blur = input
             .try_parse(|i| Length::parse_non_negative(context, i))
             .ok();
+        #[cfg(not(feature = "lynx"))]
         let blur = blur.map(NonNegative::<Length>);
+        #[cfg(not(feature = "lynx"))]
         let color = color.or_else(|| input.try_parse(|i| Color::parse(context, i)).ok());
 
+        #[cfg(not(feature = "lynx"))]
         Ok(SimpleShadow {
             color,
             horizontal,

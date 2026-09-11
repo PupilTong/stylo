@@ -105,6 +105,18 @@ impl ServoRestyleDamage {
         StyleDifference { damage, change }
     }
 
+    /// Compute the base restyle damage between two computed styles, i.e. the
+    /// damage derived purely from the per-longhand `servo_restyle_damage`
+    /// classification, WITHOUT the embedder's `TElement::compute_layout_damage`
+    /// hook (which `compute_style_difference` only consults once the base damage
+    /// already contains `RELAYOUT`) and without the custom-property REPAINT
+    /// promotion. Exposed so the fork's containment tests can classify a
+    /// style change without materializing a `TElement` (embedder harvests
+    /// read the traversal's accumulated `ElementData::damage` instead).
+    pub fn compute_base_damage(old: &ComputedValues, new: &ComputedValues) -> ServoRestyleDamage {
+        compute_damage(old, new)
+    }
+
     /// Returns a bitmask indicating that the frame needs to be reconstructed.
     pub fn reconstruct() -> ServoRestyleDamage {
         // There's no way of knowing what kind of damage system the embedder will use, but part of

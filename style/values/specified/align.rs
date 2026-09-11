@@ -238,58 +238,93 @@ impl ContentDistribution {
         input: &mut Parser<'i, 't>,
         axis: AxisDirection,
     ) -> Result<Self, ParseError<'i>> {
-        // NOTE Please also update the `list_keywords` function below
-        //      when this function is updated.
-
-        // Try to parse normal first
-        if input
-            .try_parse(|i| i.expect_ident_matching("normal"))
-            .is_ok()
+        #[cfg(feature = "lynx")]
         {
-            return Ok(ContentDistribution::normal());
-        }
-
-        // Parse <baseline-position>, but only on the block axis.
-        if axis == AxisDirection::Block {
-            if let Ok(value) = input.try_parse(parse_baseline) {
-                return Ok(ContentDistribution::new(value));
-            }
-        }
-
-        // <content-distribution>
-        if let Ok(value) = input.try_parse(parse_content_distribution) {
+            let value = try_match_ident_ignore_ascii_case! { input,
+                "stretch" => AlignFlags::STRETCH,
+                "start" => AlignFlags::START,
+                "end" => AlignFlags::END,
+                "flex-start" => AlignFlags::FLEX_START,
+                "flex-end" => AlignFlags::FLEX_END,
+                "center" => AlignFlags::CENTER,
+                "space-between" => AlignFlags::SPACE_BETWEEN,
+                "space-around" => AlignFlags::SPACE_AROUND,
+                "space-evenly" if axis == AxisDirection::Inline => AlignFlags::SPACE_EVENLY,
+            };
             return Ok(ContentDistribution::new(value));
         }
 
-        // <overflow-position>? <content-position>
-        let overflow_position = input
-            .try_parse(parse_overflow_position)
-            .unwrap_or(AlignFlags::empty());
+        #[cfg(not(feature = "lynx"))]
+        {
+            // NOTE Please also update the `list_keywords` function below
+            //      when this function is updated.
 
-        let content_position = try_match_ident_ignore_ascii_case! { input,
-            "start" => AlignFlags::START,
-            "end" => AlignFlags::END,
-            "flex-start" => AlignFlags::FLEX_START,
-            "flex-end" => AlignFlags::FLEX_END,
-            "center" => AlignFlags::CENTER,
-            "left" if axis == AxisDirection::Inline => AlignFlags::LEFT,
-            "right" if axis == AxisDirection::Inline => AlignFlags::RIGHT,
-        };
+            // Try to parse normal first
+            if input
+                .try_parse(|i| i.expect_ident_matching("normal"))
+                .is_ok()
+            {
+                return Ok(ContentDistribution::normal());
+            }
 
-        Ok(ContentDistribution::new(
-            content_position | overflow_position,
-        ))
+            // Parse <baseline-position>, but only on the block axis.
+            if axis == AxisDirection::Block {
+                if let Ok(value) = input.try_parse(parse_baseline) {
+                    return Ok(ContentDistribution::new(value));
+                }
+            }
+
+            // <content-distribution>
+            if let Ok(value) = input.try_parse(parse_content_distribution) {
+                return Ok(ContentDistribution::new(value));
+            }
+
+            // <overflow-position>? <content-position>
+            let overflow_position = input
+                .try_parse(parse_overflow_position)
+                .unwrap_or(AlignFlags::empty());
+
+            let content_position = try_match_ident_ignore_ascii_case! { input,
+                "start" => AlignFlags::START,
+                "end" => AlignFlags::END,
+                "flex-start" => AlignFlags::FLEX_START,
+                "flex-end" => AlignFlags::FLEX_END,
+                "center" => AlignFlags::CENTER,
+                "left" if axis == AxisDirection::Inline => AlignFlags::LEFT,
+                "right" if axis == AxisDirection::Inline => AlignFlags::RIGHT,
+            };
+
+            return Ok(ContentDistribution::new(
+                content_position | overflow_position,
+            ));
+        }
     }
 }
 
 impl SpecifiedValueInfo for ContentDistribution {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
-        f(&["normal"]);
-        list_baseline_keywords(f); // block-axis only
-        list_content_distribution_keywords(f);
-        list_overflow_position_keywords(f);
-        f(&["start", "end", "flex-start", "flex-end", "center"]);
-        f(&["left", "right"]); // inline-axis only
+        #[cfg(feature = "lynx")]
+        f(&[
+            "stretch",
+            "start",
+            "end",
+            "flex-start",
+            "flex-end",
+            "center",
+            "space-between",
+            "space-around",
+            "space-evenly",
+        ]);
+
+        #[cfg(not(feature = "lynx"))]
+        {
+            f(&["normal"]);
+            list_baseline_keywords(f); // block-axis only
+            list_content_distribution_keywords(f);
+            list_overflow_position_keywords(f);
+            f(&["start", "end", "flex-start", "flex-end", "center"]);
+            f(&["left", "right"]); // inline-axis only
+        }
     }
 }
 
@@ -326,11 +361,24 @@ impl SelfAlignment {
 
     /// Returns whether this value is valid for both axis directions.
     pub fn is_valid_on_both_axes(&self) -> bool {
-        match self.0.value() {
-            // left | right are only allowed on the inline axis.
-            AlignFlags::LEFT | AlignFlags::RIGHT => false,
+        #[cfg(feature = "lynx")]
+        return matches!(
+            self.0.value(),
+            AlignFlags::AUTO
+                | AlignFlags::STRETCH
+                | AlignFlags::CENTER
+                | AlignFlags::START
+                | AlignFlags::END
+        );
 
-            _ => true,
+        #[cfg(not(feature = "lynx"))]
+        {
+            match self.0.value() {
+                // left | right are only allowed on the inline axis.
+                AlignFlags::LEFT | AlignFlags::RIGHT => false,
+
+                _ => true,
+            }
         }
     }
 
@@ -355,30 +403,49 @@ impl SelfAlignment {
         input: &mut Parser<'i, 't>,
         axis: AxisDirection,
     ) -> Result<Self, ParseError<'i>> {
-        // NOTE Please also update the `list_keywords` function below
-        //      when this function is updated.
-
-        // <baseline-position>
-        //
-        // It's weird that this accepts <baseline-position>, but not
-        // justify-content...
-        if let Ok(value) = input.try_parse(parse_baseline) {
+        #[cfg(feature = "lynx")]
+        {
+            let value = try_match_ident_ignore_ascii_case! { input,
+                "auto" => AlignFlags::AUTO,
+                "stretch" => AlignFlags::STRETCH,
+                "center" => AlignFlags::CENTER,
+                "start" => AlignFlags::START,
+                "end" => AlignFlags::END,
+                "flex-start" if axis == AxisDirection::Block => AlignFlags::FLEX_START,
+                "flex-end" if axis == AxisDirection::Block => AlignFlags::FLEX_END,
+                "baseline" if axis == AxisDirection::Block => AlignFlags::BASELINE,
+            };
             return Ok(SelfAlignment(value));
         }
 
-        // auto | normal | stretch
-        if let Ok(value) = input.try_parse(parse_auto_normal_stretch) {
-            return Ok(SelfAlignment(value));
-        }
+        #[cfg(not(feature = "lynx"))]
+        {
+            // NOTE Please also update the `list_keywords` function below
+            //      when this function is updated.
 
-        // <overflow-position>? <self-position>
-        let overflow_position = input
-            .try_parse(parse_overflow_position)
-            .unwrap_or(AlignFlags::empty());
-        let self_position = parse_self_position(input, axis)?;
-        Ok(SelfAlignment(overflow_position | self_position))
+            // <baseline-position>
+            //
+            // It's weird that this accepts <baseline-position>, but not
+            // justify-content...
+            if let Ok(value) = input.try_parse(parse_baseline) {
+                return Ok(SelfAlignment(value));
+            }
+
+            // auto | normal | stretch
+            if let Ok(value) = input.try_parse(parse_auto_normal_stretch) {
+                return Ok(SelfAlignment(value));
+            }
+
+            // <overflow-position>? <self-position>
+            let overflow_position = input
+                .try_parse(parse_overflow_position)
+                .unwrap_or(AlignFlags::empty());
+            let self_position = parse_self_position(input, axis)?;
+            return Ok(SelfAlignment(overflow_position | self_position));
+        }
     }
 
+    #[cfg(not(feature = "lynx"))]
     fn list_keywords(f: KeywordsCollectFn, axis: AxisDirection) {
         list_baseline_keywords(f);
         list_auto_normal_stretch(f);
@@ -426,9 +493,24 @@ impl SelfAlignment {
 
 impl SpecifiedValueInfo for SelfAlignment {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
-        // TODO: This technically lists left/right for align-self. Not amazing but also not sure
-        // worth fixing here, could be special-cased on the caller.
-        Self::list_keywords(f, AxisDirection::Block);
+        #[cfg(feature = "lynx")]
+        f(&[
+            "auto",
+            "stretch",
+            "center",
+            "start",
+            "end",
+            "flex-start",
+            "flex-end",
+            "baseline",
+        ]);
+
+        #[cfg(not(feature = "lynx"))]
+        {
+            // TODO: This technically lists left/right for align-self. Not amazing but also not sure
+            // worth fixing here, could be special-cased on the caller.
+            Self::list_keywords(f, AxisDirection::Block);
+        }
     }
 }
 
@@ -462,6 +544,16 @@ impl ItemPlacement {
     pub fn normal() -> Self {
         Self(AlignFlags::NORMAL)
     }
+
+    /// Whether a one-value `place-items` shorthand can copy this value to
+    /// `justify-items` under Lynx's narrower inline-axis grammar.
+    #[cfg(feature = "lynx")]
+    pub fn is_valid_on_both_axes(&self) -> bool {
+        matches!(
+            self.0.value(),
+            AlignFlags::STRETCH | AlignFlags::CENTER | AlignFlags::START | AlignFlags::END
+        )
+    }
 }
 
 impl ItemPlacement {
@@ -485,41 +577,72 @@ impl ItemPlacement {
         input: &mut Parser<'i, 't>,
         axis: AxisDirection,
     ) -> Result<Self, ParseError<'i>> {
-        // NOTE Please also update `impl SpecifiedValueInfo` below when
-        //      this function is updated.
-
-        // <baseline-position>
-        if let Ok(baseline) = input.try_parse(parse_baseline) {
-            return Ok(Self(baseline));
-        }
-
-        // normal | stretch
-        if let Ok(value) = input.try_parse(parse_normal_stretch) {
+        #[cfg(feature = "lynx")]
+        {
+            let value = try_match_ident_ignore_ascii_case! { input,
+                "stretch" => AlignFlags::STRETCH,
+                "center" => AlignFlags::CENTER,
+                "start" => AlignFlags::START,
+                "end" => AlignFlags::END,
+                "flex-start" if axis == AxisDirection::Block => AlignFlags::FLEX_START,
+                "flex-end" if axis == AxisDirection::Block => AlignFlags::FLEX_END,
+                "baseline" if axis == AxisDirection::Block => AlignFlags::BASELINE,
+            };
             return Ok(Self(value));
         }
 
-        if axis == AxisDirection::Inline {
-            // legacy | [ legacy && [ left | right | center ] ]
-            if let Ok(value) = input.try_parse(parse_legacy) {
+        #[cfg(not(feature = "lynx"))]
+        {
+            // NOTE Please also update `impl SpecifiedValueInfo` below when
+            //      this function is updated.
+
+            // <baseline-position>
+            if let Ok(baseline) = input.try_parse(parse_baseline) {
+                return Ok(Self(baseline));
+            }
+
+            // normal | stretch
+            if let Ok(value) = input.try_parse(parse_normal_stretch) {
                 return Ok(Self(value));
             }
-        }
 
-        // <overflow-position>? <self-position>
-        let overflow = input
-            .try_parse(parse_overflow_position)
-            .unwrap_or(AlignFlags::empty());
-        let self_position = parse_self_position(input, axis)?;
-        Ok(ItemPlacement(self_position | overflow))
+            if axis == AxisDirection::Inline {
+                // legacy | [ legacy && [ left | right | center ] ]
+                if let Ok(value) = input.try_parse(parse_legacy) {
+                    return Ok(Self(value));
+                }
+            }
+
+            // <overflow-position>? <self-position>
+            let overflow = input
+                .try_parse(parse_overflow_position)
+                .unwrap_or(AlignFlags::empty());
+            let self_position = parse_self_position(input, axis)?;
+            return Ok(ItemPlacement(self_position | overflow));
+        }
     }
 }
 
 impl SpecifiedValueInfo for ItemPlacement {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
-        list_baseline_keywords(f);
-        list_normal_stretch(f);
-        list_overflow_position_keywords(f);
-        list_self_position_keywords(f, AxisDirection::Block);
+        #[cfg(feature = "lynx")]
+        f(&[
+            "stretch",
+            "center",
+            "start",
+            "end",
+            "flex-start",
+            "flex-end",
+            "baseline",
+        ]);
+
+        #[cfg(not(feature = "lynx"))]
+        {
+            list_baseline_keywords(f);
+            list_normal_stretch(f);
+            list_overflow_position_keywords(f);
+            list_self_position_keywords(f, AxisDirection::Block);
+        }
     }
 }
 
@@ -569,12 +692,19 @@ impl Parse for JustifyItems {
 
 impl SpecifiedValueInfo for JustifyItems {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
-        ItemPlacement::collect_completion_keywords(f);
-        list_legacy_keywords(f); // Inline axis only
+        #[cfg(feature = "lynx")]
+        f(&["stretch", "center", "start", "end"]);
+
+        #[cfg(not(feature = "lynx"))]
+        {
+            ItemPlacement::collect_completion_keywords(f);
+            list_legacy_keywords(f); // Inline axis only
+        }
     }
 }
 
 // auto | normal | stretch
+#[cfg(not(feature = "lynx"))]
 fn parse_auto_normal_stretch<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> Result<AlignFlags, ParseError<'i>> {
@@ -587,11 +717,13 @@ fn parse_auto_normal_stretch<'i, 't>(
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 fn list_auto_normal_stretch(f: KeywordsCollectFn) {
     f(&["auto", "normal", "stretch"]);
 }
 
 // normal | stretch
+#[cfg(not(feature = "lynx"))]
 fn parse_normal_stretch<'i, 't>(input: &mut Parser<'i, 't>) -> Result<AlignFlags, ParseError<'i>> {
     // NOTE Please also update the `list_normal_stretch` function below
     //      when this function is updated.
@@ -601,11 +733,13 @@ fn parse_normal_stretch<'i, 't>(input: &mut Parser<'i, 't>) -> Result<AlignFlags
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 fn list_normal_stretch(f: KeywordsCollectFn) {
     f(&["normal", "stretch"]);
 }
 
 // <baseline-position>
+#[cfg(not(feature = "lynx"))]
 fn parse_baseline<'i, 't>(input: &mut Parser<'i, 't>) -> Result<AlignFlags, ParseError<'i>> {
     // NOTE Please also update the `list_baseline_keywords` function
     //      below when this function is updated.
@@ -622,11 +756,13 @@ fn parse_baseline<'i, 't>(input: &mut Parser<'i, 't>) -> Result<AlignFlags, Pars
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 fn list_baseline_keywords(f: KeywordsCollectFn) {
     f(&["baseline", "first baseline", "last baseline"]);
 }
 
 // <content-distribution>
+#[cfg(not(feature = "lynx"))]
 fn parse_content_distribution<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> Result<AlignFlags, ParseError<'i>> {
@@ -640,11 +776,13 @@ fn parse_content_distribution<'i, 't>(
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 fn list_content_distribution_keywords(f: KeywordsCollectFn) {
     f(&["stretch", "space-between", "space-around", "space-evenly"]);
 }
 
 // <overflow-position>
+#[cfg(not(feature = "lynx"))]
 fn parse_overflow_position<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> Result<AlignFlags, ParseError<'i>> {
@@ -656,11 +794,13 @@ fn parse_overflow_position<'i, 't>(
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 fn list_overflow_position_keywords(f: KeywordsCollectFn) {
     f(&["safe", "unsafe"]);
 }
 
 // <self-position> | left | right in the inline axis.
+#[cfg(not(feature = "lynx"))]
 fn parse_self_position<'i, 't>(
     input: &mut Parser<'i, 't>,
     axis: AxisDirection,
@@ -681,6 +821,7 @@ fn parse_self_position<'i, 't>(
     })
 }
 
+#[cfg(not(feature = "lynx"))]
 fn list_self_position_keywords(f: KeywordsCollectFn, axis: AxisDirection) {
     f(&[
         "start",
@@ -701,6 +842,7 @@ fn list_self_position_keywords(f: KeywordsCollectFn, axis: AxisDirection) {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 fn parse_left_right_center<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> Result<AlignFlags, ParseError<'i>> {
@@ -714,6 +856,7 @@ fn parse_left_right_center<'i, 't>(
 }
 
 // legacy | [ legacy && [ left | right | center ] ]
+#[cfg(not(feature = "lynx"))]
 fn parse_legacy<'i, 't>(input: &mut Parser<'i, 't>) -> Result<AlignFlags, ParseError<'i>> {
     // NOTE Please also update the `list_legacy_keywords` function below
     //      when this function is updated.
@@ -733,6 +876,7 @@ fn parse_legacy<'i, 't>(input: &mut Parser<'i, 't>) -> Result<AlignFlags, ParseE
     Ok(AlignFlags::LEGACY | flags)
 }
 
+#[cfg(not(feature = "lynx"))]
 fn list_legacy_keywords(f: KeywordsCollectFn) {
     f(&["legacy", "left", "right", "center"]);
 }

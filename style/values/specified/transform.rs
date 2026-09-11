@@ -14,8 +14,10 @@ use crate::values::specified::percentage::NoCalcPercentage;
 use crate::values::specified::position::{
     HorizontalPositionKeyword, Side, VerticalPositionKeyword,
 };
+#[cfg(not(feature = "lynx"))]
+use crate::values::specified::AllowQuirks;
 use crate::values::specified::{
-    self, AllowQuirks, Angle, Integer, Length, LengthPercentage, Number, NumberOrPercentage,
+    self, Angle, Integer, Length, LengthPercentage, Number, NumberOrPercentage,
 };
 use crate::Zero;
 use cssparser::{match_ignore_ascii_case, Parser};
@@ -29,6 +31,19 @@ pub type TransformOperation =
 
 /// A specified CSS `transform`
 pub type Transform = generic::Transform<TransformOperation>;
+
+fn parse_scale_factor<'i, 't>(
+    context: &ParserContext,
+    input: &mut Parser<'i, 't>,
+) -> Result<Number, ParseError<'i>> {
+    #[cfg(feature = "lynx")]
+    return Number::parse(context, input);
+
+    #[cfg(not(feature = "lynx"))]
+    NumberOrPercentage::parse(context, input)?
+        .to_number()
+        .ok_or_else(|| input.new_custom_error(StyleParseErrorKind::UnspecifiedError))
+}
 
 /// The specified value of a CSS `<transform-origin>`
 pub type TransformOrigin = generic::TransformOrigin<
@@ -116,6 +131,7 @@ impl Transform {
     ///
     /// This is used for `-webkit-transform` which allows unitless values for perspective.
     #[inline]
+    #[cfg(not(feature = "lynx"))]
     pub(crate) fn parse_legacy<'i, 't>(
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
@@ -129,7 +145,7 @@ impl Transform {
     fn parse_internal<'i, 't>(
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
-        allow_unitless_perspective: AllowUnitlessPerspective,
+        _allow_unitless_perspective: AllowUnitlessPerspective,
     ) -> Result<Self, ParseError<'i>> {
         use style_traits::{Separator, Space};
 
@@ -233,48 +249,34 @@ impl Transform {
                         // TODO(Bug 2038213) - Properly handle serialization of percentages in calcs in
                         // scale values by not eagerly converting into numbers here at parse time.
                         "scale" => {
-                            let Some(sx) = NumberOrPercentage::parse(context, input)?.to_number() else {
-                                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                            };
+                            let sx = parse_scale_factor(context, input)?;
                             if input.try_parse(|input| input.expect_comma()).is_ok() {
-                                let Some(sy) = NumberOrPercentage::parse(context, input)?.to_number() else {
-                                    return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                                };
+                                let sy = parse_scale_factor(context, input)?;
                                 Ok(generic::TransformOperation::Scale(sx, sy))
                             } else {
                                 Ok(generic::TransformOperation::Scale(sx.clone(), sx))
                             }
                         },
                         "scalex" => {
-                            let Some(sx) = NumberOrPercentage::parse(context, input)?.to_number() else {
-                                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                            };
+                            let sx = parse_scale_factor(context, input)?;
                             Ok(generic::TransformOperation::ScaleX(sx))
                         },
                         "scaley" => {
-                            let Some(sy) = NumberOrPercentage::parse(context, input)?.to_number() else {
-                                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                            };
+                            let sy = parse_scale_factor(context, input)?;
                             Ok(generic::TransformOperation::ScaleY(sy))
                         },
+                        #[cfg(not(feature = "lynx"))]
                         "scalez" => {
-                            let Some(sz) = NumberOrPercentage::parse(context, input)?.to_number() else {
-                                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                            };
+                            let sz = parse_scale_factor(context, input)?;
                             Ok(generic::TransformOperation::ScaleZ(sz))
                         },
+                        #[cfg(not(feature = "lynx"))]
                         "scale3d" => {
-                            let Some(sx) = NumberOrPercentage::parse(context, input)?.to_number() else {
-                                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                            };
+                            let sx = parse_scale_factor(context, input)?;
                             input.expect_comma()?;
-                            let Some(sy) = NumberOrPercentage::parse(context, input)?.to_number() else {
-                                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                            };
+                            let sy = parse_scale_factor(context, input)?;
                             input.expect_comma()?;
-                            let Some(sz) = NumberOrPercentage::parse(context, input)?.to_number() else {
-                                return Err(input.new_custom_error(StyleParseErrorKind::UnspecifiedError));
-                            };
+                            let sz = parse_scale_factor(context, input)?;
                             Ok(generic::TransformOperation::Scale3D(sx, sy, sz))
                         },
                         "rotate" => {
@@ -293,6 +295,7 @@ impl Transform {
                             let theta = specified::Angle::parse_with_unitless(context, input)?;
                             Ok(generic::TransformOperation::RotateZ(theta))
                         },
+                        #[cfg(not(feature = "lynx"))]
                         "rotate3d" => {
                             let ax = Number::parse(context, input)?;
                             input.expect_comma()?;
@@ -321,9 +324,10 @@ impl Transform {
                             let theta = specified::Angle::parse_with_unitless(context, input)?;
                             Ok(generic::TransformOperation::SkewY(theta))
                         },
+                        #[cfg(not(feature = "lynx"))]
                         "perspective" => {
                             let p = match input.try_parse(|input| {
-                                if matches!(allow_unitless_perspective, AllowUnitlessPerspective::Yes) {
+                                if matches!(_allow_unitless_perspective, AllowUnitlessPerspective::Yes) {
                                     specified::Length::parse_non_negative_quirky(context, input, AllowQuirks::Always)
                                 } else {
                                     specified::Length::parse_non_negative(context, input)
@@ -376,11 +380,14 @@ impl Parse for TransformOrigin {
         context: &ParserContext,
         input: &mut Parser<'i, 't>,
     ) -> Result<Self, ParseError<'i>> {
+        #[cfg(not(feature = "lynx"))]
         let parse_depth = |input: &mut Parser| {
             input
                 .try_parse(|i| Length::parse(context, i))
                 .unwrap_or(Length::zero())
         };
+        #[cfg(feature = "lynx")]
+        let parse_depth = |_input: &mut Parser| Length::zero();
         match input.try_parse(|i| OriginComponent::parse(context, i)) {
             Ok(x_origin @ OriginComponent::Center) => {
                 if let Ok(y_origin) = input.try_parse(|i| OriginComponent::parse(context, i)) {

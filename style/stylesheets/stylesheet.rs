@@ -139,6 +139,35 @@ impl StylesheetContents {
         })
     }
 
+    /// Creates a new StylesheetContents from rules that were built
+    /// programmatically (e.g. from a pre-parsed binary wire format) rather
+    /// than parsed from CSS text.
+    ///
+    /// Unlike [`Self::from_shared_data`], the rules Arc is an ordinary
+    /// refcounted allocation — no static/shared-memory requirement — so this
+    /// works for dynamically loaded author sheets without leaking. As with UA
+    /// sheets, an empty namespace map is used: namespaces are only consulted
+    /// while parsing selector text, which the caller has already done.
+    #[cfg(feature = "lynx")]
+    pub fn from_rules(
+        rules: Arc<Locked<CssRules>>,
+        origin: Origin,
+        url_data: UrlExtraData,
+        quirks_mode: QuirksMode,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            rules,
+            origin,
+            url_data,
+            namespaces: Namespaces::default(),
+            quirks_mode,
+            source_map_url: None,
+            source_url: None,
+            use_counters: UseCounters::default(),
+            _forbid_construction: (),
+        })
+    }
+
     /// Returns a reference to the list of rules.
     #[inline]
     pub fn rules<'a, 'b: 'a>(&'a self, guard: &'b SharedRwLockReadGuard) -> &'a [CssRule] {

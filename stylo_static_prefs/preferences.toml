@@ -8,6 +8,7 @@
 "layout.css.at-scope.enabled" = false
 "layout.css.attr.enabled" = false
 "layout.css.background-clip.border-area.enabled" = false
+"layout.css.background-clip-text.enabled" = false
 "layout.css.basic-shape-shape.enabled" = false
 "layout.css.color-mix-multi-color.enabled" = true
 "layout.css.content.alt-text.enabled" = false

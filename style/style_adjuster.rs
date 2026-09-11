@@ -8,6 +8,7 @@
 use crate::computed_value_flags::ComputedValueFlags;
 use crate::dom::TElement;
 use crate::logical_geometry::PhysicalSide;
+#[cfg(any(not(feature = "lynx"), feature = "gecko"))]
 use crate::properties::longhands::display::computed_value::T as Display;
 use crate::properties::longhands::float::computed_value::T as Float;
 use crate::properties::longhands::position::computed_value::T as Position;
@@ -150,8 +151,13 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         if !self.style.is_absolutely_positioned() {
             self.style.mutate_box().set_position(Position::Absolute);
         }
-        if self.style.get_box().clone_display().is_contents() {
-            self.style.mutate_box().set_display(Display::Block);
+        let display = self.style.get_box().clone_display();
+        if display.is_contents() {
+            #[cfg(feature = "lynx")]
+            let block_display = display.equivalent_block_display(true);
+            #[cfg(not(feature = "lynx"))]
+            let block_display = Display::Block;
+            self.style.mutate_box().set_display(block_display);
         }
     }
 
@@ -393,6 +399,7 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
     ///
     /// <https://lists.w3.org/Archives/Public/www-style/2017Mar/0045.html>
     /// <https://github.com/servo/servo/issues/15754>
+    #[cfg(not(feature = "lynx"))]
     fn adjust_for_writing_mode(&mut self, layout_parent_style: &ComputedValues) {
         let our_writing_mode = self.style.get_inherited_box().clone_writing_mode();
         let parent_writing_mode = layout_parent_style.get_inherited_box().clone_writing_mode();
@@ -513,7 +520,7 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
     /// https://drafts.csswg.org/css-display/#unbox-html
     ///
     /// And forbidding display: contents in pseudo-elements, at least for now.
-    #[cfg(feature = "gecko")]
+    #[cfg(all(feature = "gecko", not(feature = "lynx")))]
     fn adjust_for_prohibited_display_contents<E>(&mut self, element: Option<E>)
     where
         E: TElement,
@@ -577,8 +584,14 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
             "How did we create a fieldset-content box with display: contents?"
         );
         let new_display = match parent_display {
-            Display::Flex | Display::InlineFlex => Some(Display::Flex),
-            Display::Grid | Display::InlineGrid => Some(Display::Grid),
+            Display::Flex => Some(Display::Flex),
+            #[cfg(not(feature = "lynx"))]
+            Display::InlineFlex => Some(Display::Flex),
+            #[cfg(feature = "lynx")]
+            Display::Linear => Some(Display::Linear),
+            Display::Grid => Some(Display::Grid),
+            #[cfg(not(feature = "lynx"))]
+            Display::InlineGrid => Some(Display::Grid),
             _ => None,
         };
         if let Some(new_display) = new_display {
@@ -592,6 +605,7 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
     ///
     /// In this case, we don't want to inherit the text alignment into the
     /// table.
+    #[cfg(not(feature = "lynx"))]
     fn adjust_for_table_text_align(&mut self) {
         use crate::properties::longhands::text_align::computed_value::T as TextAlign;
         if self.style.get_box().clone_display() != Display::Table {
@@ -607,6 +621,9 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
             .mutate_inherited_text()
             .set_text_align(TextAlign::Start)
     }
+
+    #[cfg(feature = "lynx")]
+    fn adjust_for_table_text_align(&mut self) {}
 
     #[cfg(feature = "gecko")]
     fn should_suppress_linebreak<E>(&self, element: Option<E>) -> bool
@@ -886,10 +903,12 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
                     self.flip_start();
                 },
             }
+            #[cfg(not(feature = "lynx"))]
             self.apply_position_area_tactic(*tactic);
         }
     }
 
+    #[cfg(not(feature = "lynx"))]
     fn apply_position_area_tactic(&mut self, tactic: PositionTryFallbacksTryTacticKeyword) {
         let pos = self.style.get_position();
         let old = pos.clone_position_area();
@@ -1053,9 +1072,10 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         // );
 
         self.adjust_for_visited(element);
+        #[cfg(all(feature = "gecko", not(feature = "lynx")))]
+        self.adjust_for_prohibited_display_contents(element);
         #[cfg(feature = "gecko")]
         {
-            self.adjust_for_prohibited_display_contents(element);
             self.adjust_for_fieldset_content();
             self.adjust_for_text_control_editing_root();
         }
@@ -1072,6 +1092,7 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
             self.adjust_for_justify_items();
         }
         self.adjust_for_table_text_align();
+        #[cfg(not(feature = "lynx"))]
         self.adjust_for_writing_mode(layout_parent_style);
         #[cfg(feature = "gecko")]
         self.adjust_for_ruby(element);

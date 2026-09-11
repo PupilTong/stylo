@@ -1083,6 +1083,8 @@ pub trait MatchMethods: TElement {
 
                 // Needed for the "inherit from body" quirk.
                 let text_color = new_primary_style.get_inherited_text().clone_color();
+                #[cfg(feature = "lynx")]
+                let text_color = text_color.solid_color();
                 device.set_body_text_color(text_color);
             }
         }

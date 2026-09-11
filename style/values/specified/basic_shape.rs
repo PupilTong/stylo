@@ -247,17 +247,31 @@ impl Parse for ClipPath {
             return Ok(ClipPath::None);
         }
 
+        #[cfg(feature = "lynx")]
+        return BasicShape::parse(
+            context,
+            input,
+            AllowedBasicShapes::INSET
+                | AllowedBasicShapes::CIRCLE
+                | AllowedBasicShapes::ELLIPSE
+                | AllowedBasicShapes::PATH,
+            ShapeType::Filled,
+        )
+        .map(|shape| ClipPath::Shape(Box::new(shape), Default::default()));
+
+        #[cfg(not(feature = "lynx"))]
         if let Ok(url) = input.try_parse(|i| SpecifiedUrl::parse(context, i)) {
             return Ok(ClipPath::Url(url));
         }
 
-        parse_shape_or_box(
+        #[cfg(not(feature = "lynx"))]
+        return parse_shape_or_box(
             context,
             input,
             ClipPath::Shape,
             ClipPath::Box,
             AllowedBasicShapes::ALL,
-        )
+        );
     }
 }
 

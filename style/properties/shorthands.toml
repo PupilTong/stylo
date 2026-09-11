@@ -283,8 +283,12 @@ spec = "https://drafts.csswg.org/css-logical/#propdef-inset-inline"
 rule_types_allowed = ["style", "keyframe", "scope", "position-try"]
 kind = "two_properties"
 
+# lynx-vello: un-`gecko`'d so the servo build declares the shorthand (its
+# `contain-intrinsic-width`/`-height` longhands are now servo-visible). Seeded in
+# properties/lynx_properties.txt so it parses from author CSS under the `lynx`
+# feature; the closure pass then exposes its physical longhands automatically.
 [contain-intrinsic-size]
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 sub_properties = ["contain-intrinsic-width", "contain-intrinsic-height"]
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 kind = "two_properties"
@@ -557,7 +561,11 @@ spec = "https://www.w3.org/TR/css-text-4/#white-space-property"
 derive_value_info = false
 
 [-webkit-text-stroke]
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke`; stylo ships it gecko-only.
+# Expose it in servo behind the experimental pref (so `lynx` force-enables it)
+# and register the unprefixed Lynx alias.
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke"]
 sub_properties = ["-webkit-text-stroke-width", "-webkit-text-stroke-color"]
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke"
 derive_serialize = true
