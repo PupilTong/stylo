@@ -24,8 +24,7 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "list-style",
     "list-style-type",
     "list-style-position",
-    // Generated content / counters / quotes.
-    "content",
+    // Counters / quotes; content is exposed for Bobcat generated text.
     "quotes",
     "counter-increment",
     "counter-reset",
