@@ -212,3 +212,6 @@ width
 will-change
 word-break
 z-index
+
+# Generated text for Bobcat paragraphs.
+content

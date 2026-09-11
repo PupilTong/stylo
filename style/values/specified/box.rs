@@ -207,7 +207,6 @@ impl Display {
     pub const Contents: Self = Self(
         ((DisplayOutside::None as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Contents as u16,
     );
-    #[cfg(not(feature = "lynx"))]
     pub const Inline: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16);
     #[cfg(not(feature = "lynx"))]
@@ -542,8 +541,9 @@ impl DisplayKeyword {
     fn parse<'i>(input: &mut Parser<'i, '_>) -> Result<Self, ParseError<'i>> {
         use self::DisplayKeyword::*;
         // Lynx's display property chooses only an internal layout algorithm:
-        // none | contents | flex | grid | linear | relative. It has no flow layout, and
-        // its documentation explicitly rejects block/inline and all compound
+        // none | contents | flex | grid | linear | relative. Inline is additionally
+        // available for Bobcat generated text. There is no general flow layout
+        // or support for block and compound
         // <display-outside> <display-inside> forms. Unsupported public
         // constants and inside variants compile out with the parser. The
         // shared outside/inside representation can still encode upstream-only
@@ -551,6 +551,8 @@ impl DisplayKeyword {
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
             "contents" => Full(Display::Contents),
+            #[cfg(feature = "lynx")]
+            "inline" => Full(Display::Inline),
             #[cfg(feature = "lynx")]
             "linear" => Full(Display::Linear),
             #[cfg(feature = "lynx")]
