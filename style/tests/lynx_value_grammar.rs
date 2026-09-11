@@ -51,6 +51,22 @@ fn rejects(name: &str, values: &[&str]) {
 }
 
 #[test]
+fn generated_text_content_parses_from_author_css() {
+    accepts(
+        "content",
+        &[
+            "normal",
+            "none",
+            "'prefix'",
+            "attr(text)",
+            "'[' attr(text) ']'",
+            "attr(text, 'fallback')",
+        ],
+    );
+    rejects("content", &["attr()", "10px", "unquoted-text"]);
+}
+
+#[test]
 fn sizing_position_and_numeric_grammars() {
     accepts("position", &["relative", "absolute", "fixed", "sticky"]);
     rejects("position", &["static"]);
