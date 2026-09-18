@@ -1,7 +1,7 @@
 //! Locks Lynx containment hints to Stylo's upstream structural bit layout.
 #![cfg(feature = "lynx")]
 
-use cssparser::{Parser as CssParser, ParserInput};
+use cssparser::Parser as CssParser;
 use style::context::QuirksMode;
 use style::custom_properties::AttrTaint;
 use style::parser::{Parse, ParserContext};
@@ -22,8 +22,7 @@ fn with_parser<T>(css: &str, parse: impl FnOnce(&ParserContext, &mut CssParser) 
         None,
         AttrTaint::default(),
     );
-    let mut input = ParserInput::new(css);
-    let mut parser = CssParser::new(&mut input);
+    let mut parser = CssParser::new(css);
     parse(&context, &mut parser)
 }
 

@@ -2,7 +2,7 @@
 // without it there is nothing to test.
 #![cfg(feature = "lynx")]
 
-use cssparser::{Parser as CssParser, ParserInput};
+use cssparser::Parser as CssParser;
 use style::context::QuirksMode;
 use style::custom_properties::AttrTaint;
 use style::parser::{Parse, ParserContext};
@@ -24,8 +24,7 @@ fn parse_display(css: &str) -> Result<Display, ()> {
         None,
         AttrTaint::default(),
     );
-    let mut input = ParserInput::new(css);
-    let mut parser = CssParser::new(&mut input);
+    let mut parser = CssParser::new(css);
     parser
         .parse_entirely(|input| Display::parse(&context, input))
         .map_err(|_| ())

@@ -41,10 +41,7 @@ pub enum Spacing {
 }
 
 impl Parse for Spacing {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         #[cfg(not(feature = "lynx"))]
         {
             if input
@@ -234,10 +231,7 @@ pub struct TextOverflow {
 }
 
 impl Parse for TextOverflow {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<TextOverflow, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<TextOverflow, ParseError> {
         let first = <TextOverflowSide as Parse>::parse(context, input)?;
         #[cfg(feature = "lynx")]
         return Ok(Self {

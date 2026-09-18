@@ -30,10 +30,7 @@ pub enum RelativeAlign {
 }
 
 impl Parse for RelativeAlign {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         if input
             .try_parse(|input| input.expect_ident_matching("none"))
             .is_ok()
@@ -107,10 +104,7 @@ pub enum RelativeReference {
 }
 
 impl Parse for RelativeReference {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         if input
             .try_parse(|input| input.expect_ident_matching("none"))
             .is_ok()

@@ -32,10 +32,7 @@ pub type TransformOperation =
 /// A specified CSS `transform`
 pub type Transform = generic::Transform<TransformOperation>;
 
-fn parse_scale_factor(
-    context: &ParserContext,
-    input: &mut Parser,
-) -> Result<Number, ParseError> {
+fn parse_scale_factor(context: &ParserContext, input: &mut Parser) -> Result<Number, ParseError> {
     #[cfg(feature = "lynx")]
     return Number::parse(context, input);
 
@@ -371,10 +368,7 @@ pub enum OriginComponent<S> {
 }
 
 impl Parse for TransformOrigin {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         #[cfg(not(feature = "lynx"))]
         let parse_depth = |input: &mut Parser| {
             input

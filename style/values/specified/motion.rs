@@ -176,10 +176,7 @@ impl Parse for OffsetPathFunction {
 }
 
 impl Parse for OffsetPath {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         return OffsetPathFunction::parse(context, input).map(|path| OffsetPath::OffsetPath {
             path: Box::new(path),
@@ -294,10 +291,7 @@ impl OffsetRotate {
 }
 
 impl Parse for OffsetRotate {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
             if input.try_parse(|i| i.expect_ident_matching("auto")).is_ok() {

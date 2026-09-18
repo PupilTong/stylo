@@ -72,10 +72,7 @@ impl TimingFunction {
         Ok(GenericTimingFunction::SquareBezier { x, y })
     }
 
-    fn parse_cubic_bezier(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse_cubic_bezier(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         let x1 = Number::parse(context, input)?;
         input.expect_comma()?;
         let y1 = Number::parse(context, input)?;

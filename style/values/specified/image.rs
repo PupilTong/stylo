@@ -921,18 +921,15 @@ impl Gradient {
         let mut flags = GradientFlags::empty();
         flags.set(GradientFlags::REPEATING, repeating);
 
-        let mut color_interpolation_method = input
-            .try_parse(|i| ColorInterpolationMethod::parse(context, i))
-            .ok();
+        let mut color_interpolation_method =
+            Self::try_parse_color_interpolation_method(context, input);
 
         let direction = input
             .try_parse(|p| LineDirection::parse(context, p, &mut compat_mode))
             .ok();
 
         if direction.is_some() && color_interpolation_method.is_none() {
-            color_interpolation_method = input
-                .try_parse(|i| ColorInterpolationMethod::parse(context, i))
-                .ok();
+            color_interpolation_method = Self::try_parse_color_interpolation_method(context, input);
         }
 
         // If either of the 2 options were specified, we require a comma.
@@ -973,9 +970,8 @@ impl Gradient {
         let mut flags = GradientFlags::empty();
         flags.set(GradientFlags::REPEATING, repeating);
 
-        let mut color_interpolation_method = input
-            .try_parse(|i| ColorInterpolationMethod::parse(context, i))
-            .ok();
+        let mut color_interpolation_method =
+            Self::try_parse_color_interpolation_method(context, input);
 
         let (shape, position) = match compat_mode {
             GradientCompatMode::Modern => {
@@ -1000,9 +996,7 @@ impl Gradient {
 
         let has_shape_or_position = shape.is_ok() || position.is_some();
         if has_shape_or_position && color_interpolation_method.is_none() {
-            color_interpolation_method = input
-                .try_parse(|i| ColorInterpolationMethod::parse(context, i))
-                .ok();
+            color_interpolation_method = Self::try_parse_color_interpolation_method(context, input);
         }
 
         if has_shape_or_position || color_interpolation_method.is_some() {
@@ -1043,9 +1037,8 @@ impl Gradient {
         let mut flags = GradientFlags::empty();
         flags.set(GradientFlags::REPEATING, repeating);
 
-        let mut color_interpolation_method = input
-            .try_parse(|i| ColorInterpolationMethod::parse(context, i))
-            .ok();
+        let mut color_interpolation_method =
+            Self::try_parse_color_interpolation_method(context, input);
 
         let angle = input.try_parse(|i| {
             i.expect_ident_matching("from")?;
@@ -1060,9 +1053,7 @@ impl Gradient {
 
         let has_angle_or_position = angle.is_ok() || position.is_ok();
         if has_angle_or_position && color_interpolation_method.is_none() {
-            color_interpolation_method = input
-                .try_parse(|i| ColorInterpolationMethod::parse(context, i))
-                .ok();
+            color_interpolation_method = Self::try_parse_color_interpolation_method(context, input);
         }
 
         if has_angle_or_position || color_interpolation_method.is_some() {
@@ -1404,10 +1395,7 @@ impl<T> generic::ColorStop<Color, T> {
 
 impl PaintWorklet {
     #[cfg(all(feature = "servo", not(feature = "lynx")))]
-    fn parse_args(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse_args(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         use crate::custom_properties::SpecifiedValue;
         use servo_arc::Arc;
         let name = Atom::from(&**input.expect_ident()?);

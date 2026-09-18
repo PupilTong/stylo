@@ -2,7 +2,7 @@
 // without it there is nothing to test.
 #![cfg(feature = "lynx")]
 
-use cssparser::{Parser as CssParser, ParserInput};
+use cssparser::Parser as CssParser;
 use euclid::{Scale, Size2D};
 use style::context::QuirksMode;
 use style::custom_properties::AttrTaint;
@@ -55,8 +55,7 @@ fn parse_length(css: &str) -> Result<Length, ()> {
         None,
         AttrTaint::default(),
     );
-    let mut input = ParserInput::new(css);
-    let mut parser = CssParser::new(&mut input);
+    let mut parser = CssParser::new(css);
     parser
         .parse_entirely(|input| Length::parse(&context, input))
         .map_err(|_| ())

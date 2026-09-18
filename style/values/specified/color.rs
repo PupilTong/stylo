@@ -1052,10 +1052,7 @@ impl ToComputedValue for ColorPropertyValue {
 
 #[cfg(feature = "lynx")]
 impl Parse for ColorPropertyValue {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         if let Ok(color) =
             input.try_parse(|input| Color::parse_quirky(context, input, AllowQuirks::Yes))
         {
