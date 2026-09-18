@@ -75,6 +75,7 @@ fn shorthand_longhand_closure_is_authorable() {
         "font",
         "font-kerning",
         "font-stretch",
+        "font-width",
         "font-variant",
         "grid",
         "grid-area",

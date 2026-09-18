@@ -326,7 +326,7 @@ impl Parse for Filter {
                      .unwrap_or(NonNegativeFactor::one()),
                 )),
                 _ => Err(ParseError::custom(
-                    ValueParseErrorKind::InvalidFilter(Token::Function(function.clone()))
+                    StyleParseErrorKind::UnspecifiedError
                 )),
             };
 
@@ -397,10 +397,7 @@ impl Parse for Filter {
 
 impl Parse for SimpleShadow {
     #[inline]
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
             let horizontal = Length::parse(context, input)?;

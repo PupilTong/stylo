@@ -12,7 +12,7 @@
 // lynx_value_grammar.rs / lynx_supported_properties.rs.)
 #![cfg(feature = "lynx")]
 
-use cssparser::{Parser as CssParser, ParserInput};
+use cssparser::Parser as CssParser;
 use style::context::QuirksMode;
 use style::custom_properties::AttrTaint;
 use style::parser::{Parse, ParserContext};
@@ -45,8 +45,7 @@ fn parse<T: Parse>(css: &str) -> Result<T, ()> {
         None,
         AttrTaint::default(),
     );
-    let mut input = ParserInput::new(css);
-    let mut parser = CssParser::new(&mut input);
+    let mut parser = CssParser::new(css);
     parser
         .parse_entirely(|input| T::parse(&context, input))
         .map_err(|_| ())

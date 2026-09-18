@@ -3077,20 +3077,20 @@ pub struct DescriptorParser<'a, 'b: 'a> {
     pub descriptors: &'a mut Descriptors,
 }
 
-impl<'a, 'b, 'i> cssparser::AtRuleParser<'i> for DescriptorParser {
+impl<'a, 'b, 'i> cssparser::AtRuleParser<'i> for DescriptorParser<'a, 'b> {
     type Prelude = ();
     type AtRule = ();
     type Error = StyleParseErrorKind;
 }
 
-impl<'a, 'b, 'i> cssparser::QualifiedRuleParser<'i> for DescriptorParser {
+impl<'a, 'b, 'i> cssparser::QualifiedRuleParser<'i> for DescriptorParser<'a, 'b> {
     type Prelude = ();
     type QualifiedRule = ();
     type Error = StyleParseErrorKind;
 }
 
 impl<'a, 'b, 'i> cssparser::RuleBodyItemParser<'i, (), StyleParseErrorKind>
-    for DescriptorParser
+    for DescriptorParser<'a, 'b>
 {
     fn parse_qualified(&self) -> bool {
         false
@@ -3100,7 +3100,7 @@ impl<'a, 'b, 'i> cssparser::RuleBodyItemParser<'i, (), StyleParseErrorKind>
     }
 }
 
-impl<'a, 'b, 'i> cssparser::DeclarationParser<'i> for DescriptorParser {
+impl<'a, 'b, 'i> cssparser::DeclarationParser<'i> for DescriptorParser<'a, 'b> {
     type Declaration = ();
     type Error = StyleParseErrorKind;
 

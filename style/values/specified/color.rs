@@ -62,8 +62,7 @@ impl ColorMix {
                     .ok()
             };
 
-            let allow_multiple_items =
-                crate::pref!("layout.css.color-mix-multi-color.enabled");
+            let allow_multiple_items = crate::pref!("layout.css.color-mix-multi-color.enabled");
 
             let mut items = ColorMixItemList::default();
 
@@ -1054,10 +1053,7 @@ impl ToComputedValue for ColorPropertyValue {
 
 #[cfg(feature = "lynx")]
 impl Parse for ColorPropertyValue {
-    fn parse(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         if let Ok(color) =
             input.try_parse(|input| Color::parse_quirky(context, input, AllowQuirks::Yes))
         {

@@ -105,9 +105,12 @@ font-family
 font-feature-settings
 font-optical-sizing
 font-size
+# Preserve the existing spelling after upstream renamed the canonical property to font-width.
+font-stretch
 font-style
 font-variation-settings
 font-weight
+font-width
 gap
 grid-auto-columns
 grid-auto-flow

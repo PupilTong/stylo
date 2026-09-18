@@ -220,7 +220,7 @@ pub fn parse_color_with(
 
 /// Parse one of the color functions: rgba(), lab(), color(), etc.
 #[inline]
-fn parse_color_function(
+fn parse_color_function<'i>(
     context: &ParserContext,
     name: CowRcStr<'i>,
     arguments: &mut Parser<'i>,
@@ -262,7 +262,6 @@ fn parse_origin_color(
 ) -> Result<Option<SpecifiedColor>, ParseError> {
     #[cfg(feature = "lynx")]
     return Ok(None);
-
 
     // Not finding the from keyword is not an error, it just means we don't
     // have an origin color.

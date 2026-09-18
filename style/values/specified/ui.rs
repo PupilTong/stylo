@@ -24,10 +24,7 @@ pub type CursorImage = generics::GenericCursorImage<Image, Number>;
 
 impl Parse for Cursor {
     /// cursor: [<url> [<number> <number>]?]# [auto | default | ...]
-    fn parse(
-        _context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    fn parse(_context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         return Ok(Self {
             images: Default::default(),

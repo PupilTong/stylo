@@ -1867,6 +1867,7 @@ pub type Perspective = GenericPerspective<NonNegativeLength>;
 
 impl Perspective {
     /// Parses a `-webkit-perspective` value.
+    #[cfg(not(feature = "lynx"))]
     pub(crate) fn parse_legacy(
         context: &ParserContext,
         input: &mut Parser,

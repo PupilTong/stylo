@@ -163,14 +163,12 @@ impl Parse for BackgroundRepeat {
 
 #[cfg(not(feature = "lynx"))]
 fn background_clip_border_area_enabled(context: &ParserContext) -> bool {
-    context.chrome_rules_enabled()
-        || crate::pref!("layout.css.background-clip.border-area.enabled")
+    context.chrome_rules_enabled() || crate::pref!("layout.css.background-clip.border-area.enabled")
 }
 
 #[cfg(not(any(feature = "lynx", feature = "gecko")))]
 fn background_clip_text_enabled(context: &ParserContext) -> bool {
-    context.chrome_rules_enabled()
-        || static_prefs::pref!("layout.css.background-clip-text.enabled")
+    context.chrome_rules_enabled() || static_prefs::pref!("layout.css.background-clip-text.enabled")
 }
 
 /// The specified value of the `background-clip` and `mask-clip` properties.
@@ -277,10 +275,7 @@ impl BackgroundClip {
     }
 
     /// Parse the value of the `mask-clip` property.
-    pub fn parse_for_mask(
-        context: &ParserContext,
-        input: &mut Parser,
-    ) -> Result<Self, ParseError> {
+    pub fn parse_for_mask(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         let clip = <Self as Parse>::parse(context, input)?;
         if !clip.validity().intersects(ClipValidity::MASK) {
             return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));

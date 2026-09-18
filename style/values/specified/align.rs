@@ -228,10 +228,7 @@ impl ContentDistribution {
         Self::parse(input, AxisDirection::Inline)
     }
 
-    fn parse(
-        input: &mut Parser,
-        axis: AxisDirection,
-    ) -> Result<Self, ParseError> {
+    fn parse(input: &mut Parser, axis: AxisDirection) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
             let value = try_match_ident_ignore_ascii_case! { input,
@@ -387,10 +384,7 @@ impl SelfAlignment {
     }
 
     /// Parse a self-alignment value on one of the axes.
-    fn parse(
-        input: &mut Parser,
-        axis: AxisDirection,
-    ) -> Result<Self, ParseError> {
+    fn parse(input: &mut Parser, axis: AxisDirection) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
             let value = try_match_ident_ignore_ascii_case! { input,
@@ -555,10 +549,7 @@ impl ItemPlacement {
         Self::parse(input, AxisDirection::Inline)
     }
 
-    fn parse(
-        input: &mut Parser,
-        axis: AxisDirection,
-    ) -> Result<Self, ParseError> {
+    fn parse(input: &mut Parser, axis: AxisDirection) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
             let value = try_match_ident_ignore_ascii_case! { input,
@@ -684,9 +675,7 @@ impl SpecifiedValueInfo for JustifyItems {
 
 // auto | normal | stretch
 #[cfg(not(feature = "lynx"))]
-fn parse_auto_normal_stretch(
-    input: &mut Parser,
-) -> Result<AlignFlags, ParseError> {
+fn parse_auto_normal_stretch(input: &mut Parser) -> Result<AlignFlags, ParseError> {
     // NOTE Please also update the `list_auto_normal_stretch` function
     //      below when this function is updated.
     try_match_ident_ignore_ascii_case! { input,
@@ -742,9 +731,7 @@ fn list_baseline_keywords(f: KeywordsCollectFn) {
 
 // <content-distribution>
 #[cfg(not(feature = "lynx"))]
-fn parse_content_distribution(
-    input: &mut Parser,
-) -> Result<AlignFlags, ParseError> {
+fn parse_content_distribution(input: &mut Parser) -> Result<AlignFlags, ParseError> {
     // NOTE Please also update the `list_content_distribution_keywords`
     //      function below when this function is updated.
     try_match_ident_ignore_ascii_case! { input,
@@ -762,9 +749,7 @@ fn list_content_distribution_keywords(f: KeywordsCollectFn) {
 
 // <overflow-position>
 #[cfg(not(feature = "lynx"))]
-fn parse_overflow_position(
-    input: &mut Parser,
-) -> Result<AlignFlags, ParseError> {
+fn parse_overflow_position(input: &mut Parser) -> Result<AlignFlags, ParseError> {
     // NOTE Please also update the `list_overflow_position_keywords`
     //      function below when this function is updated.
     try_match_ident_ignore_ascii_case! { input,
@@ -778,6 +763,7 @@ fn list_overflow_position_keywords(f: KeywordsCollectFn) {
     f(&["safe", "unsafe"]);
 }
 
+#[cfg(not(feature = "lynx"))]
 enum AllowAnchorCenter {
     No,
     Yes,
@@ -833,9 +819,7 @@ fn list_self_position_keywords(f: KeywordsCollectFn, axis: AxisDirection) {
 }
 
 #[cfg(not(feature = "lynx"))]
-fn parse_left_right_center(
-    input: &mut Parser,
-) -> Result<AlignFlags, ParseError> {
+fn parse_left_right_center(input: &mut Parser) -> Result<AlignFlags, ParseError> {
     // NOTE Please also update the `list_legacy_keywords` function below
     //      when this function is updated.
     Ok(try_match_ident_ignore_ascii_case! { input,
