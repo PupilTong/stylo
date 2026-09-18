@@ -1,5 +1,5 @@
-// display:linear|relative|-lynx-text are gated behind the `lynx` cargo feature;
-// without it there is nothing to test.
+// display:linear|relative|-lynx-text|grid-lanes are gated behind the `lynx`
+// cargo feature; without it there is nothing to test.
 #![cfg(feature = "lynx")]
 
 use cssparser::Parser as CssParser;
@@ -67,6 +67,11 @@ fn parses_and_serializes_lynx_display_keywords() {
     // way every other display keyword does — the vendor prefix is not a
     // separate token.
     assert_eq!(parse_display("-LYNX-TEXT").unwrap(), Display::LynxText);
+
+    let grid_lanes = parse_display("grid-lanes").unwrap();
+    assert_eq!(grid_lanes, Display::GridLanes);
+    assert_eq!(grid_lanes.to_css_string(), "grid-lanes");
+    assert_eq!(parse_display("GRID-LANES").unwrap(), Display::GridLanes);
 }
 
 #[test]
@@ -82,6 +87,9 @@ fn display_inside_serializes_lynx_keywords() {
     assert_eq!(DisplayInside::LynxLinear.to_css_string(), "linear");
     assert_eq!(DisplayInside::LynxRelative.to_css_string(), "relative");
     assert_eq!(DisplayInside::LynxText.to_css_string(), "-lynx-text");
+    // `GridLanes` is a W3C keyword, so the kebab-cased variant name already
+    // agrees with it; the explicit `#[css(keyword = ...)]` pins that.
+    assert_eq!(DisplayInside::GridLanes.to_css_string(), "grid-lanes");
 }
 
 #[test]
@@ -145,6 +153,26 @@ fn lynx_text_is_block_level_and_not_an_item_container() {
     assert_eq!(display.equivalent_block_display(true), Display::LynxText);
 }
 
+/// `grid-lanes` (css-grid-3) is a block-level grid container: its children are
+/// grid items, so it opts into `is_item_container()` exactly like `grid` and
+/// `linear`, and unlike `relative`/`-lynx-text`.
+#[test]
+fn grid_lanes_behaves_like_a_block_level_grid_container() {
+    let display = parse_display("grid-lanes").unwrap();
+
+    assert_eq!(display.outside(), DisplayOutside::Block);
+    assert_eq!(display.inside(), DisplayInside::GridLanes);
+    assert!(display.is_item_container());
+    assert!(!display.is_inline_flow());
+    assert!(!display.is_contents());
+    assert!(!display.is_none());
+    assert_eq!(display.equivalent_block_display(false), Display::GridLanes);
+    // There is no inline-level grid lanes value to blockify from, and
+    // blockification is identity for every Block-outside Lynx value, so this
+    // holds at the root too.
+    assert_eq!(display.equivalent_block_display(true), Display::GridLanes);
+}
+
 #[test]
 fn lynx_display_keywords_are_single_keyword_values() {
     assert!(parse_display("inline linear").is_err());
@@ -154,4 +182,13 @@ fn lynx_display_keywords_are_single_keyword_values() {
     // The unprefixed spelling is not the keyword.
     assert!(parse_display("lynx-text").is_err());
     assert!(parse_display("text").is_err());
+    assert!(parse_display("inline grid-lanes").is_err());
+    assert!(parse_display("grid-lanes list-item").is_err());
+    // css-grid-3 defines `inline-grid-lanes` too, but the Lynx grammar has no
+    // inline-level container values at all (`inline-flex`/`inline-grid` are
+    // gated out), so `grid-lanes` deliberately gets no inline-level partner.
+    // `masonry` is a grid *track* keyword in this fork
+    // (`GenericGridTemplateComponent::Masonry`), never a display value.
+    assert!(parse_display("inline-grid-lanes").is_err());
+    assert!(parse_display("masonry").is_err());
 }

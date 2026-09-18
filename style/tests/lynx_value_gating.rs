@@ -57,8 +57,8 @@ fn custom_properties_and_var_references_remain_enabled() {
 
 #[test]
 fn display_keyword_gating() {
-    // Lynx: none | contents | flex | grid, plus the Lynx-only
-    // linear | relative | -lynx-text.
+    // Lynx: none | contents | flex | grid, plus the css-grid-3 `grid-lanes`
+    // extension and the Lynx-only linear | relative | -lynx-text.
     // `grid` is force-enabled under `lynx` (grid_enabled() returns true), so it
     // parses out of the box — matching its grid-* longhands, which are enabled
     // the same way — without needing stylo's `layout.grid.enabled` pref.
@@ -67,6 +67,7 @@ fn display_keyword_gating() {
         "contents",
         "flex",
         "grid",
+        "grid-lanes",
         "linear",
         "relative",
         "-lynx-text",
@@ -80,6 +81,9 @@ fn display_keyword_gating() {
         "inline-block",
         "inline-flex",
         "inline-grid",
+        // No inline-level container value exists in the Lynx grammar, so the
+        // css-grid-3 extension gets no inline-level partner.
+        "inline-grid-lanes",
         "inline-table",
         "flow-root",
         "list-item",

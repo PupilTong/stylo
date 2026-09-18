@@ -85,6 +85,8 @@ fn lynx_only_names_and_values_do_not_exist() {
         ("display", "linear"),
         ("display", "relative"),
         ("display", "-lynx-text"),
+        ("display", "grid-lanes"),
+        ("flow-tolerance", "0"),
         ("width", "1rpx"),
     ] {
         assert!(
