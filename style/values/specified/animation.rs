@@ -156,6 +156,7 @@ pub type AnimationDuration = generics::GenericAnimationDuration<Time>;
 
 impl Parse for AnimationDuration {
     fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
+        #[cfg(not(feature = "lynx"))]
         if crate::pref!("layout.css.scroll-driven-animations.enabled")
             && input.try_parse(|i| i.expect_ident_matching("auto")).is_ok()
         {
