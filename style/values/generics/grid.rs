@@ -960,3 +960,61 @@ impl<L, I> Default for GridTemplateComponent<L, I> {
         Self::INITIAL_VALUE
     }
 }
+
+/// A generic `flow-tolerance` value: `normal | <length-percentage [0,∞]> |
+/// infinite`.
+///
+/// <https://drafts.csswg.org/css-grid-3/#propdef-flow-tolerance>
+///
+/// Shaped after `GenericLengthPercentageOrNormal`, with the extra `infinite`
+/// keyword css-grid-3 adds. `normal` is kept as a keyword through computed
+/// value time — the spec's used value for it is `1em`, which layout resolves —
+/// and percentages resolve against the grid-axis content box size of the grid
+/// lanes container, so they too survive as percentages.
+///
+/// This is a `lynx`-feature addition: the grammar is a user-directed W3C
+/// extension and upstream Stylo has no `flow-tolerance`, so the type does not
+/// exist at all in a plain build.
+#[cfg(feature = "lynx")]
+#[derive(
+    Animate,
+    Clone,
+    ComputeSquaredDistance,
+    Copy,
+    Debug,
+    MallocSizeOf,
+    Parse,
+    PartialEq,
+    SpecifiedValueInfo,
+    ToAnimatedValue,
+    ToAnimatedZero,
+    ToComputedValue,
+    ToCss,
+    ToResolvedValue,
+    ToShmem,
+    ToTyped,
+)]
+#[repr(C, u8)]
+pub enum GenericFlowTolerance<LengthPercent> {
+    /// A `<length-percentage [0,∞]>` tolerance.
+    LengthPercentage(LengthPercent),
+    /// `normal`: the initial value, whose used value is `1em`.
+    Normal,
+    /// `infinite`: every candidate start position counts as tied with the
+    /// shortest lane, so items are placed strictly in order regardless of how
+    /// far each lane has already been filled
+    /// (<https://drafts.csswg.org/css-grid-3/#propdef-flow-tolerance>).
+    Infinite,
+}
+
+#[cfg(feature = "lynx")]
+pub use self::GenericFlowTolerance as FlowTolerance;
+
+#[cfg(feature = "lynx")]
+impl<LengthPercent> FlowTolerance<LengthPercent> {
+    /// Returns the `normal` value.
+    #[inline]
+    pub fn normal() -> Self {
+        FlowTolerance::Normal
+    }
+}

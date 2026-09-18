@@ -1142,6 +1142,19 @@ servo_pref = "layout.grid.enabled"
 spec = "https://drafts.csswg.org/css-grid/#propdef-grid-template-rows"
 affects = "layout"
 
+# css-grid-3 `flow-tolerance` (`normal | <length-percentage [0,∞]> |
+# infinite`), which applies to `display: grid-lanes` containers. Lynx has no
+# such property, so it exists only under the `lynx` feature, alongside the
+# grid longhands whose struct it shares.
+[flow-tolerance]
+lynx_only = true
+type = "FlowTolerance"
+initial = "computed::FlowTolerance::normal()"
+struct = "position"
+spec = "https://drafts.csswg.org/css-grid-3/#propdef-flow-tolerance"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
 [height]
 type = "Size"
 initial = "computed::Size::auto()"

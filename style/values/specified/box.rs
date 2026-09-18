@@ -158,6 +158,9 @@ pub enum DisplayInside {
     #[css(keyword = "linear")]
     LynxLinear,
     Grid,
+    #[cfg(feature = "lynx")]
+    #[css(keyword = "grid-lanes")]
+    GridLanes,
     #[cfg(not(feature = "lynx"))]
     Table,
     #[cfg(feature = "lynx")]
@@ -277,6 +280,10 @@ impl Display {
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flex as u16);
     pub const Grid: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
+    #[cfg(feature = "lynx")]
+    pub const GridLanes: Self = Self(
+        ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::GridLanes as u16,
+    );
     #[cfg(not(feature = "lynx"))]
     pub const InlineGrid: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
@@ -481,6 +488,12 @@ impl Display {
             #[cfg(feature = "lynx")]
             DisplayInside::LynxLinear => true,
             DisplayInside::Grid => true,
+            // A grid lanes container lays out grid items
+            // (https://drafts.csswg.org/css-grid-3/#masonry-model), so its
+            // children are blockified and `display: contents` children carry
+            // the item-container flag, exactly like `grid`.
+            #[cfg(feature = "lynx")]
+            DisplayInside::GridLanes => true,
             _ => false,
         }
     }
@@ -587,12 +600,16 @@ impl DisplayKeyword {
     fn parse(input: &mut Parser) -> Result<Self, ParseError> {
         use self::DisplayKeyword::*;
         // Lynx's display property chooses only an internal layout algorithm:
-        // none | contents | flex | grid | linear | relative. It has no flow layout, and
-        // its documentation explicitly rejects block/inline and all compound
-        // <display-outside> <display-inside> forms. Unsupported public
-        // constants and inside variants compile out with the parser. The
-        // shared outside/inside representation can still encode upstream-only
-        // combinations internally, but Lynx never accepts them from authors.
+        // none | contents | flex | grid | grid-lanes | linear | relative |
+        // -lynx-text. It has no flow layout, and its documentation explicitly
+        // rejects block/inline and all compound <display-outside>
+        // <display-inside> forms. Nor is there any inline-level container
+        // value: `inline-flex`/`inline-grid` are gated out, so css-grid-3's
+        // `inline-grid-lanes` is deliberately left out alongside them.
+        // Unsupported public constants and inside variants compile out with
+        // the parser. The shared outside/inside representation can still
+        // encode upstream-only combinations internally, but Lynx never
+        // accepts them from authors.
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
             "contents" => Full(Display::Contents),
@@ -665,6 +682,10 @@ impl DisplayKeyword {
             "table" => Inside(DisplayInside::Table),
             #[cfg(feature = "lynx")]
             "grid" if grid_enabled() => Full(Display::Grid),
+            // css-grid-3 `grid-lanes`; the same length as `-lynx-text`, so
+            // `match_ignore_ascii_case!`'s maximum keyword length is unchanged.
+            #[cfg(feature = "lynx")]
+            "grid-lanes" => Full(Display::GridLanes),
             #[cfg(not(feature = "lynx"))]
             "grid" if grid_enabled() => Inside(DisplayInside::Grid),
             #[cfg(feature = "gecko")]
@@ -695,6 +716,8 @@ impl ToCss for Display {
             Display::LynxRelative => dest.write_str("relative"),
             #[cfg(feature = "lynx")]
             Display::LynxText => dest.write_str("-lynx-text"),
+            #[cfg(feature = "lynx")]
+            Display::GridLanes => dest.write_str("grid-lanes"),
             #[cfg(not(feature = "lynx"))]
             Display::Block | Display::Inline => outside.to_css(dest),
             #[cfg(not(feature = "lynx"))]
@@ -821,7 +844,15 @@ impl Parse for Display {
 impl SpecifiedValueInfo for Display {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
         #[cfg(feature = "lynx")]
-        f(&["none", "linear", "flex", "grid", "relative", "-lynx-text"]);
+        f(&[
+            "none",
+            "linear",
+            "flex",
+            "grid",
+            "grid-lanes",
+            "relative",
+            "-lynx-text",
+        ]);
         #[cfg(not(feature = "lynx"))]
         f(&[
             "block",

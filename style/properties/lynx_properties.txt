@@ -101,6 +101,10 @@ flex-grow
 flex-shrink
 flex-wrap
 flex
+# `flow-tolerance` (css-grid-3) is a user-directed W3C extension beyond Lynx's
+# property index: it parameterizes `display: grid-lanes`, which Lynx itself has
+# no property for.
+flow-tolerance
 font-family
 font-feature-settings
 font-optical-sizing

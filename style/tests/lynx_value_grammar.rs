@@ -448,6 +448,38 @@ fn grid_and_lynx_layout_grammars() {
     );
     rejects("grid-template-columns", &["repeat(2)"]);
 
+    // css-grid-3 `flow-tolerance`, which parameterizes `display: grid-lanes`:
+    // normal | <length-percentage [0,∞]> | infinite.
+    accepts(
+        "flow-tolerance",
+        &[
+            "normal",
+            "infinite",
+            "0",
+            "10px",
+            "50%",
+            "1em",
+            "calc(1em + 2px)",
+        ],
+    );
+    rejects(
+        "flow-tolerance",
+        &[
+            // The range is [0,∞]; negative lengths and percentages are
+            // rejected at parse time, not clamped.
+            "-1px",
+            "-5%",
+            "auto",
+            "none",
+            // Unitless non-zero numbers are not lengths outside quirks mode.
+            "5",
+            // Each alternative is a single value; the keywords take no
+            // companion length.
+            "normal 1px",
+            "infinite 1px",
+        ],
+    );
+
     accepts(
         "linear-direction",
         &["row", "row-reverse", "column", "column-reverse"],
@@ -498,4 +530,135 @@ fn w3c_will_change_grammar() {
         ],
     );
     rejects("will-change", &["none", "all", "will-change"]);
+}
+
+// ------------------------------------------------------------------------
+// `flow-tolerance` (css-grid-3 §4.2) is the one Lynx-gated longhand whose
+// computed value keeps a keyword alongside a `<length-percentage>`: `normal`'s
+// used value is `1em` and `infinite`'s is unbounded, both of which layout
+// resolves, so the cascade must hand the keywords through untouched.
+// Percentages resolve against the grid-axis content box size of the grid lanes
+// container and therefore survive as percentages too.
+// ------------------------------------------------------------------------
+
+/// A device whose viewport is 375×667 CSS px, with a 16px base font size —
+/// enough for `em` to resolve at computed-value time.
+fn flow_tolerance_test_device() -> style::device::Device {
+    use euclid::{Scale, Size2D};
+    use style::media_queries::MediaType;
+    use style::properties::{style_structs, ComputedValues};
+    use style::queries::values::PrefersColorScheme;
+    use style::servo::media_features::PointerCapabilities;
+    use style_traits::{CSSPixel, DevicePixel};
+
+    #[derive(Debug)]
+    struct TestFontMetricsProvider;
+
+    impl style::device::servo::FontMetricsProvider for TestFontMetricsProvider {
+        fn query_font_metrics(
+            &self,
+            _vertical: bool,
+            _font: &style_structs::Font,
+            _base_size: style::values::computed::CSSPixelLength,
+            _flags: style::values::specified::font::QueryFontMetricsFlags,
+        ) -> style::font_metrics::FontMetrics {
+            style::font_metrics::FontMetrics::default()
+        }
+
+        fn base_size_for_generic(
+            &self,
+            _generic: style::values::computed::font::GenericFontFamily,
+        ) -> style::values::computed::Length {
+            style::values::computed::Length::new(16.0)
+        }
+    }
+
+    let default_values =
+        ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
+    style::device::Device::new(
+        MediaType::screen(),
+        QuirksMode::NoQuirks,
+        Size2D::<f32, CSSPixel>::new(375.0, 667.0),
+        Size2D::<f32, DevicePixel>::new(750.0, 1334.0),
+        Scale::<f32, CSSPixel, DevicePixel>::new(2.0),
+        Box::new(TestFontMetricsProvider),
+        default_values,
+        PrefersColorScheme::Light,
+        PointerCapabilities::default(),
+        PointerCapabilities::default(),
+    )
+}
+
+fn parse_flow_tolerance(css: &str) -> Result<style::values::specified::FlowTolerance, ()> {
+    use cssparser::Parser as CssParser;
+    use style::custom_properties::AttrTaint;
+    use style::parser::{Parse, ParserContext};
+
+    let url_data = url_data();
+    let context = ParserContext::new(
+        Origin::Author,
+        &url_data,
+        None,
+        ParsingMode::DEFAULT,
+        QuirksMode::NoQuirks,
+        Default::default(),
+        None,
+        None,
+        AttrTaint::default(),
+    );
+    let mut parser = CssParser::new(css);
+    parser
+        .parse_entirely(|input| style::values::specified::FlowTolerance::parse(&context, input))
+        .map_err(|_| ())
+}
+
+#[test]
+fn flow_tolerance_round_trips_through_serialization() {
+    use style_traits::ToCss;
+
+    for css in ["normal", "infinite", "10px", "50%"] {
+        assert_eq!(
+            parse_flow_tolerance(css).unwrap().to_css_string(),
+            css,
+            "`flow-tolerance: {css}` must serialize back to itself"
+        );
+    }
+}
+
+#[test]
+fn flow_tolerance_keeps_its_keywords_at_computed_value_time() {
+    use style::values::computed::ToComputedValue;
+    use style::values::computed::{Context, FlowTolerance as ComputedFlowTolerance};
+    use style::values::specified::FlowTolerance as SpecifiedFlowTolerance;
+
+    let device = flow_tolerance_test_device();
+    Context::for_media_query_evaluation(&device, QuirksMode::NoQuirks, |context| {
+        assert!(matches!(
+            SpecifiedFlowTolerance::Normal.to_computed_value(context),
+            ComputedFlowTolerance::Normal
+        ));
+        assert!(matches!(
+            SpecifiedFlowTolerance::Infinite.to_computed_value(context),
+            ComputedFlowTolerance::Infinite
+        ));
+
+        // A font-relative length is absolutized by the cascade (16px base).
+        let computed = parse_flow_tolerance("1em")
+            .unwrap()
+            .to_computed_value(context);
+        let ComputedFlowTolerance::LengthPercentage(length) = computed else {
+            panic!("`flow-tolerance: 1em` must compute to a <length-percentage>");
+        };
+        assert_eq!(length.0.to_length().map(|l| l.px()), Some(16.0));
+
+        // A percentage stays a percentage: it resolves against the grid-axis
+        // content box size, which only layout knows.
+        let computed = parse_flow_tolerance("50%")
+            .unwrap()
+            .to_computed_value(context);
+        let ComputedFlowTolerance::LengthPercentage(percentage) = computed else {
+            panic!("`flow-tolerance: 50%` must compute to a <length-percentage>");
+        };
+        assert_eq!(percentage.0.to_length(), None);
+    });
 }
