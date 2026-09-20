@@ -27,6 +27,7 @@ animation-play-state
 animation-timing-function
 animation
 aspect-ratio
+backdrop-filter
 background-clip
 background-color
 background-image

@@ -52,8 +52,9 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     // Logical properties outside both the project seed and its shorthand
     // closure.
     "padding-block",
-    // Effects / misc not in the Lynx property set.
-    "backdrop-filter",
+    // Effects / misc not in the Lynx property set. `backdrop-filter` is NOT
+    // here: lynx-vello exposes it as a W3C filter-effects-2 value-add over
+    // Lynx's own surface (see lynx_supported_properties).
     "mix-blend-mode",
     "backface-visibility",
     "perspective-origin",

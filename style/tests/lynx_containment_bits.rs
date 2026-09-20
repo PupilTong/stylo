@@ -69,3 +69,14 @@ fn will_change_contain_uses_upstream_structural_bit() {
     assert_eq!(will_change_bits("contents"), 0);
     assert_eq!(will_change_bits("opacity"), (1 << 10) | (1 << 4));
 }
+
+#[test]
+fn will_change_backdrop_filter_matches_will_change_filter() {
+    // STACKING_CONTEXT_UNCONDITIONAL | FIXPOS_CB_NON_SVG | BACKDROP_ROOT.
+    // `backdrop-filter`'s arm in change_bits_for_longhand was gated to
+    // non-lynx builds while the longhand was not compiled under `lynx`; it is
+    // compiled now, so the two must agree.
+    let expected = (1 << 0) | (1 << 7) | (1 << 10);
+    assert_eq!(will_change_bits("filter"), expected);
+    assert_eq!(will_change_bits("backdrop-filter"), expected);
+}

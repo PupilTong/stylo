@@ -137,6 +137,21 @@ fn custom_properties_are_still_supported() {
 }
 
 #[test]
+fn pref_gated_upstream_properties_are_force_enabled() {
+    // Stock stylo keeps these behind an experimental servo pref
+    // (`layout.unimplemented`) because servo does not implement them.
+    // lynx-vello provides their layout/paint, so the `lynx` seed forces them
+    // content-enabled through ALWAYS_ENABLED while leaving `servo_pref` in
+    // place. `backdrop-filter` is the filter-effects-2 member of that set.
+    for name in ["backdrop-filter", "offset-distance"] {
+        assert!(
+            is_content_enabled(name),
+            "`{name}` is seeded for Lynx and must ignore its servo pref"
+        );
+    }
+}
+
+#[test]
 fn containment_hints_are_content_enabled() {
     for name in ["contain", "will-change"] {
         assert!(
