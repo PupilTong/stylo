@@ -118,6 +118,21 @@ fn ported_containment_surface_stays_pref_gated() {
 }
 
 #[test]
+fn backdrop_filter_stays_pref_gated() {
+    // `backdrop-filter` is exposed to author CSS only under the `lynx`
+    // feature. Upstream it carries `servo_pref = "layout.unimplemented"`, and
+    // that pref is untouched, so a stock Servo build must still refuse it.
+    for value in ["none", "blur(4px)", "blur(4px) brightness(0.5)"] {
+        assert!(
+            !parses("backdrop-filter", value),
+            "stock servo must keep `backdrop-filter: {value}` pref-gated"
+        );
+    }
+    // `filter` is not pref-gated upstream and must keep parsing.
+    assert!(parses("filter", "blur(4px) sepia(1)"));
+}
+
+#[test]
 fn background_clip_text_stays_pref_gated() {
     // `background-clip: text` is un-gated from gecko for the `lynx`
     // feature's benefit (Lynx supports it as a Core value); a stock Servo

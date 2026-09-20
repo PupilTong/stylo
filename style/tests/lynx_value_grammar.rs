@@ -331,6 +331,26 @@ fn effects_and_motion_grammars() {
             "drop-shadow(1px 1px red)",
         ],
     );
+    // `backdrop-filter` reuses the same `Filter` list type, so its grammar is
+    // the `filter` grammar exactly.
+    accepts(
+        "backdrop-filter",
+        &[
+            "none",
+            "blur(4px) brightness(0.5)",
+            "contrast(1.2) grayscale(30%)",
+            "saturate(2)",
+        ],
+    );
+    rejects(
+        "backdrop-filter",
+        &[
+            "sepia(1)",
+            "invert(1)",
+            "hue-rotate(10deg)",
+            "drop-shadow(1px 1px red)",
+        ],
+    );
     accepts(
         "box-shadow",
         &[

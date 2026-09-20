@@ -348,6 +348,7 @@ gecko_pref = "layout.css.backdrop-filter.enabled"
 servo_pref = "layout.unimplemented"
 spec = "https://drafts.fxtf.org/filter-effects-2/#propdef-backdrop-filter"
 affects = "overflow"
+servo_restyle_damage = "repaint"
 
 [background-color]
 type = "Color"
