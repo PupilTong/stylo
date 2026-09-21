@@ -209,7 +209,11 @@ spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properti
 kind = "two_properties"
 
 [container]
-engine = "gecko"
+# Un-gecko'd for the `lynx` feature (css-contain-3 size query containers, so
+# that `cqw`/`cqh` are a standard implementation). It carries the same
+# `servo_pref` as its two longhands, so a stock Servo build keeps the whole
+# family gated together and `LonghandsToSerialize` keeps non-`Option` fields.
+servo_pref = "layout.container-queries.enabled"
 sub_properties = ["container-name", "container-type"]
 spec = "https://drafts.csswg.org/css-contain-3/#container-shorthand"
 

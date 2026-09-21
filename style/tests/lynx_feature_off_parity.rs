@@ -118,6 +118,34 @@ fn ported_containment_surface_stays_pref_gated() {
 }
 
 #[test]
+fn container_query_properties_stay_pref_gated() {
+    // `container-type` / `container-name` are upstream servo longhands behind
+    // `layout.container-queries.enabled` (false), and the `container`
+    // shorthand is un-gecko'd for the `lynx` feature's benefit while carrying
+    // that same pref. A stock Servo build must still refuse all three, and
+    // `PropertyId` must not resolve them for `@supports` either.
+    for (name, value) in [
+        ("container-type", "size"),
+        ("container-type", "inline-size"),
+        ("container-type", "normal"),
+        ("container-name", "foo"),
+        ("container-name", "none"),
+        ("container", "foo / size"),
+    ] {
+        assert!(
+            !parses(name, value),
+            "stock servo must keep `{name}: {value}` pref-gated"
+        );
+    }
+    for name in ["container", "container-name", "container-type"] {
+        assert!(
+            PropertyId::parse_enabled_for_all_content(name).is_err(),
+            "stock servo must not expose `{name}` to the author surface"
+        );
+    }
+}
+
+#[test]
 fn backdrop_filter_stays_pref_gated() {
     // `backdrop-filter` is exposed to author CSS only under the `lynx`
     // feature. Upstream it carries `servo_pref = "layout.unimplemented"`, and

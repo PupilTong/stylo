@@ -181,9 +181,10 @@ fn parses_container_units_inside_calc() {
 
 #[test]
 fn container_units_fall_back_to_the_viewport() {
-    // No element can be a query container in this build (`container-type` is
-    // not content-enabled), so `ContainerSizeQuery::none()` is the only
-    // possible query and css-contain-3's fallback applies: `cqw`/`cqh` resolve
+    // `container-type` IS content-enabled under `lynx`, so an element can be a
+    // size query container; this context simply has no element (media-query
+    // evaluation), so `ContainerSizeQuery::none()` is the only possible query
+    // and css-contain-3's no-container fallback applies: `cqw`/`cqh` resolve
     // against the small viewport, which on the servo device is just the
     // viewport (`au_viewport_size_for_viewport_unit_resolution` ignores the
     // `ViewportVariant`).

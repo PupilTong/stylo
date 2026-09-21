@@ -238,13 +238,14 @@ impl LengthUnit {
             // Lynx admits the two physical container units (`cqw`/`cqh`).
             // They are plain W3C units that authors get from the browser on
             // the web target, so content written there uses them; Lynx's own
-            // native engine has no such token. `cqw`/`cqh` are the query
-            // container's width/height divided by 100, and nothing in a Lynx
-            // build can be a query container (`container-type` is not
-            // content-enabled), so css-contain-3's fallback applies: both
-            // resolve against the small viewport, which makes them the same
-            // lengths as `vw`/`vh`. The logical units
-            // (`cqi`/`cqb`/`cqmin`/`cqmax`) stay out.
+            // native engine has no such token. They are a standard
+            // css-contain-3 implementation: `cqw`/`cqh` are the nearest size
+            // query container's content-box width/height divided by 100, and
+            // `container-type` is content-enabled under `lynx`, so an element
+            // really can be that container. When no ancestor is a size query
+            // container, css-contain-3's fallback applies and both resolve
+            // against the small viewport (the same lengths as `vw`/`vh`). The
+            // logical units (`cqi`/`cqb`/`cqmin`/`cqmax`) stay out.
             "cqw" if !in_page_rule && (cfg!(feature = "gecko") || cfg!(feature = "lynx")) => {
                 Self::Cqw
             },

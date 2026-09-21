@@ -87,9 +87,21 @@ grid-column-gap
 # longhands automatically; the logical contain-intrinsic-block-size/-inline-size
 # stay disabled-for-content (only un-gecko'd in longhands.toml to keep the
 # contain-intrinsic-size logical group balanced for the servo build).
-# css-contain-3 container queries (container-type/-name) stay out of scope.
 contain
 contain-intrinsic-size
+# css-contain-3's `container-type` / `container-name` (and the `container`
+# shorthand that sets both) are exposed so that `cqw`/`cqh` are a STANDARD
+# implementation rather than viewport aliases: an element with
+# `container-type: size | inline-size` is a size query container, and the
+# container units resolve against the nearest such ancestor's content box,
+# falling back to the small viewport only when there is none. Seeding the
+# shorthand lets the closure pull both longhands in. The `@container` rule
+# itself (https://drafts.csswg.org/css-contain-3/#container-rule) is NOT in
+# scope -- it stays gecko-only in stylesheets/rule_parser.rs, so
+# `container-name` is parsed and cascaded but nothing matches on it yet -- and
+# `container-type: scroll-state` stays rejected behind its own static pref
+# (`layout.css.scroll-state.enabled`, false).
+container
 content-visibility
 cursor
 direction
