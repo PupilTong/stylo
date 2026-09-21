@@ -234,10 +234,24 @@ impl LengthUnit {
             "dvi" if !in_page_rule => Self::Dvi,
             // Container query lengths. Inherit the limitation from viewport units since
             // we may fall back to them.
-            #[cfg(not(feature = "lynx"))]
-            "cqw" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqw,
-            #[cfg(not(feature = "lynx"))]
-            "cqh" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqh,
+            //
+            // Lynx admits the two physical container units (`cqw`/`cqh`).
+            // They are plain W3C units that authors get from the browser on
+            // the web target, so content written there uses them; Lynx's own
+            // native engine has no such token. They are a standard
+            // css-contain-3 implementation: `cqw`/`cqh` are the nearest size
+            // query container's content-box width/height divided by 100, and
+            // `container-type` is content-enabled under `lynx`, so an element
+            // really can be that container. When no ancestor is a size query
+            // container, css-contain-3's fallback applies and both resolve
+            // against the small viewport (the same lengths as `vw`/`vh`). The
+            // logical units (`cqi`/`cqb`/`cqmin`/`cqmax`) stay out.
+            "cqw" if !in_page_rule && (cfg!(feature = "gecko") || cfg!(feature = "lynx")) => {
+                Self::Cqw
+            },
+            "cqh" if !in_page_rule && (cfg!(feature = "gecko") || cfg!(feature = "lynx")) => {
+                Self::Cqh
+            },
             #[cfg(not(feature = "lynx"))]
             "cqi" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqi,
             #[cfg(not(feature = "lynx"))]

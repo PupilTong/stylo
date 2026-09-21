@@ -912,8 +912,6 @@ LYNX_INTERNAL_LONGHANDS = frozenset(
         "color-scheme",
         "column-count",
         "column-width",
-        "container-name",
-        "container-type",
         "float",
         "font-size-adjust",
         "forced-color-adjust",
