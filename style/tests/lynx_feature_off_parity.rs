@@ -147,3 +147,16 @@ fn background_clip_text_stays_pref_gated() {
         "`text` is background-only in the shared clip grammar"
     );
 }
+
+#[test]
+fn container_units_stay_gecko_only() {
+    // `cqw`/`cqh` are admitted under the `lynx` feature, and the rest of the
+    // container family only under gecko. A stock Servo build parses none of
+    // them.
+    for value in ["1cqw", "1cqh", "1cqi", "1cqb", "1cqmin", "1cqmax"] {
+        assert!(
+            !parses("width", value),
+            "stock servo must not parse container unit `{value}`"
+        );
+    }
+}

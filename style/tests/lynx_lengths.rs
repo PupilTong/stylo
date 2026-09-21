@@ -143,3 +143,70 @@ fn rpx_resolves_like_viewport_units() {
         assert_eq!(one_rpx.px(), expected);
     });
 }
+
+#[test]
+fn parses_and_serializes_container_units() {
+    for (unit, expected) in [("cqw", LengthUnit::Cqw), ("cqh", LengthUnit::Cqh)] {
+        let no_calc =
+            NoCalcLength::parse_dimension_with_flags(ParsingMode::DEFAULT, false, 10.0, unit)
+                .unwrap();
+        assert_eq!(no_calc.length_unit(), expected);
+        assert_eq!(no_calc.unitless_value(), 10.0);
+
+        let parsed = parse_length(&format!("10{unit}")).unwrap();
+        assert_eq!(parsed.to_css_string(), format!("10{unit}"));
+    }
+}
+
+#[test]
+fn rejects_logical_container_units() {
+    // Only the two physical container units are admitted under `lynx`; the
+    // logical family stays out.
+    for css in ["1cqi", "1cqb", "1cqmin", "1cqmax"] {
+        assert!(parse_length(css).is_err(), "`{css}` must not parse");
+    }
+}
+
+#[test]
+fn parses_container_units_inside_calc() {
+    let parsed = parse_length("calc(1cqw + 1cqh)").unwrap();
+    assert!(parsed.is_calc());
+    // `SortKey` is alphabetical: cqh, then cqw, then px.
+    assert_eq!(parsed.to_css_string(), "calc(1cqh + 1cqw)");
+
+    let joined = parse_length("calc(2px + 3cqw)").unwrap();
+    assert!(joined.is_calc());
+    assert_eq!(joined.to_css_string(), "calc(3cqw + 2px)");
+}
+
+#[test]
+fn container_units_fall_back_to_the_viewport() {
+    // No element can be a query container in this build (`container-type` is
+    // not content-enabled), so `ContainerSizeQuery::none()` is the only
+    // possible query and css-contain-3's fallback applies: `cqw`/`cqh` resolve
+    // against the small viewport, which on the servo device is just the
+    // viewport (`au_viewport_size_for_viewport_unit_resolution` ignores the
+    // `ViewportVariant`).
+    let device = test_device(375.0);
+    Context::for_media_query_evaluation(&device, QuirksMode::NoQuirks, |context| {
+        let cqw = NoCalcLength::new(LengthUnit::Cqw, 10.0).to_computed_value(context);
+        assert_eq!(cqw.px(), 37.5);
+
+        let cqh = NoCalcLength::new(LengthUnit::Cqh, 10.0).to_computed_value(context);
+        assert_eq!(cqh.px(), 66.7);
+
+        // 100cq* is the whole viewport box.
+        assert_eq!(
+            NoCalcLength::new(LengthUnit::Cqw, 100.0)
+                .to_computed_value(context)
+                .px(),
+            375.0
+        );
+        assert_eq!(
+            NoCalcLength::new(LengthUnit::Cqh, 100.0)
+                .to_computed_value(context)
+                .px(),
+            667.0
+        );
+    });
+}
