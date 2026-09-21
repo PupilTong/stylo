@@ -72,6 +72,10 @@ fn shorthand_longhand_closure_is_authorable() {
         // stays disabled — see lynx_disabled_properties / lynx_containment).
         "contain-intrinsic-height",
         "contain-intrinsic-width",
+        // Likewise the `container` shorthand is seeded and the closure pulls in
+        // both css-contain-3 longhands.
+        "container-name",
+        "container-type",
         "font",
         "font-kerning",
         "font-stretch",
@@ -147,6 +151,23 @@ fn pref_gated_upstream_properties_are_force_enabled() {
         assert!(
             is_content_enabled(name),
             "`{name}` is seeded for Lynx and must ignore its servo pref"
+        );
+    }
+}
+
+#[test]
+fn container_query_properties_are_content_enabled() {
+    // css-contain-3's container-query properties carry
+    // `servo_pref = "layout.container-queries.enabled"` (false upstream). The
+    // `container` shorthand is seeded so the closure pulls in both longhands
+    // and ALWAYS_ENABLED forces all three on: `cqw`/`cqh` are a standard
+    // implementation, which needs an element to be able to declare itself a
+    // size query container. The `@container` rule itself stays gecko-only.
+    for name in ["container", "container-name", "container-type"] {
+        assert!(
+            is_content_enabled(name),
+            "`{name}` must be content-enabled so `cqw`/`cqh` can resolve \
+             against a real size query container"
         );
     }
 }

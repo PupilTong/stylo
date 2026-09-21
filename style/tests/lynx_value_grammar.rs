@@ -117,10 +117,17 @@ fn sizing_position_and_numeric_grammars() {
 
 #[test]
 fn length_and_angle_units_are_the_documented_subset() {
-    accepts("width", &["1px", "1rpx", "1em", "1rem", "1vw", "1vh", "0"]);
+    accepts(
+        "width",
+        &[
+            "1px", "1rpx", "1em", "1rem", "1vw", "1vh", "1cqw", "1cqh", "0",
+        ],
+    );
     rejects(
         "width",
-        &["1ppx", "1sp", "1cm", "1pt", "1ex", "1vmin", "1dvw"],
+        &[
+            "1ppx", "1sp", "1cm", "1pt", "1ex", "1vmin", "1dvw", "1cqi", "1cqb", "1cqmin", "1cqmax",
+        ],
     );
     accepts(
         "transform",

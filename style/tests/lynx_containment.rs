@@ -6,26 +6,33 @@
 // exercised elsewhere: `content-visibility` / `contain-intrinsic-size` value
 // grammar, the computed-value accessors the downstream stylo-dom helper depends
 // on, `contain`-change restyle damage, and the negative gating that keeps the
-// logical contain-intrinsic pair and the css-contain-3 container-query surface
-// disabled-for-content. (`contain`'s structural bit layout lives in
-// lynx_containment_bits.rs; its value grammar and content-enablement live in
-// lynx_value_grammar.rs / lynx_supported_properties.rs.)
+// logical contain-intrinsic pair disabled-for-content. It also covers the
+// css-contain-3 container-query *properties* (`container-type`,
+// `container-name`, and the `container` shorthand), which are exposed so that
+// `cqw`/`cqh` are a standard implementation -- an element with
+// `container-type: size | inline-size` really is a size query container. The
+// `@container` *rule* stays gecko-only and out of scope. (`contain`'s
+// structural bit layout lives in lynx_containment_bits.rs; its value grammar
+// and content-enablement live in lynx_value_grammar.rs /
+// lynx_supported_properties.rs.)
 #![cfg(feature = "lynx")]
 
 use cssparser::Parser as CssParser;
 use style::context::QuirksMode;
 use style::custom_properties::AttrTaint;
 use style::parser::{Parse, ParserContext};
-use style::properties::declaration_block::parse_one_declaration_into;
+use style::properties::declaration_block::{parse_one_declaration_into, parse_style_attribute};
 use style::properties::{
-    style_structs, ComputedValues, LonghandId, PropertyDeclarationId, PropertyId,
-    SourcePropertyDeclaration,
+    style_structs, ComputedValues, LonghandId, PropertyDeclarationBlock, PropertyDeclarationId,
+    PropertyId, SourcePropertyDeclaration,
 };
 use style::servo::restyle_damage::ServoRestyleDamage;
 use style::stylesheets::{CssRuleType, Origin, UrlExtraData};
 use style::values::computed::ContainIntrinsicSize as ComputedContainIntrinsicSize;
-use style::values::specified::box_::{Contain, ContainIntrinsicSize, ContentVisibility};
-use style_traits::ParsingMode;
+use style::values::specified::box_::{
+    Contain, ContainIntrinsicSize, ContainerName, ContainerType, ContentVisibility,
+};
+use style_traits::{CssWriter, ParsingMode, ToCss};
 
 fn url_data() -> UrlExtraData {
     UrlExtraData::from(::url::Url::parse("https://example.com/").unwrap())
@@ -77,8 +84,7 @@ fn parse_declaration_longhand(name: &str, value: &str) -> Result<LonghandId, ()>
 }
 
 // ------------------------------------------------------------------------
-// Negative gating: only the physical contain-intrinsic-* are authorable, and
-// css-contain-3 container queries stay out of scope.
+// Negative gating: only the physical contain-intrinsic-* are authorable.
 // ------------------------------------------------------------------------
 
 #[test]
@@ -95,21 +101,194 @@ fn logical_contain_intrinsic_longhands_stay_disabled() {
     }
 }
 
+// ------------------------------------------------------------------------
+// css-contain-3 container-query properties. They exist so that `cqw`/`cqh` are
+// a standard implementation: without a content-enabled `container-type`, no
+// element could ever be a size query container and the units would be
+// permanent `vw`/`vh` aliases. Only the properties are in scope; the
+// `@container` rule stays gecko-only (stylesheets/rule_parser.rs), so
+// `container-name` is parsed and cascaded but nothing matches on it yet.
+// ------------------------------------------------------------------------
+
+/// Serialize a specified value through `ToCss`.
+fn to_css<T: ToCss>(value: &T) -> String {
+    let mut out = String::new();
+    value
+        .to_css(&mut CssWriter::new(&mut out))
+        .expect("serialization must not fail");
+    out
+}
+
+/// Serialize a declaration block the way CSSOM's `cssText` does (shorthands
+/// restored where every longhand is present).
+fn block_to_css(block: &PropertyDeclarationBlock) -> String {
+    let mut out = String::new();
+    block.to_css(&mut out).expect("serialization must not fail");
+    out
+}
+
 #[test]
-fn container_query_properties_stay_disabled() {
-    // `container-type` / `container-name` (and their `container` shorthand) are
-    // css-contain-3 (container queries), explicitly OUT OF SCOPE for the
-    // lynx-vello containment extension — see the containment note in
-    // properties/lynx_properties.txt. Enabling css-contain-2 containment must not
-    // leak the container-query surface, so these stay disabled-for-content under
-    // `lynx`.
+fn container_query_properties_are_content_enabled() {
     for name in ["container-type", "container-name", "container"] {
         assert!(
-            PropertyId::parse_enabled_for_all_content(name).is_err(),
-            "`{name}` is css-contain-3 (out of scope) and must stay \
-             disabled-for-content under the `lynx` feature",
+            PropertyId::parse_enabled_for_all_content(name).is_ok(),
+            "`{name}` must be content-enabled under the `lynx` feature so that \
+             an element can be a size query container for `cqw`/`cqh`",
         );
     }
+}
+
+#[test]
+fn container_type_keywords_parse_and_serialize() {
+    assert_eq!(
+        parse::<ContainerType>("normal").unwrap(),
+        ContainerType::NORMAL
+    );
+    assert_eq!(parse::<ContainerType>("size").unwrap(), ContainerType::SIZE);
+    assert_eq!(
+        parse::<ContainerType>("inline-size").unwrap(),
+        ContainerType::INLINE_SIZE,
+    );
+
+    assert_eq!(to_css(&ContainerType::NORMAL), "normal");
+    assert_eq!(to_css(&ContainerType::SIZE), "size");
+    assert_eq!(to_css(&ContainerType::INLINE_SIZE), "inline-size");
+
+    // `size` and `inline-size` are mutually exclusive.
+    assert!(parse::<ContainerType>("size inline-size").is_err());
+    assert!(parse::<ContainerType>("block-size").is_err());
+}
+
+#[test]
+fn container_type_scroll_state_stays_rejected() {
+    // `scroll-state` is guarded by `layout.css.scroll-state.enabled`, which is
+    // false and deliberately left alone: lynx-vello implements size query
+    // containers only.
+    for css in ["scroll-state", "size scroll-state", "scroll-state size"] {
+        assert!(
+            parse::<ContainerType>(css).is_err(),
+            "`container-type: {css}` must stay rejected",
+        );
+    }
+}
+
+#[test]
+fn container_type_parses_from_author_css() {
+    assert_eq!(
+        parse_declaration_longhand("container-type", "size"),
+        Ok(LonghandId::ContainerType),
+    );
+    assert_eq!(
+        parse_declaration_longhand("container-type", "inline-size"),
+        Ok(LonghandId::ContainerType),
+    );
+}
+
+#[test]
+fn container_name_round_trips() {
+    assert!(parse::<ContainerName>("none").unwrap().is_none());
+    assert_eq!(to_css(&ContainerName::none()), "none");
+
+    let single = parse::<ContainerName>("foo").unwrap();
+    assert!(!single.is_none());
+    assert_eq!(to_css(&single), "foo");
+
+    let multiple = parse::<ContainerName>("foo bar").unwrap();
+    assert_eq!(multiple.0.len(), 2);
+    assert_eq!(to_css(&multiple), "foo bar");
+
+    // `none`/`not`/`or`/`and` are disallowed idents in a name list.
+    assert!(parse::<ContainerName>("foo none").is_err());
+    assert!(parse::<ContainerName>("and").is_err());
+
+    assert_eq!(
+        parse_declaration_longhand("container-name", "foo bar"),
+        Ok(LonghandId::ContainerName),
+    );
+}
+
+#[test]
+fn container_shorthand_expands_and_serializes() {
+    let url_data = url_data();
+    let block = parse_style_attribute(
+        "container: foo / size;",
+        &url_data,
+        None,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    );
+    let ids: Vec<_> = block.declarations().iter().map(|d| d.id()).collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&PropertyDeclarationId::Longhand(LonghandId::ContainerName)));
+    assert!(ids.contains(&PropertyDeclarationId::Longhand(LonghandId::ContainerType)));
+    // Both longhands present and non-initial-only => the shorthand is restored.
+    assert_eq!(block_to_css(&block), "container: foo / size;");
+}
+
+#[test]
+fn container_shorthand_is_name_first() {
+    // The hand-written parser is `<container-name> [ / <container-type> ]?`,
+    // deliberately NOT the spec grammar, because the two sides are
+    // ambiguous when the type keyword is omitted: see
+    // https://github.com/w3c/csswg-drafts/issues/7180. So a bare
+    // `container: size` sets container-name to the custom ident `size` and
+    // leaves container-type at `normal`; it does NOT make the element a size
+    // query container. Authors who want that must write `container: / size`
+    // ... which the name-first parser rejects, so `container-type: size` is
+    // the only way to spell it.
+    let url_data = url_data();
+    let block = parse_style_attribute(
+        "container: size;",
+        &url_data,
+        None,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    );
+    assert_eq!(block.len(), 2);
+    assert_eq!(block_to_css(&block), "container: size;");
+
+    let empty_name = parse_style_attribute(
+        "container: / size;",
+        &url_data,
+        None,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    );
+    assert_eq!(empty_name.len(), 0);
+
+    // `none` is a valid container-name, so `container: none` resets both.
+    let none = parse_style_attribute(
+        "container: none;",
+        &url_data,
+        None,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    );
+    assert_eq!(none.len(), 2);
+    assert_eq!(block_to_css(&none), "container: none;");
+}
+
+#[test]
+fn container_type_is_a_size_container_type() {
+    // The accessor `style_adjuster` / `matching` use to set
+    // SELF_OR_ANCESTOR_HAS_SIZE_CONTAINER_TYPE, which is what makes `cqw`/`cqh`
+    // resolve against this element instead of the small viewport.
+    assert!(ContainerType::SIZE.is_size_container_type());
+    assert!(ContainerType::INLINE_SIZE.is_size_container_type());
+    assert!(!ContainerType::NORMAL.is_size_container_type());
+    assert!(ContainerType::NORMAL.is_normal());
+}
+
+#[test]
+fn container_computed_accessors_round_trip() {
+    let initial =
+        ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
+    assert_eq!(initial.clone_container_type(), ContainerType::NORMAL);
+    assert!(initial.clone_container_name().is_none());
+
+    let mut values: ComputedValues = (*initial).clone();
+    values.mutate_box().set_container_type(ContainerType::SIZE);
+    assert_eq!(values.clone_container_type(), ContainerType::SIZE);
 }
 
 // ------------------------------------------------------------------------
