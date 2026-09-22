@@ -1897,6 +1897,18 @@ animation_type = "discrete"
 affects = "paint"
 keyword = { values = ["auto", "nearest"] }
 
+# css-scroll-snap-2's `scroll-initial-target` (`none | nearest`): the element
+# sets its nearest scroll container's initial scroll position. Gecko has no
+# declaration for it, so like `flow-tolerance` it exists only under the `lynx`
+# feature. Paint-affecting only: the engine reads it during the paint build.
+[scroll-initial-target]
+lynx_only = true
+struct = "box"
+spec = "https://drafts.csswg.org/css-scroll-snap-2/#scroll-initial-target"
+animation_type = "discrete"
+affects = "paint"
+keyword = { values = ["none", "nearest"] }
+
 [page]
 type = "PageName"
 initial = "computed::PageName::auto()"

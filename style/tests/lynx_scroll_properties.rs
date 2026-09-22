@@ -149,3 +149,15 @@ fn scroll_margin_and_padding_shorthands_expand_to_the_physical_sides() {
     assert!(PropertyId::parse_enabled_for_all_content("scroll-margin-block").is_err());
     assert!(PropertyId::parse_enabled_for_all_content("scroll-padding-inline-start").is_err());
 }
+
+#[test]
+fn scroll_initial_target_parses_none_and_nearest_only() {
+    for value in ["none", "nearest"] {
+        assert_eq!(
+            longhand_ids("scroll-initial-target", value),
+            [LonghandId::ScrollInitialTarget]
+        );
+    }
+    assert_rejects("scroll-initial-target", "auto");
+    assert_rejects("scroll-initial-target", "start");
+}

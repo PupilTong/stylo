@@ -235,6 +235,9 @@ scroll-snap-align
 scroll-snap-stop
 scroll-margin
 scroll-padding
+# css-scroll-snap-2's `scroll-initial-target` (`none | nearest`), the element
+# that sets its nearest scroll container's initial scroll position.
+scroll-initial-target
 text-align
 text-decoration
 text-indent
