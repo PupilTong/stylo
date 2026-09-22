@@ -54,8 +54,8 @@ fn assert_rejects(name: &str, value: &str) {
 }
 
 #[test]
-fn overscroll_behavior_longhands_parse_the_three_keywords() {
-    for value in ["auto", "contain", "none"] {
+fn overscroll_behavior_longhands_parse_the_standard_keywords_and_contain_bounce() {
+    for value in ["auto", "contain", "none", "contain-bounce"] {
         assert_eq!(
             longhand_ids("overscroll-behavior-x", value),
             [LonghandId::OverscrollBehaviorX]
@@ -67,6 +67,18 @@ fn overscroll_behavior_longhands_parse_the_three_keywords() {
     }
     assert_rejects("overscroll-behavior-x", "scroll");
     assert_rejects("overscroll-behavior-y", "nearest");
+    assert_rejects("overscroll-behavior-y", "bounce");
+}
+
+#[test]
+fn overscroll_behavior_shorthand_takes_contain_bounce_per_axis() {
+    let ids = longhand_ids("overscroll-behavior", "contain-bounce");
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&LonghandId::OverscrollBehaviorX));
+    assert!(ids.contains(&LonghandId::OverscrollBehaviorY));
+
+    let ids = longhand_ids("overscroll-behavior", "auto contain-bounce");
+    assert_eq!(ids.len(), 2);
 }
 
 #[test]
