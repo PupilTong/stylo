@@ -18,8 +18,9 @@ spec = "https://drafts.csswg.org/css-logical/#propdef-margin-inline"
 rule_types_allowed = ["style", "keyframe", "page", "scope", "position-try"]
 kind = "two_properties"
 
+# lynx-vello: un-gecko'd with its longhands (see longhands.toml, scroll-snap-align).
 [scroll-margin]
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 sub_properties = ["scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"]
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin"
 kind = "four_sides"
@@ -55,7 +56,7 @@ rule_types_allowed = ["style", "keyframe", "page", "scope", "position-try"]
 kind = "two_properties"
 
 [scroll-padding]
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 sub_properties = ["scroll-padding-top", "scroll-padding-right", "scroll-padding-bottom", "scroll-padding-left"]
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding"
 kind = "four_sides"

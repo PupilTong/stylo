@@ -181,6 +181,14 @@ outline-width
 overflow-x
 overflow-y
 overflow
+# css-overscroll-1's `overscroll-behavior` (https://drafts.csswg.org/css-overscroll-1/)
+# is a user-directed W3C extension beyond Lynx's property index: Lynx has no
+# such property, but the native engine drives its own nested-scroll chain and
+# needs the standard way to say a scroll container does not chain past its
+# boundary. Seeding the shorthand lets the closure pull in the physical
+# overscroll-behavior-x/-y longhands; the logical -block/-inline pair stays
+# disabled-for-content (only compiled to keep the logical group balanced).
+overscroll-behavior
 padding-bottom
 padding-inline-end
 padding-inline-start
@@ -209,6 +217,24 @@ relative-top-of
 right
 row-gap
 grid-row-gap
+# `scroll-capture` is a lynx-vello-only property with no W3C or Lynx
+# counterpart: `nearest` lets a gesture on this scroll container scroll the
+# nearest ancestor scroll container first, and this container only once that
+# ancestor cannot move. The default `auto` keeps the ordinary inner-first
+# chain.
+scroll-capture
+# css-scroll-snap-1 (https://drafts.csswg.org/css-scroll-snap-1/) is a
+# user-directed W3C extension beyond Lynx's property index: the container's
+# `scroll-snap-type` and `scroll-padding`, the snap areas' `scroll-snap-align`,
+# `scroll-snap-stop` and `scroll-margin`. Seeding the two shorthands lets the
+# closure pull in their physical longhands; the logical scroll-margin-*/
+# scroll-padding-* pairs stay disabled-for-content (compiled for group balance
+# only), as do the logical `scroll-margin-block`-style shorthands.
+scroll-snap-type
+scroll-snap-align
+scroll-snap-stop
+scroll-margin
+scroll-padding
 text-align
 text-decoration
 text-indent
