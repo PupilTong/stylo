@@ -188,6 +188,9 @@ overflow
 # boundary. Seeding the shorthand lets the closure pull in the physical
 # overscroll-behavior-x/-y longhands; the logical -block/-inline pair stays
 # disabled-for-content (only compiled to keep the logical group balanced).
+# Under the `lynx` feature the value grammar grows a fourth keyword,
+# `contain-bounce` (lynx-vello's own): `contain`'s fence plus a rubber-band
+# overscroll at the boundary that springs back.
 overscroll-behavior
 padding-bottom
 padding-inline-end

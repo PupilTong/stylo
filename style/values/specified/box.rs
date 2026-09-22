@@ -1329,6 +1329,11 @@ pub enum OverscrollBehavior {
     Auto,
     Contain,
     None,
+    /// lynx-vello's own value: fences the chain the way `contain` does, and
+    /// turns the boundary into a rubber-band overscroll that springs back.
+    /// No W3C counterpart, so it exists only under the `lynx` feature.
+    #[cfg(feature = "lynx")]
+    ContainBounce,
 }
 
 #[allow(missing_docs)]
