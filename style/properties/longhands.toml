@@ -1883,6 +1883,32 @@ spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properti
 animation_type = "discrete"
 affects = "paint"
 
+# lynx-vello's own nested-scroll ordering switch, with no W3C or Lynx
+# counterpart, so it exists only under the `lynx` feature: `nearest` hands a
+# gesture on this scroll container to the nearest ancestor scroll container
+# first and scrolls this one only once that ancestor cannot move; `auto` is the
+# ordinary inner-first chain. Paint-affecting only: the engine reads it into
+# the committed frame's scroll-slot table, never into layout.
+[scroll-capture]
+lynx_only = true
+struct = "box"
+spec = "Nonstandard lynx-vello scroll chaining property"
+animation_type = "discrete"
+affects = "paint"
+keyword = { values = ["auto", "nearest"] }
+
+# css-scroll-snap-2's `scroll-initial-target` (`none | nearest`): the element
+# sets its nearest scroll container's initial scroll position. Gecko has no
+# declaration for it, so like `flow-tolerance` it exists only under the `lynx`
+# feature. Paint-affecting only: the engine reads it during the paint build.
+[scroll-initial-target]
+lynx_only = true
+struct = "box"
+spec = "https://drafts.csswg.org/css-scroll-snap-2/#scroll-initial-target"
+animation_type = "discrete"
+affects = "paint"
+keyword = { values = ["none", "nearest"] }
+
 [page]
 type = "PageName"
 initial = "computed::PageName::auto()"
@@ -2079,11 +2105,17 @@ spec = "https://drafts.csswg.org/css-transforms-2/#individual-transforms"
 servo_restyle_damage = "recalculate_overflow"
 affects = "overflow"
 
+# lynx-vello: css-scroll-snap-1 is a user-directed W3C extension beyond Lynx's
+# property index (Lynx has no snapping property). Ported to servo behind the
+# experimental pref, the -webkit-text-stroke*/offset-distance pattern, so the
+# `lynx` feature force-enables the seeded spellings while stock servo keeps
+# them out of its author surface. Same for the scroll-margin-*/scroll-padding-*
+# families below.
 [scroll-snap-align]
 type = "ScrollSnapAlign"
 initial = "computed::ScrollSnapAlign::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#scroll-snap-align"
 animation_type = "discrete"
 affects = "paint"
@@ -2092,7 +2124,7 @@ affects = "paint"
 type = "ScrollSnapStop"
 initial = "computed::ScrollSnapStop::Normal"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#scroll-snap-stop"
 animation_type = "discrete"
 affects = "paint"
@@ -2101,7 +2133,7 @@ affects = "paint"
 type = "ScrollSnapType"
 initial = "computed::ScrollSnapType::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#scroll-snap-type"
 animation_type = "discrete"
 affects = "paint"
@@ -3618,11 +3650,14 @@ animation_type = "none"
 spec = "https://drafts.csswg.org/css-box-4/#propdef-margin-trim"
 affects = "layout"
 
+# lynx-vello: ported to servo behind the experimental pref with the snap
+# longhands (see scroll-snap-align). The logical pair is compiled for group
+# balance only; only the physical sides are seeded.
 [scroll-margin-top]
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.0"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin-top"
@@ -3632,7 +3667,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.1"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin-right"
@@ -3642,7 +3677,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.2"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin-bottom"
@@ -3652,7 +3687,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.3"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin-left"
@@ -3662,7 +3697,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.4"
@@ -3673,7 +3708,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.5"
@@ -3684,7 +3719,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.6"
@@ -3695,7 +3730,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.7"
@@ -3792,11 +3827,14 @@ gecko_ffi_name = "mPadding.7"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
+# lynx-vello: ported to servo behind the experimental pref with the snap
+# longhands (see scroll-snap-align). The logical pair is compiled for group
+# balance only; only the physical sides are seeded.
 [scroll-padding-top]
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.0"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding-top"
@@ -3806,7 +3844,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.1"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding-right"
@@ -3816,7 +3854,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.2"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding-bottom"
@@ -3826,7 +3864,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.3"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding-left"
@@ -3836,7 +3874,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.4"
@@ -3847,7 +3885,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.5"
@@ -3858,7 +3896,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.6"
@@ -3869,7 +3907,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.7"
