@@ -1144,6 +1144,19 @@ impl ScrollSnapType {
             strictness: ScrollSnapStrictness::None,
         }
     }
+
+    /// The axes this container snaps on. Meaningless when
+    /// [`Self::strictness`] is `None`.
+    #[inline]
+    pub fn axis(&self) -> ScrollSnapAxis {
+        self.axis
+    }
+
+    /// How strictly it snaps; `None` is `scroll-snap-type: none`.
+    #[inline]
+    pub fn strictness(&self) -> ScrollSnapStrictness {
+        self.strictness
+    }
 }
 
 impl Parse for ScrollSnapType {
@@ -1237,6 +1250,18 @@ impl ScrollSnapAlign {
             block: ScrollSnapAlignKeyword::None,
             inline: ScrollSnapAlignKeyword::None,
         }
+    }
+
+    /// The alignment in the block axis.
+    #[inline]
+    pub fn block(&self) -> ScrollSnapAlignKeyword {
+        self.block
+    }
+
+    /// The alignment in the inline axis.
+    #[inline]
+    pub fn inline(&self) -> ScrollSnapAlignKeyword {
+        self.inline
     }
 }
 

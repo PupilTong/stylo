@@ -78,6 +78,17 @@ fn shorthand_longhand_closure_is_authorable() {
         "container-type",
         "font",
         "font-kerning",
+        // The `overscroll-behavior` shorthand is seeded; the closure pulls in
+        // its physical longhands (the logical block/inline pair stays
+        // disabled — see lynx_disabled_properties / lynx_scroll_properties).
+        "overscroll-behavior-x",
+        "overscroll-behavior-y",
+        // The `scroll-margin` / `scroll-padding` shorthands are seeded; the
+        // closure pulls in their physical sides.
+        "scroll-margin-top",
+        "scroll-margin-left",
+        "scroll-padding-bottom",
+        "scroll-padding-right",
         "font-stretch",
         "font-width",
         "font-variant",

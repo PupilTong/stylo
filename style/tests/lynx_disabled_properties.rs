@@ -49,6 +49,19 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     // contain-intrinsic-width/-height are exposed, via the shorthand closure).
     "contain-intrinsic-block-size",
     "contain-intrinsic-inline-size",
+    // Likewise only the physical overscroll-behavior-x/-y are exposed, via
+    // the seeded `overscroll-behavior` shorthand; the logical pair is compiled
+    // for group balance only.
+    "overscroll-behavior-block",
+    "overscroll-behavior-inline",
+    // css-scroll-snap-1's logical scroll-margin/-padding sides and their
+    // logical shorthands: compiled for group balance, never author-facing.
+    "scroll-margin-block-start",
+    "scroll-margin-inline-end",
+    "scroll-padding-block-end",
+    "scroll-padding-inline-start",
+    "scroll-margin-block",
+    "scroll-padding-inline",
     // Logical properties outside both the project seed and its shorthand
     // closure.
     "padding-block",
