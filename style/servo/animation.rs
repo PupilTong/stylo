@@ -60,6 +60,21 @@ impl PropertyAnimation {
         self.from.id()
     }
 
+    /// The value this animation starts from.
+    pub fn from(&self) -> &AnimationValue {
+        &self.from
+    }
+
+    /// The value this animation ends at.
+    pub fn to(&self) -> &AnimationValue {
+        &self.to
+    }
+
+    /// The timing function applied to this animation's progress.
+    pub fn timing_function(&self) -> &TimingFunction {
+        &self.timing_function
+    }
+
     /// The output of the timing function given the progress ration of this animation.
     fn timing_function_output(&self, progress: f64) -> f64 {
         let epsilon = 1. / (200. * self.duration);
