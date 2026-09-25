@@ -6,13 +6,14 @@
 #![cfg(not(feature = "lynx"))]
 
 use style::context::QuirksMode;
-use style::properties::declaration_block::parse_one_declaration_into;
+use style::properties::declaration_block::{parse_one_declaration_into, parse_style_attribute};
 use style::properties::{
     longhands, style_structs, ComputedValues, PropertyId, SourcePropertyDeclaration,
 };
 use style::stylesheets::{CssRuleType, Origin, UrlExtraData};
 use style::values::specified::box_::Display;
-use style_traits::ParsingMode;
+use style::values::specified::AnimationDuration;
+use style_traits::{ParsingMode, ToCss};
 
 fn url_data() -> UrlExtraData {
     UrlExtraData::from(::url::Url::parse("https://example.com/").unwrap())
@@ -188,4 +189,56 @@ fn container_units_stay_gecko_only() {
             "stock servo must not parse container unit `{value}`"
         );
     }
+}
+
+#[test]
+fn scroll_timeline_surface_stays_pref_gated() {
+    // scroll-animations-1's timeline declarations are ported to servo for the
+    // `lynx` feature's benefit behind `layout.unimplemented`, and
+    // `animation-duration: auto` stays behind gecko's scroll-driven-animations
+    // pref (false). A stock Servo build refuses all of them.
+    for (name, value) in [
+        ("scroll-timeline", "--a x"),
+        ("scroll-timeline-name", "--a"),
+        ("scroll-timeline-axis", "inline"),
+        ("view-timeline", "--v block 10% 20px"),
+        ("view-timeline-name", "--v"),
+        ("view-timeline-axis", "y"),
+        ("view-timeline-inset", "auto 5px"),
+        ("timeline-scope", "all"),
+        ("timeline-scope", "--a, --b"),
+        ("animation-range", "entry 10% exit 90%"),
+        ("animation-timeline", "scroll()"),
+        ("animation-duration", "auto"),
+    ] {
+        assert!(
+            !parses(name, value),
+            "stock servo must keep `{name}: {value}` pref-gated"
+        );
+    }
+    assert!(parses("animation-duration", "1s"));
+}
+
+#[test]
+fn animation_duration_auto_still_serializes_as_zero() {
+    // The initial `auto` keeps serializing as `0s` in a stock Servo build,
+    // both on its own and as the duration an `animation` shorthand leaves
+    // unset.
+    assert_eq!(AnimationDuration::auto().to_css_string(), "0s");
+
+    let block = parse_style_attribute(
+        "animation: fade",
+        &url_data(),
+        None,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    );
+    let mut duration = String::new();
+    block
+        .property_value_to_css(
+            &PropertyId::parse_enabled_for_all_content("animation-duration").unwrap(),
+            &mut duration,
+        )
+        .unwrap();
+    assert_eq!(duration, "0s");
 }

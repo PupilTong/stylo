@@ -1525,7 +1525,6 @@ pub mod style_structs {
 
             /// Returns whether there is any named progress timeline specified with
             /// scroll-timeline-name other than `none`.
-            #[cfg(feature = "gecko")]
             pub fn specifies_scroll_timelines(&self) -> bool {
                 self.scroll_timeline_name_iter().any(|name| !name.value.is_none())
             }
@@ -1536,15 +1535,20 @@ pub mod style_structs {
                 !self.mTimelineScope.is_none()
             }
 
+            /// Returns whether there is any timeline scope specified.
+            #[cfg(feature = "servo")]
+            pub fn specifies_timeline_scope(&self) -> bool {
+                !self.timeline_scope.is_none()
+            }
+
             /// Returns whether there is any named progress timeline specified with
             /// view-timeline-name other than `none`.
-            #[cfg(feature = "gecko")]
             pub fn specifies_view_timelines(&self) -> bool {
                 self.view_timeline_name_iter().any(|name| !name.value.is_none())
             }
 
             /// Returns true if animation properties are equal between styles, but without
-            /// considering keyframe data and animation-timeline.
+            /// considering keyframe data.
             #[cfg(feature = "servo")]
             pub fn animations_equals(&self, other: &Self) -> bool {
                 self.animation_name_iter().eq(other.animation_name_iter()) &&
@@ -1555,7 +1559,10 @@ pub mod style_structs {
                 self.animation_fill_mode_iter().eq(other.animation_fill_mode_iter()) &&
                 self.animation_iteration_count_iter().eq(other.animation_iteration_count_iter()) &&
                 self.animation_play_state_iter().eq(other.animation_play_state_iter()) &&
-                self.animation_timing_function_iter().eq(other.animation_timing_function_iter())
+                self.animation_timing_function_iter().eq(other.animation_timing_function_iter()) &&
+                self.animation_timeline_iter().eq(other.animation_timeline_iter()) &&
+                self.animation_range_start_iter().eq(other.animation_range_start_iter()) &&
+                self.animation_range_end_iter().eq(other.animation_range_end_iter())
             }
 
         % elif style_struct.name == "Column":
