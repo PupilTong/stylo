@@ -15,7 +15,9 @@ use std::{
     iter, mem,
 };
 
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps, MallocUnconditionalSizeOf};
+use malloc_size_of::{
+    MallocConditionalSizeOf, MallocSizeOf, MallocSizeOfOps, MallocUnconditionalSizeOf,
+};
 
 /// A canary that we stash in ArcSlices.
 ///
@@ -147,6 +149,16 @@ impl<T: MallocSizeOf> MallocUnconditionalSizeOf for ArcSlice<T> {
             size += el.size_of(ops);
         }
         size
+    }
+}
+
+impl<T: MallocSizeOf> MallocConditionalSizeOf for ArcSlice<T> {
+    fn conditional_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        if ops.have_seen_ptr(self.0.heap_ptr()) {
+            0
+        } else {
+            self.unconditional_size_of(ops)
+        }
     }
 }
 
