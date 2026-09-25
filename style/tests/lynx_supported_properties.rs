@@ -89,6 +89,13 @@ fn shorthand_longhand_closure_is_authorable() {
         "scroll-margin-left",
         "scroll-padding-bottom",
         "scroll-padding-right",
+        // The `scroll-timeline` / `view-timeline` shorthands are seeded; the
+        // closure pulls in their scroll-animations-1 longhands.
+        "scroll-timeline-axis",
+        "scroll-timeline-name",
+        "view-timeline-axis",
+        "view-timeline-inset",
+        "view-timeline-name",
         "font-stretch",
         "font-width",
         "font-variant",
