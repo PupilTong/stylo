@@ -1548,7 +1548,7 @@ pub mod style_structs {
             }
 
             /// Returns true if animation properties are equal between styles, but without
-            /// considering keyframe data and animation-timeline.
+            /// considering keyframe data.
             #[cfg(feature = "servo")]
             pub fn animations_equals(&self, other: &Self) -> bool {
                 self.animation_name_iter().eq(other.animation_name_iter()) &&
@@ -1559,7 +1559,10 @@ pub mod style_structs {
                 self.animation_fill_mode_iter().eq(other.animation_fill_mode_iter()) &&
                 self.animation_iteration_count_iter().eq(other.animation_iteration_count_iter()) &&
                 self.animation_play_state_iter().eq(other.animation_play_state_iter()) &&
-                self.animation_timing_function_iter().eq(other.animation_timing_function_iter())
+                self.animation_timing_function_iter().eq(other.animation_timing_function_iter()) &&
+                self.animation_timeline_iter().eq(other.animation_timeline_iter()) &&
+                self.animation_range_start_iter().eq(other.animation_range_start_iter()) &&
+                self.animation_range_end_iter().eq(other.animation_range_end_iter())
             }
 
         % elif style_struct.name == "Column":
