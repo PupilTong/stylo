@@ -1525,7 +1525,6 @@ pub mod style_structs {
 
             /// Returns whether there is any named progress timeline specified with
             /// scroll-timeline-name other than `none`.
-            #[cfg(feature = "gecko")]
             pub fn specifies_scroll_timelines(&self) -> bool {
                 self.scroll_timeline_name_iter().any(|name| !name.value.is_none())
             }
@@ -1536,9 +1535,14 @@ pub mod style_structs {
                 !self.mTimelineScope.is_none()
             }
 
+            /// Returns whether there is any timeline scope specified.
+            #[cfg(feature = "servo")]
+            pub fn specifies_timeline_scope(&self) -> bool {
+                !self.timeline_scope.is_none()
+            }
+
             /// Returns whether there is any named progress timeline specified with
             /// view-timeline-name other than `none`.
-            #[cfg(feature = "gecko")]
             pub fn specifies_view_timelines(&self) -> bool {
                 self.view_timeline_name_iter().any(|name| !name.value.is_none())
             }

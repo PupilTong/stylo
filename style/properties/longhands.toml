@@ -2532,11 +2532,18 @@ animation_type = "none"
 spec = "https://drafts.csswg.org/css-animations-2/#animation-composition"
 affects = ""
 
+# lynx-vello: scroll-animations-1's timeline declarations are a user-directed
+# W3C extension beyond Lynx (native Lynx has no scroll-driven animations).
+# Ported to servo behind the experimental pref, the container/scroll-snap
+# pattern, so the `lynx` feature force-enables them while stock servo keeps
+# them out of its author surface. Same for the view-timeline-* longhands below.
+# `view-timeline-inset` keeps `animation_type = "none"`, as Firefox ships it,
+# although scroll-animations-1 makes it animatable by computed value.
 [scroll-timeline-axis]
 type = "ScrollAxis"
 initial = "computed::ScrollAxis::default()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2548,7 +2555,7 @@ affects = ""
 type = "TimelineName"
 initial = "computed::TimelineName::none()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2560,7 +2567,7 @@ affects = ""
 type = "ScrollAxis"
 initial = "computed::ScrollAxis::default()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2572,7 +2579,7 @@ affects = ""
 type = "ViewTimelineInset"
 initial = "computed::ViewTimelineInset::default()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2584,7 +2591,7 @@ affects = ""
 type = "TimelineName"
 initial = "computed::TimelineName::none()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -4554,11 +4561,13 @@ affects = "layout"
 servo_restyle_damage = "rebuild_box"
 keyword = { values = ["collapse", "preserve", "preserve-breaks", "break-spaces"], extra_gecko_values = ["preserve-spaces"], gecko_aliases = ["-moz-pre-space=preserve-spaces"] }
 
+# lynx-vello: ported to servo behind the experimental pref with the
+# scroll-timeline-* longhands (see scroll-timeline-axis).
 [timeline-scope]
 type = "ScopedName"
 initial = "computed::ScopedName::none()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
 spec = "https://drafts.csswg.org/scroll-animations-1/#timeline-scope"
