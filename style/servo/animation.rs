@@ -27,7 +27,7 @@ use crate::style_resolver::StyleResolverForElement;
 use crate::stylesheets::keyframes_rule::{KeyframesAnimation, KeyframesStep, KeyframesStepValue};
 use crate::stylesheets::layer_rule::LayerOrder;
 use crate::values::animated::{Animate, Procedure};
-use crate::values::computed::TimingFunction;
+use crate::values::computed::{AnimationTimeline, TimingFunction};
 use crate::values::generics::easing::BeforeFlag;
 use crate::values::specified::TransitionBehavior;
 use crate::{ArcSlice, Atom};
@@ -240,9 +240,12 @@ impl IterationCursor {
     }
 }
 
-/// Where an animation stands in its current iteration: the progress
-/// [`Animation::sample_at`] reads, and the direction the iteration runs.
-#[derive(Clone, Copy, Debug)]
+/// Where an animation stands in its current iteration: the simple iteration
+/// progress (css-animations-1 / web-animations-1 §4.7, before the direction
+/// is applied) and whether the iteration runs reversed.
+/// [`Animation::sample_at`] applies the direction itself: a reversed
+/// iteration reads the keyframe offset `1 - progress`. Never NaN.
+#[derive(Clone, Copy, Debug, MallocSizeOf, PartialEq)]
 pub struct AnimationProgress {
     /// In `[0, 1]`, or negative in a backwards-filled before phase.
     progress: f64,
@@ -251,17 +254,33 @@ pub struct AnimationProgress {
 }
 
 impl AnimationProgress {
-    /// A progress through an iteration running forward, or reversed when
-    /// `reversed`; `progress` is clamped to `[0, 1]`, NaN reading as 0.
+    /// A simple iteration progress through an iteration running forward, or
+    /// reversed when `reversed`; `progress` is clamped to `[0, 1]`, NaN
+    /// reading as 0.
     pub fn new(progress: f64, reversed: bool) -> Self {
         Self {
             // `f64::max` answers 0 for NaN.
             progress: progress.max(0.).min(1.),
-            direction: if reversed {
-                AnimationDirection::Reverse
-            } else {
-                AnimationDirection::Normal
-            },
+            direction: Self::direction_of(reversed),
+        }
+    }
+
+    /// A backwards-filled before phase: the negative progress the time path
+    /// reads there. [`Animation::sample_at`] then takes the first keyframe
+    /// (the last one when `reversed`) without easing it, as the before flag
+    /// requires for `steps(jump-start)`.
+    pub fn before_phase(reversed: bool) -> Self {
+        Self {
+            progress: -1.,
+            direction: Self::direction_of(reversed),
+        }
+    }
+
+    fn direction_of(reversed: bool) -> AnimationDirection {
+        if reversed {
+            AnimationDirection::Reverse
+        } else {
+            AnimationDirection::Normal
         }
     }
 
@@ -738,10 +757,10 @@ pub struct Animation {
     /// timeline when this animation was created plus any animation delay.
     pub started_at: f64,
 
-    /// The duration of this animation.
+    /// The duration of this animation; a nominal 1 for a progress-driven one.
     pub duration: f64,
 
-    /// The delay of the animation.
+    /// The delay of the animation; 0 for a progress-driven one.
     pub delay: f64,
 
     /// The `animation-fill-mode` property of this animation.
@@ -765,9 +784,40 @@ pub struct Animation {
     /// Whether or not this animation is new and or has already been tracked
     /// by the script thread.
     pub is_new: bool,
+
+    /// The computed `animation-timeline` of this animation: `auto` for the
+    /// document timeline, otherwise a scroll or view progress timeline.
+    pub timeline: AnimationTimeline,
+
+    /// A progress-driven animation's simple iteration progress and iteration
+    /// direction, resolved by the embedder from its timeline (range, phase,
+    /// fill and iteration applied; [`Self::sample_at`] applies the
+    /// direction); `None` contributes nothing. Unread for an animation on the
+    /// document timeline. The embedder writes the first sample even when the
+    /// animation starts paused and holds it while paused, so one created
+    /// under `animation-play-state: paused` shows the value at the scroll
+    /// position of that moment rather than the base value.
+    pub timeline_sample: Option<AnimationProgress>,
+}
+
+/// Whether `timeline` is `none`: an animation with no timeline is inactive.
+fn is_none_timeline(timeline: &AnimationTimeline) -> bool {
+    matches!(timeline, AnimationTimeline::Timeline(name) if name.value.is_none())
 }
 
 impl Animation {
+    /// Whether this animation follows a progress timeline instead of the
+    /// document timeline: its progress is `timeline_sample`, and the clock
+    /// neither iterates nor ends it.
+    pub fn is_progress_driven(&self) -> bool {
+        !self.timeline.is_auto()
+    }
+
+    /// Whether the clock has to tick this animation.
+    fn needs_to_be_ticked(&self) -> bool {
+        !self.is_progress_driven() && self.state.needs_to_be_ticked()
+    }
+
     /// Whether or not this animation is cancelled by changes from a new style.
     fn is_cancelled_in_new_style(&self, new_style: &Arc<ComputedValues>) -> bool {
         let new_ui = new_style.get_ui();
@@ -779,6 +829,13 @@ impl Animation {
             None => return true,
         };
 
+        let timeline = new_ui.animation_timeline_mod(index);
+        if is_none_timeline(&timeline) {
+            return true;
+        }
+        if !timeline.is_auto() {
+            return false;
+        }
         new_ui.animation_duration_mod(index).seconds() == 0.
     }
 
@@ -786,6 +843,9 @@ impl Animation {
     /// updates times, and then toggles the direction if appropriate. Otherwise
     /// does nothing. Returns true if this animation has iterated.
     pub fn iterate_if_necessary(&mut self, time: f64) -> bool {
+        if self.is_progress_driven() {
+            return false;
+        }
         if !self.iteration_over(time) {
             return false;
         }
@@ -808,7 +868,7 @@ impl Animation {
     /// elapsed, where it stops short. Returns true if this animation has
     /// iterated.
     pub fn iterate_to(&mut self, now: f64) -> bool {
-        if self.state != AnimationState::Running {
+        if self.state != AnimationState::Running || self.is_progress_driven() {
             return false;
         }
         let mut cursor = self.cursor();
@@ -880,7 +940,7 @@ impl Animation {
 
     /// [`Self::has_ended`] with the iteration fields of `cursor`.
     fn has_ended_at(&self, cursor: &IterationCursor, time: f64) -> bool {
-        if !cursor.on_last_iteration() {
+        if self.is_progress_driven() || !cursor.on_last_iteration() {
             return false;
         }
 
@@ -903,12 +963,15 @@ impl Animation {
     /// The first instant a finite running or pending animation, iterated as
     /// [`Self::progress_at`] iterates it, has ended at: it contributes at the
     /// instant before, and `has_ended` holds from it on after `iterate_to`.
-    /// `None` for one that never ends on its own: infinite, paused, finished
-    /// or canceled.
+    /// `None` for one that never ends on its own: infinite, paused, finished,
+    /// canceled or progress-driven.
     pub fn expires_at(&self) -> Option<f64> {
         // Rounding puts that instant within a few ulps of the estimate.
         const ULPS: usize = 8;
 
+        if self.is_progress_driven() {
+            return None;
+        }
         match (&self.state, &self.iteration_state) {
             (
                 AnimationState::Running | AnimationState::Pending,
@@ -988,6 +1051,17 @@ impl Animation {
             "KeyframesAnimationState::update_from_other({:?}, {:?})",
             self, other
         );
+
+        // A progress-driven animation has no time state to carry over, only
+        // the progress the embedder last wrote. `maybe_start_animations`
+        // replaces an animation whose timeline kind changed.
+        if other.is_progress_driven() {
+            debug_assert_eq!(self.is_progress_driven(), other.is_progress_driven());
+            let timeline_sample = self.timeline_sample;
+            *self = other.clone();
+            self.timeline_sample = timeline_sample;
+            return;
+        }
 
         // NB: We shall not touch the started_at field, since we don't want to
         // restart the animation.
@@ -1100,7 +1174,7 @@ impl Animation {
     /// reads them. `None` when the animation contributes nothing at `now`.
     pub fn progress_at(&self, now: f64) -> Option<AnimationProgress> {
         let mut cursor = self.cursor();
-        if self.state == AnimationState::Running {
+        if self.state == AnimationState::Running && !self.is_progress_driven() {
             cursor.iterate_to(now, self.duration, self.direction);
         }
         self.progress_of(&cursor, now)
@@ -1108,11 +1182,19 @@ impl Animation {
 
     /// Where this animation stands at `now` with the iteration fields of
     /// `cursor`: the fill and `has_ended` rules applied, the progress clamped
-    /// to the current iteration unless a backwards fill reads it negative.
+    /// to the current iteration unless a backwards fill reads it negative. A
+    /// progress-driven animation stands at its `timeline_sample`, paused or
+    /// not.
     fn progress_of(&self, cursor: &IterationCursor, now: f64) -> Option<AnimationProgress> {
         if self.computed_steps.is_empty() {
             // Nothing to do.
             return None;
+        }
+        if self.is_progress_driven() {
+            return match self.state {
+                AnimationState::Canceled => None,
+                _ => self.timeline_sample,
+            };
         }
 
         // Raw progress ratio of the animation: can be negative (before start) or
@@ -1152,7 +1234,8 @@ impl Animation {
         })
     }
 
-    /// Fill in an `AnimationValueMap` with this animation's values at `at`.
+    /// Fill in an `AnimationValueMap` with this animation's values at `at`,
+    /// applying its direction.
     pub fn sample_at(&self, at: AnimationProgress, map: &mut AnimationValueMap) {
         let AnimationProgress {
             progress: total_progress,
@@ -1314,6 +1397,8 @@ impl fmt::Debug for Animation {
             .field("state", &self.state)
             .field("direction", &self.direction)
             .field("current_direction", &self.current_direction)
+            .field("timeline", &self.timeline)
+            .field("timeline_sample", &self.timeline_sample)
             .field("cascade_style", &())
             .finish()
     }
@@ -1535,22 +1620,23 @@ impl ElementAnimationSet {
     }
 
     /// Whether or not this state needs animation ticks for its transitions
-    /// or animations.
+    /// or animations. A progress-driven animation never does.
     pub fn needs_animation_ticks(&self) -> bool {
         self.animations
             .iter()
-            .any(|animation| animation.state.needs_to_be_ticked())
+            .any(|animation| animation.needs_to_be_ticked())
             || self
                 .transitions
                 .iter()
                 .any(|transition| transition.state.needs_to_be_ticked())
     }
 
-    /// The number of running animations and transitions for this `ElementAnimationSet`.
+    /// The number of running animations and transitions for this
+    /// `ElementAnimationSet`, progress-driven animations excluded.
     pub fn running_animation_and_transition_count(&self) -> usize {
         self.animations
             .iter()
-            .filter(|animation| animation.state.needs_to_be_ticked())
+            .filter(|animation| animation.needs_to_be_ticked())
             .count()
             + self
                 .transitions
@@ -2105,8 +2191,15 @@ pub fn maybe_start_animations<E>(
         };
 
         debug!("maybe_start_animations: name={}", name);
+        let timeline = style.animation_timeline_mod(i);
+        if is_none_timeline(&timeline) {
+            continue;
+        }
+        // A progress-driven animation stands where the embedder's
+        // `timeline_sample` puts it, whatever its duration.
+        let progress_driven = !timeline.is_auto();
         let duration = style.animation_duration_mod(i).seconds() as f64;
-        if duration == 0. {
+        if duration == 0. && !progress_driven {
             continue;
         }
 
@@ -2119,7 +2212,16 @@ pub fn maybe_start_animations<E>(
         // NB: This delay may be negative, meaning that the animation may be created
         // in a state where we have advanced one or more iterations or even that the
         // animation begins in a finished state.
-        let delay = style.animation_delay_mod(i).seconds() as f64;
+        //
+        // A progress-driven animation takes a nominal duration, which keeps
+        // its easing tolerance equal to the embedder's own sampler's, and no
+        // delay: the embedder reads the specified ones from the style to place
+        // it within its timeline.
+        let (duration, delay) = if progress_driven {
+            (1., 0.)
+        } else {
+            (duration, style.animation_delay_mod(i).seconds() as f64)
+        };
 
         let iteration_count = style.animation_iteration_count_mod(i);
         let iteration_state = if iteration_count.0.is_infinite() {
@@ -2142,9 +2244,10 @@ pub fn maybe_start_animations<E>(
         let now = context.current_time_for_animations;
         let started_at = now + delay;
         let starting_progress = (now - started_at) / duration;
-        let state = match style.animation_play_state_mod(i) {
-            AnimationPlayState::Paused => AnimationState::Paused(starting_progress),
-            AnimationPlayState::Running => AnimationState::Pending,
+        let state = match (style.animation_play_state_mod(i), progress_driven) {
+            (AnimationPlayState::Paused, _) => AnimationState::Paused(starting_progress),
+            (AnimationPlayState::Running, false) => AnimationState::Pending,
+            (AnimationPlayState::Running, true) => AnimationState::Running,
         };
 
         // Determine the set of animating properties. This is not equivalent to the set of changed properties
@@ -2186,11 +2289,15 @@ pub fn maybe_start_animations<E>(
             current_direction: initial_direction,
             number_of_animating_properties,
             is_new: true,
+            timeline,
+            timeline_sample: None,
         };
 
         // If we started with a negative delay, make sure we iterate the animation if
         // the delay moves us past the first iteration.
-        new_animation.iterate_by(starting_progress);
+        if !progress_driven {
+            new_animation.iterate_by(starting_progress);
+        }
 
         animation_state.dirty = true;
 
@@ -2201,8 +2308,14 @@ pub fn maybe_start_animations<E>(
             }
 
             if new_animation.name == existing_animation.name {
-                existing_animation
-                    .update_from_other(&new_animation, context.current_time_for_animations);
+                // A change between the document timeline and a progress
+                // timeline starts the animation over.
+                if existing_animation.is_progress_driven() != progress_driven {
+                    *existing_animation = new_animation;
+                } else {
+                    existing_animation
+                        .update_from_other(&new_animation, context.current_time_for_animations);
+                }
                 return;
             }
         }
