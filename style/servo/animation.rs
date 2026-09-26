@@ -30,7 +30,7 @@ use crate::values::animated::{Animate, Procedure};
 use crate::values::computed::TimingFunction;
 use crate::values::generics::easing::BeforeFlag;
 use crate::values::specified::TransitionBehavior;
-use crate::Atom;
+use crate::{ArcSlice, Atom};
 use debug_unreachable::debug_unreachable;
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
@@ -126,6 +126,155 @@ pub enum KeyframesIterationState {
     Infinite(f64),
     /// Current and max iterations.
     Finite(f64, f64),
+}
+
+/// The fields iterating an animation moves, apart from the animation, so a
+/// sampler can advance a copy of them.
+#[derive(Clone, Debug)]
+struct IterationCursor {
+    started_at: f64,
+    iteration_state: KeyframesIterationState,
+    current_direction: AnimationDirection,
+}
+
+impl IterationCursor {
+    /// See [`Animation::iterate_by`].
+    fn iterate_by(&mut self, n: f64, duration: f64, direction: AnimationDirection) -> f64 {
+        let n = n.trunc().min(self.remaining_iterations().ceil() - 1.0);
+        if n < 1. {
+            return 0.;
+        }
+
+        match self.iteration_state {
+            KeyframesIterationState::Finite(ref mut current, max) => {
+                *current = (*current + n).min(max);
+            },
+            KeyframesIterationState::Infinite(ref mut current) => {
+                *current += n;
+            },
+        }
+
+        // Update the next iteration direction if applicable.
+        self.started_at += duration * n;
+        match direction {
+            AnimationDirection::Alternate | AnimationDirection::AlternateReverse
+                if n % 2. == 1.0 =>
+            {
+                self.current_direction = match self.current_direction {
+                    AnimationDirection::Normal => AnimationDirection::Reverse,
+                    AnimationDirection::Reverse => AnimationDirection::Normal,
+                    _ => unreachable!(
+                        "Current animation direction can only be `normal` or `reverse`."
+                    ),
+                };
+            },
+            _ => {},
+        }
+
+        n
+    }
+
+    /// See [`Animation::iterate_to`].
+    fn iterate_to(&mut self, now: f64, duration: f64, direction: AnimationDirection) -> bool {
+        // Below this every integer is exact, so `whole` counts iterations.
+        const EXACT: f64 = (1u64 << 52) as f64;
+        // The single steps after the jump: one or two, one more after a jump
+        // one iteration shorter, and one for rounding.
+        const TAIL: usize = 4;
+
+        if !self.iteration_over(now, duration) {
+            return false;
+        }
+        let mut iterated = false;
+        // All but the last one or two whole iterations elapsed, in one step
+        // that stays short of `now`: one iteration fewer when rounding
+        // carries `whole` to or past it, none when that does too.
+        let whole = ((now - self.started_at) / duration).ceil() - 2.;
+        if whole >= 1. && whole < EXACT {
+            let jump = [whole, whole - 1.]
+                .into_iter()
+                .find(|n| self.started_at + duration * n < now);
+            if let Some(n) = jump {
+                iterated = self.iterate_by(n, duration, direction) > 0.;
+            }
+        }
+        // The rest one at a time, with the check `iterate_if_necessary`
+        // makes; a step that leaves `started_at` unchanged ends the walk.
+        for _ in 0..TAIL {
+            let started_at = self.started_at;
+            let over = self.iteration_over(now, duration);
+            if !over || self.iterate_by(1., duration, direction) == 0. {
+                break;
+            }
+            iterated = true;
+            if self.started_at == started_at {
+                break;
+            }
+        }
+        iterated
+    }
+
+    fn remaining_iterations(&self) -> f64 {
+        match self.iteration_state {
+            KeyframesIterationState::Finite(current, max) => max - current,
+            KeyframesIterationState::Infinite(_) => f64::INFINITY,
+        }
+    }
+
+    fn current_iteration_end_progress(&self) -> f64 {
+        self.remaining_iterations().min(1.)
+    }
+
+    fn iteration_over(&self, time: f64, duration: f64) -> bool {
+        time > (self.started_at + self.current_iteration_end_progress() * duration)
+    }
+
+    /// Whether a running animation's current iteration has reached its end
+    /// progress at `time`.
+    fn iteration_ended(&self, time: f64, duration: f64) -> bool {
+        (time - self.started_at) / duration >= self.current_iteration_end_progress()
+    }
+
+    fn on_last_iteration(&self) -> bool {
+        self.remaining_iterations() <= 1.
+    }
+}
+
+/// Where an animation stands in its current iteration: the progress
+/// [`Animation::sample_at`] reads, and the direction the iteration runs.
+#[derive(Clone, Copy, Debug)]
+pub struct AnimationProgress {
+    /// In `[0, 1]`, or negative in a backwards-filled before phase.
+    progress: f64,
+    /// `normal` or `reverse`.
+    direction: AnimationDirection,
+}
+
+impl AnimationProgress {
+    /// A progress through an iteration running forward, or reversed when
+    /// `reversed`; `progress` is clamped to `[0, 1]`, NaN reading as 0.
+    pub fn new(progress: f64, reversed: bool) -> Self {
+        Self {
+            // `f64::max` answers 0 for NaN.
+            progress: progress.max(0.).min(1.),
+            direction: if reversed {
+                AnimationDirection::Reverse
+            } else {
+                AnimationDirection::Normal
+            },
+        }
+    }
+
+    /// The progress: in `[0, 1]`, or negative in a backwards-filled before
+    /// phase.
+    pub fn progress(&self) -> f64 {
+        self.progress
+    }
+
+    /// The direction the iteration runs: `normal` or `reverse`.
+    pub fn direction(&self) -> AnimationDirection {
+        self.direction
+    }
 }
 
 /// A temporary data structure used when calculating ComputedKeyframes for an
@@ -345,16 +494,34 @@ struct KeyframeOffsetCacheForProperty {
     next_keyframe_that_defines_property: Option<usize>,
 }
 
-struct KeyframeDataForProperty<'a> {
+/// One keyframe that declares a given property.
+#[derive(Clone, Copy, Debug)]
+pub struct KeyframeDataForProperty<'a> {
     /// The timing function to use for transitions between this step
-    /// and the next one.
-    timing_function: &'a TimingFunction,
+    /// and the next one in the iteration's direction: a forward iteration
+    /// eases a segment by its lower keyframe's, a reverse one by its upper
+    /// keyframe's.
+    pub timing_function: &'a TimingFunction,
 
     /// The starting percentage (a number between 0 and 1) which represents
     /// at what point in an animation iteration this step is.
-    start_percentage: f64,
+    pub start_percentage: f64,
 
-    value: &'a AnimationValue,
+    /// The value this keyframe declares, or the base style's where it
+    /// backfills the first or last keyframe.
+    pub value: &'a AnimationValue,
+}
+
+/// Two consecutive keyframes declaring one property: the segment an
+/// animation interpolates that property over. A forward iteration eases it
+/// by `from.timing_function`, a reverse one by `to.timing_function` over
+/// progress running from `to` back to `from`.
+#[derive(Clone, Copy, Debug)]
+pub struct KeyframeSegment<'a> {
+    /// The lower keyframe.
+    pub from: KeyframeDataForProperty<'a>,
+    /// The upper keyframe.
+    pub to: KeyframeDataForProperty<'a>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -384,37 +551,34 @@ impl Animation {
         keyframe_index: usize,
         direction: Direction,
     ) -> Option<KeyframeDataForProperty<'_>> {
-        let relevant_keyframe = &self.computed_steps[keyframe_index];
-        let parameters = match &relevant_keyframe.values[property_index] {
-            AnimationValueOrReference::AnimationValue(animation_value) => KeyframeDataForProperty {
-                timing_function: &relevant_keyframe.timing_function,
-                start_percentage: relevant_keyframe.start_percentage,
-                value: animation_value,
-            },
-            AnimationValueOrReference::NotDefinedHere(offsets) => {
-                let next_relevant_keyframe_index = match direction {
+        let relevant_keyframe_index =
+            match &self.computed_steps[keyframe_index].values[property_index] {
+                AnimationValueOrReference::AnimationValue(_) => keyframe_index,
+                AnimationValueOrReference::NotDefinedHere(offsets) => match direction {
                     Direction::Forward => offsets.following_declaration,
                     Direction::Backward => offsets.preceding_declaration,
-                };
-                let next_relevant_keyframe = &self.computed_steps[next_relevant_keyframe_index];
-                let AnimationValueOrReference::AnimationValue(animation_value) =
-                    &next_relevant_keyframe.values[property_index]
-                else {
-                    panic!("Referenced keyframe does not set property");
-                };
-
-                KeyframeDataForProperty {
-                    timing_function: &next_relevant_keyframe.timing_function,
-                    start_percentage: next_relevant_keyframe.start_percentage,
-                    value: &animation_value,
-                }
-            },
-        };
+                },
+            };
+        let parameters = self.computed_steps[relevant_keyframe_index]
+            .declaring(property_index)
+            .expect("Referenced keyframe does not set property");
 
         Some(parameters)
     }
 }
 impl ComputedKeyframe {
+    /// This keyframe, if it declares the property at `property_index`.
+    fn declaring(&self, property_index: usize) -> Option<KeyframeDataForProperty<'_>> {
+        match &self.values[property_index] {
+            AnimationValueOrReference::AnimationValue(value) => Some(KeyframeDataForProperty {
+                timing_function: &self.timing_function,
+                start_percentage: self.start_percentage,
+                value,
+            }),
+            AnimationValueOrReference::NotDefinedHere(_) => None,
+        }
+    }
+
     fn generate_for_keyframes<E>(
         element: E,
         animation: &KeyframesAnimation,
@@ -425,7 +589,7 @@ impl ComputedKeyframe {
         resolver: &mut StyleResolverForElement<E>,
         animating_properties: PropertyDeclarationIdSet,
         number_of_animating_properties: usize,
-    ) -> Box<[Self]>
+    ) -> ArcSlice<Self>
     where
         E: TElement,
     {
@@ -552,7 +716,7 @@ impl ComputedKeyframe {
                 .all(|value| matches!(value, AnimationValueOrReference::AnimationValue(_)))
         }));
 
-        computed_steps.into_boxed_slice()
+        ArcSlice::from_iter(computed_steps.into_iter())
     }
 }
 
@@ -565,8 +729,10 @@ pub struct Animation {
     /// The properties that change in this animation.
     properties_changed: PropertyDeclarationIdSet,
 
-    /// The computed style for each keyframe of this animation.
-    computed_steps: Box<[ComputedKeyframe]>,
+    /// The computed style for each keyframe of this animation, shared by
+    /// clones.
+    #[conditional_malloc_size_of]
+    computed_steps: ArcSlice<ComputedKeyframe>,
 
     /// The time this animation started at, which is the current value of the animation
     /// timeline when this animation was created plus any animation delay.
@@ -632,22 +798,33 @@ impl Animation {
         self.iterate_by(1.) == 1.
     }
 
+    /// Advances a running animation past every whole iteration elapsed by
+    /// `now`: the iteration count and direction a loop of
+    /// `iterate_if_necessary(now)` reaches, with `started_at` equal to it up
+    /// to f64 rounding (one `duration · n` step against repeated additions).
+    /// One jump plus at most four checked single steps, so the cost does not
+    /// grow with the iterations elapsed; idempotent at a fixed `now` unless
+    /// `duration` is below the rounding of `started_at` or 2^52 iterations
+    /// elapsed, where it stops short. Returns true if this animation has
+    /// iterated.
+    pub fn iterate_to(&mut self, now: f64) -> bool {
+        if self.state != AnimationState::Running {
+            return false;
+        }
+        let mut cursor = self.cursor();
+        let iterated = cursor.iterate_to(now, self.duration, self.direction);
+        self.set_cursor(cursor);
+        iterated
+    }
+
     /// Attempts to advance this animation by `n` iterations, but stops when reaching
     /// the last iteration, and doesn't perform fractional iterations.
     /// Returns the actual number of iterations that happened.
     fn iterate_by(&mut self, n: f64) -> f64 {
-        let n = n.trunc().min(self.remaining_iterations().ceil() - 1.0);
+        let mut cursor = self.cursor();
+        let n = cursor.iterate_by(n, self.duration, self.direction);
         if n < 1. {
             return 0.;
-        }
-
-        match self.iteration_state {
-            KeyframesIterationState::Finite(ref mut current, max) => {
-                *current = (*current + n).min(max);
-            },
-            KeyframesIterationState::Infinite(ref mut current) => {
-                *current += n;
-            },
         }
 
         if let AnimationState::Paused(ref mut progress) = self.state {
@@ -655,31 +832,23 @@ impl Animation {
             *progress -= n;
         }
 
-        // Update the next iteration direction if applicable.
-        self.started_at += self.duration * n;
-        match self.direction {
-            AnimationDirection::Alternate | AnimationDirection::AlternateReverse
-                if n % 2. == 1.0 =>
-            {
-                self.current_direction = match self.current_direction {
-                    AnimationDirection::Normal => AnimationDirection::Reverse,
-                    AnimationDirection::Reverse => AnimationDirection::Normal,
-                    _ => unreachable!(
-                        "Current animation direction can only be `normal` or `reverse`."
-                    ),
-                };
-            },
-            _ => {},
-        }
-
+        self.set_cursor(cursor);
         n
     }
 
-    fn remaining_iterations(&self) -> f64 {
-        match self.iteration_state {
-            KeyframesIterationState::Finite(current, max) => max - current,
-            KeyframesIterationState::Infinite(_) => f64::INFINITY,
+    /// A copy of the fields iterating moves.
+    fn cursor(&self) -> IterationCursor {
+        IterationCursor {
+            started_at: self.started_at,
+            iteration_state: self.iteration_state.clone(),
+            current_direction: self.current_direction,
         }
+    }
+
+    fn set_cursor(&mut self, cursor: IterationCursor) {
+        self.started_at = cursor.started_at;
+        self.iteration_state = cursor.iteration_state;
+        self.current_direction = cursor.current_direction;
     }
 
     /// A number (> 0 and <= 1) which represents the fraction of a full iteration
@@ -687,7 +856,7 @@ impl Animation {
     /// if the current iteration is the fractional remainder of a non-integral
     /// iteration count.
     pub fn current_iteration_end_progress(&self) -> f64 {
-        self.remaining_iterations().min(1.)
+        self.cursor().current_iteration_end_progress()
     }
 
     /// The duration of the current iteration of this animation which may be less
@@ -699,30 +868,110 @@ impl Animation {
     /// Whether or not the current iteration is over. Note that this method assumes that
     /// the animation is still running.
     fn iteration_over(&self, time: f64) -> bool {
-        time > (self.started_at + self.current_iteration_duration())
-    }
-
-    /// Assuming this animation is running, whether or not it is on the last iteration.
-    fn on_last_iteration(&self) -> bool {
-        self.remaining_iterations() <= 1.
+        self.cursor().iteration_over(time, self.duration)
     }
 
     /// Whether or not this animation has finished at the provided time. This does
     /// not take into account canceling i.e. when an animation or transition is
     /// canceled due to changes in the style.
     pub fn has_ended(&self, time: f64) -> bool {
-        if !self.on_last_iteration() {
+        self.has_ended_at(&self.cursor(), time)
+    }
+
+    /// [`Self::has_ended`] with the iteration fields of `cursor`.
+    fn has_ended_at(&self, cursor: &IterationCursor, time: f64) -> bool {
+        if !cursor.on_last_iteration() {
             return false;
         }
 
-        let progress = match self.state {
-            AnimationState::Finished => return true,
-            AnimationState::Paused(progress) => progress,
-            AnimationState::Running => (time - self.started_at) / self.duration,
-            AnimationState::Pending | AnimationState::Canceled => return false,
-        };
+        match self.state {
+            AnimationState::Finished => true,
+            AnimationState::Paused(progress) => progress >= cursor.current_iteration_end_progress(),
+            AnimationState::Running => cursor.iteration_ended(time, self.duration),
+            AnimationState::Pending | AnimationState::Canceled => false,
+        }
+    }
 
-        progress >= self.current_iteration_end_progress()
+    /// Whether this animation, running and iterated to `time` as
+    /// [`Self::progress_at`] iterates it, has ended at `time`.
+    fn run_ended_at(&self, time: f64) -> bool {
+        let mut cursor = self.cursor();
+        cursor.iterate_to(time, self.duration, self.direction);
+        cursor.on_last_iteration() && cursor.iteration_ended(time, self.duration)
+    }
+
+    /// The first instant a finite running or pending animation, iterated as
+    /// [`Self::progress_at`] iterates it, has ended at: it contributes at the
+    /// instant before, and `has_ended` holds from it on after `iterate_to`.
+    /// `None` for one that never ends on its own: infinite, paused, finished
+    /// or canceled.
+    pub fn expires_at(&self) -> Option<f64> {
+        // Rounding puts that instant within a few ulps of the estimate.
+        const ULPS: usize = 8;
+
+        match (&self.state, &self.iteration_state) {
+            (
+                AnimationState::Running | AnimationState::Pending,
+                KeyframesIterationState::Finite(..),
+            ) => {},
+            _ => return None,
+        }
+        let mut last = self.cursor();
+        let before_last = last.remaining_iterations().ceil() - 1.;
+        last.iterate_by(before_last, self.duration, self.direction);
+        let estimate = last.started_at + self.duration * last.current_iteration_end_progress();
+        let mut cursor = self.cursor();
+        cursor.iterate_to(estimate, self.duration, self.direction);
+        let mut end = cursor.started_at + self.duration * cursor.current_iteration_end_progress();
+        for _ in 0..ULPS {
+            if self.run_ended_at(end) {
+                break;
+            }
+            end = end.next_up();
+        }
+        for _ in 0..ULPS {
+            if !self.run_ended_at(end.next_down()) {
+                break;
+            }
+            end = end.next_down();
+        }
+        Some(end)
+    }
+
+    /// The properties this animation's keyframes animate, each with the
+    /// index [`Self::keyframe_segments`] takes.
+    pub fn animating_properties(&self) -> impl Iterator<Item = (usize, PropertyDeclarationId<'_>)> {
+        self.computed_steps.first().into_iter().flat_map(|step| {
+            step.values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| match value {
+                    AnimationValueOrReference::AnimationValue(value) => (index, value.id()),
+                    AnimationValueOrReference::NotDefinedHere(_) => {
+                        unreachable!("the first keyframe declares every animating property")
+                    },
+                })
+        })
+    }
+
+    /// The segments the property at `property_index` interpolates over: each
+    /// pair of consecutive keyframes declaring it, ascending.
+    pub fn keyframe_segments(
+        &self,
+        property_index: usize,
+    ) -> impl Iterator<Item = KeyframeSegment<'_>> {
+        let mut declaring = self
+            .computed_steps
+            .iter()
+            .filter_map(move |step| step.declaring(property_index));
+        let mut from = declaring.next();
+        std::iter::from_fn(move || {
+            let to = declaring.next()?;
+            Some(KeyframeSegment {
+                from: from.replace(to)?,
+                to,
+            })
+        })
     }
 
     /// Updates the appropiate state from other animation.
@@ -841,31 +1090,75 @@ impl Animation {
     /// Fill in an `AnimationValueMap` with values calculated from this animation at
     /// the given time value.
     fn get_property_declaration_at_time(&self, now: f64, map: &mut AnimationValueMap) {
+        if let Some(at) = self.progress_of(&self.cursor(), now) {
+            self.sample_at(at, map);
+        }
+    }
+
+    /// Where this animation stands at `now`, without moving `self`: its
+    /// iteration fields as `iterate_to(now)` leaves them, read as the cascade
+    /// reads them. `None` when the animation contributes nothing at `now`.
+    pub fn progress_at(&self, now: f64) -> Option<AnimationProgress> {
+        let mut cursor = self.cursor();
+        if self.state == AnimationState::Running {
+            cursor.iterate_to(now, self.duration, self.direction);
+        }
+        self.progress_of(&cursor, now)
+    }
+
+    /// Where this animation stands at `now` with the iteration fields of
+    /// `cursor`: the fill and `has_ended` rules applied, the progress clamped
+    /// to the current iteration unless a backwards fill reads it negative.
+    fn progress_of(&self, cursor: &IterationCursor, now: f64) -> Option<AnimationProgress> {
         if self.computed_steps.is_empty() {
             // Nothing to do.
-            return;
+            return None;
         }
 
         // Raw progress ratio of the animation: can be negative (before start) or
         // >1.0 (after end or during multiple iterations).
         let progress = match self.state {
             AnimationState::Running | AnimationState::Pending | AnimationState::Finished => {
-                (now - self.started_at) / self.duration
+                (now - cursor.started_at) / self.duration
             },
             AnimationState::Paused(progress) => progress,
-            AnimationState::Canceled => return,
+            AnimationState::Canceled => return None,
         };
 
         if progress < 0.
             && self.fill_mode != AnimationFillMode::Backwards
             && self.fill_mode != AnimationFillMode::Both
         {
-            return;
+            return None;
         }
-        if self.has_ended(now)
+        if self.has_ended_at(cursor, now)
             && self.fill_mode != AnimationFillMode::Forwards
             && self.fill_mode != AnimationFillMode::Both
         {
+            return None;
+        }
+
+        let progress = if progress < 0.0 {
+            progress
+        } else {
+            // Progress clamped to the current iteration [0.0, 1.0].
+            progress
+                .min(cursor.current_iteration_end_progress())
+                .max(0.0)
+        };
+        Some(AnimationProgress {
+            progress,
+            direction: cursor.current_direction,
+        })
+    }
+
+    /// Fill in an `AnimationValueMap` with this animation's values at `at`.
+    pub fn sample_at(&self, at: AnimationProgress, map: &mut AnimationValueMap) {
+        let AnimationProgress {
+            progress: total_progress,
+            direction,
+        } = at;
+        if self.computed_steps.is_empty() {
             return;
         }
 
@@ -881,8 +1174,8 @@ impl Animation {
         };
 
         // Handle negative progress (before animation start) with backwards/both fill mode
-        if progress < 0.0 {
-            if let Some(keyframe) = match self.current_direction {
+        if total_progress < 0.0 {
+            if let Some(keyframe) = match direction {
                 AnimationDirection::Normal => self.computed_steps.first(),
                 AnimationDirection::Reverse => self.computed_steps.last(),
                 _ => unreachable!("Current animation direction can only be `normal` or `reverse`."),
@@ -892,12 +1185,9 @@ impl Animation {
             return;
         }
 
-        // Progress clamped to the current iteration [0.0, 1.0].
-        let total_progress = progress.min(self.current_iteration_end_progress()).max(0.0);
-
         // At 1.0 there is nothing left to interpolate. Return end keyframe.
         if total_progress == 1.0 {
-            let keyframe = match self.current_direction {
+            let keyframe = match direction {
                 AnimationDirection::Normal => self.computed_steps.last().unwrap(),
                 AnimationDirection::Reverse => self.computed_steps.first().unwrap(),
                 _ => unreachable!("Current animation direction can only be `normal` or `reverse`."),
@@ -910,7 +1200,7 @@ impl Animation {
         let next_keyframe_index;
         let prev_keyframe_index;
         let num_steps = self.computed_steps.len();
-        match self.current_direction {
+        match direction {
             AnimationDirection::Normal => {
                 next_keyframe_index = self
                     .computed_steps
@@ -965,7 +1255,7 @@ impl Animation {
         }
 
         // Interpolate a new value for each animating property
-        let reversed = self.current_direction != AnimationDirection::Normal;
+        let reversed = direction != AnimationDirection::Normal;
         for property_index in 0..self.number_of_animating_properties {
             let Some(previous_keyframe) = self.next_relevant_keyframe_for_property_in_direction(
                 property_index,
@@ -992,7 +1282,7 @@ impl Animation {
             let percentage_between_keyframes =
                 (next_keyframe.start_percentage - previous_keyframe.start_percentage).abs();
             let duration_between_keyframes = percentage_between_keyframes * self.duration;
-            let direction_aware_prev_keyframe_start_percentage = match self.current_direction {
+            let direction_aware_prev_keyframe_start_percentage = match direction {
                 AnimationDirection::Normal => previous_keyframe.start_percentage,
                 AnimationDirection::Reverse => 1. - previous_keyframe.start_percentage,
                 _ => unreachable!(),
