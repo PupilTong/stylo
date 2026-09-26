@@ -7,6 +7,8 @@
 //! TODO(emilio): Enhance docs.
 
 use super::computed::{Context, ToComputedValue};
+#[cfg(feature = "lynx")]
+use super::generics::grid::FlowTolerance as GenericFlowTolerance;
 use super::generics::grid::ImplicitGridTracks as GenericImplicitGridTracks;
 use super::generics::grid::{GridLine as GenericGridLine, TrackBreadth as GenericTrackBreadth};
 use super::generics::grid::{TrackList as GenericTrackList, TrackSize as GenericTrackSize};
@@ -145,6 +147,8 @@ pub mod image;
 pub mod intersection_observer;
 pub mod length;
 pub mod list;
+#[cfg(feature = "lynx")]
+pub mod lynx_layout;
 pub mod motion;
 pub mod number;
 pub mod outline;
@@ -379,6 +383,11 @@ pub type GridLine = GenericGridLine<Integer>;
 
 /// `<grid-template-rows> | <grid-template-columns>`
 pub type GridTemplateComponent = GenericGridTemplateComponent<LengthPercentage, Integer>;
+
+/// The specified value of `flow-tolerance`
+/// (`normal | <length-percentage [0,∞]> | infinite`).
+#[cfg(feature = "lynx")]
+pub type FlowTolerance = GenericFlowTolerance<NonNegativeLengthPercentage>;
 
 /// rect(...)
 pub type ClipRect = generics::GenericClipRect<LengthOrAuto>;

@@ -18,8 +18,9 @@ spec = "https://drafts.csswg.org/css-logical/#propdef-margin-inline"
 rule_types_allowed = ["style", "keyframe", "page", "scope", "position-try"]
 kind = "two_properties"
 
+# lynx-vello: un-gecko'd with its longhands (see longhands.toml, scroll-snap-align).
 [scroll-margin]
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 sub_properties = ["scroll-margin-top", "scroll-margin-right", "scroll-margin-bottom", "scroll-margin-left"]
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin"
 kind = "four_sides"
@@ -55,7 +56,7 @@ rule_types_allowed = ["style", "keyframe", "page", "scope", "position-try"]
 kind = "two_properties"
 
 [scroll-padding]
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 sub_properties = ["scroll-padding-top", "scroll-padding-right", "scroll-padding-bottom", "scroll-padding-left"]
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding"
 kind = "four_sides"
@@ -209,7 +210,11 @@ spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properti
 kind = "two_properties"
 
 [container]
-engine = "gecko"
+# Un-gecko'd for the `lynx` feature (css-contain-3 size query containers, so
+# that `cqw`/`cqh` are a standard implementation). It carries the same
+# `servo_pref` as its two longhands, so a stock Servo build keeps the whole
+# family gated together and `LonghandsToSerialize` keeps non-`Option` fields.
+servo_pref = "layout.container-queries.enabled"
 sub_properties = ["container-name", "container-type"]
 spec = "https://drafts.csswg.org/css-contain-3/#container-shorthand"
 
@@ -284,8 +289,12 @@ spec = "https://drafts.csswg.org/css-logical/#propdef-inset-inline"
 rule_types_allowed = ["style", "keyframe", "scope", "position-try"]
 kind = "two_properties"
 
+# lynx-vello: un-`gecko`'d so the servo build declares the shorthand (its
+# `contain-intrinsic-width`/`-height` longhands are now servo-visible). Seeded in
+# properties/lynx_properties.txt so it parses from author CSS under the `lynx`
+# feature; the closure pass then exposes its physical longhands automatically.
 [contain-intrinsic-size]
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 sub_properties = ["contain-intrinsic-width", "contain-intrinsic-height"]
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 kind = "two_properties"
@@ -558,7 +567,11 @@ spec = "https://www.w3.org/TR/css-text-4/#white-space-property"
 derive_value_info = false
 
 [-webkit-text-stroke]
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke`; stylo ships it gecko-only.
+# Expose it in servo behind the experimental pref (so `lynx` force-enables it)
+# and register the unprefixed Lynx alias.
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke"]
 sub_properties = ["-webkit-text-stroke-width", "-webkit-text-stroke-color"]
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke"
 derive_serialize = true

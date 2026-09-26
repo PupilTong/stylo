@@ -1,0 +1,194 @@
+// Verifies the project seed and shorthand/longhand closure generated for Lynx.
+#![cfg(feature = "lynx")]
+
+use style::properties::PropertyId;
+
+/// Whether `name` parses as a content-enabled property (the gate every author
+/// stylesheet / CSSOM `setProperty` funnels through).
+fn is_content_enabled(name: &str) -> bool {
+    PropertyId::parse_enabled_for_all_content(name).is_ok()
+}
+
+const LYNX_PROPERTY_SEEDS: &str = include_str!("../properties/lynx_properties.txt");
+const OMITTED_PROPERTIES: &[&str] = &[
+    "-x-auto-font-size",
+    "-x-auto-font-size-line-ranges",
+    "-x-auto-font-size-preset-sizes",
+    "-x-caret-gradient",
+    "-x-caret-height",
+    "-x-caret-radius",
+    "-x-caret-width",
+    "-x-handle-color",
+    "-x-handle-size",
+    "linear-cross-gravity",
+    "linear-gravity",
+    "linear-layout-gravity",
+    // Lynx has no outline-offset (outlines are flush rings; see
+    // lynx/core/style/outline_data.h) and it is not part of the `outline`
+    // shorthand's closure — pin it out so a codegen change cannot expose it.
+    "outline-offset",
+];
+
+fn lynx_property_seeds() -> impl Iterator<Item = &'static str> {
+    LYNX_PROPERTY_SEEDS.lines().filter_map(|raw| {
+        let name = raw.split('#').next().unwrap().trim();
+        (!name.is_empty()).then_some(name)
+    })
+}
+
+#[test]
+fn lynx_supported_properties_are_content_enabled() {
+    for name in lynx_property_seeds() {
+        assert!(
+            is_content_enabled(name),
+            "`{name}` is Lynx-supported and must stay content-enabled under the `lynx` feature",
+        );
+    }
+}
+
+#[test]
+fn deliberately_omitted_properties_are_absent() {
+    for name in OMITTED_PROPERTIES {
+        assert!(
+            !is_content_enabled(name),
+            "`{name}` is deliberately omitted from the Lynx property source"
+        );
+    }
+}
+
+#[test]
+fn shorthand_longhand_closure_is_authorable() {
+    // Each representative starts outside the official seed list and is pulled
+    // in by a supported shorthand or longhand relation.
+    for name in [
+        "animation-range-end",
+        "animation-range-start",
+        "animation-timeline",
+        "background-attachment",
+        "border-image",
+        "border-image-source",
+        // The `contain-intrinsic-size` shorthand is seeded; its physical
+        // longhands are pulled in by the closure (the logical block/inline pair
+        // stays disabled — see lynx_disabled_properties / lynx_containment).
+        "contain-intrinsic-height",
+        "contain-intrinsic-width",
+        // Likewise the `container` shorthand is seeded and the closure pulls in
+        // both css-contain-3 longhands.
+        "container-name",
+        "container-type",
+        "font",
+        "font-kerning",
+        // The `overscroll-behavior` shorthand is seeded; the closure pulls in
+        // its physical longhands (the logical block/inline pair stays
+        // disabled — see lynx_disabled_properties / lynx_scroll_properties).
+        "overscroll-behavior-x",
+        "overscroll-behavior-y",
+        // The `scroll-margin` / `scroll-padding` shorthands are seeded; the
+        // closure pulls in their physical sides.
+        "scroll-margin-top",
+        "scroll-margin-left",
+        "scroll-padding-bottom",
+        "scroll-padding-right",
+        "font-stretch",
+        "font-width",
+        "font-variant",
+        "grid",
+        "grid-area",
+        "grid-template",
+        "grid-template-areas",
+        "inset",
+        "mask-position",
+        "place-content",
+        "place-items",
+        "place-self",
+        "text-decoration-color",
+        "text-decoration-line",
+        "text-decoration-style",
+        "transition-behavior",
+    ] {
+        assert!(
+            is_content_enabled(name),
+            "`{name}` belongs to the shorthand closure"
+        );
+    }
+}
+
+#[test]
+fn internal_storage_longhands_are_not_authorable() {
+    // Internal storage exists only to satisfy Stylo invariants. Anything
+    // reached through the supported shorthand/longhand closure belongs in
+    // `shorthand_longhand_closure_is_authorable` instead.
+    for name in [
+        "-moz-default-appearance",
+        "-servo-top-layer",
+        "animation-composition",
+        "color-scheme",
+    ] {
+        assert!(
+            !is_content_enabled(name),
+            "internal storage property `{name}` must stay out of the Lynx name table"
+        );
+    }
+}
+
+#[test]
+fn undocumented_canonical_spellings_do_not_leak_through_aliases() {
+    // These declarations are compiled because the documented unprefixed alias
+    // maps to them, but only the Lynx spelling belongs in the name table.
+    for name in [
+        "-webkit-text-stroke",
+        "-webkit-text-stroke-color",
+        "-webkit-text-stroke-width",
+        "all",
+    ] {
+        assert!(!is_content_enabled(name), "`{name}` is not a Lynx spelling");
+    }
+}
+
+#[test]
+fn custom_properties_are_still_supported() {
+    // Custom properties go through a different id space and must be unaffected.
+    assert!(is_content_enabled("--lynx-custom"));
+}
+
+#[test]
+fn pref_gated_upstream_properties_are_force_enabled() {
+    // Stock stylo keeps these behind an experimental servo pref
+    // (`layout.unimplemented`) because servo does not implement them.
+    // lynx-vello provides their layout/paint, so the `lynx` seed forces them
+    // content-enabled through ALWAYS_ENABLED while leaving `servo_pref` in
+    // place. `backdrop-filter` is the filter-effects-2 member of that set.
+    for name in ["backdrop-filter", "offset-distance"] {
+        assert!(
+            is_content_enabled(name),
+            "`{name}` is seeded for Lynx and must ignore its servo pref"
+        );
+    }
+}
+
+#[test]
+fn container_query_properties_are_content_enabled() {
+    // css-contain-3's container-query properties carry
+    // `servo_pref = "layout.container-queries.enabled"` (false upstream). The
+    // `container` shorthand is seeded so the closure pulls in both longhands
+    // and ALWAYS_ENABLED forces all three on: `cqw`/`cqh` are a standard
+    // implementation, which needs an element to be able to declare itself a
+    // size query container. The `@container` rule itself stays gecko-only.
+    for name in ["container", "container-name", "container-type"] {
+        assert!(
+            is_content_enabled(name),
+            "`{name}` must be content-enabled so `cqw`/`cqh` can resolve \
+             against a real size query container"
+        );
+    }
+}
+
+#[test]
+fn containment_hints_are_content_enabled() {
+    for name in ["contain", "will-change"] {
+        assert!(
+            is_content_enabled(name),
+            "the standard `{name}` property must be content-enabled"
+        );
+    }
+}
