@@ -443,3 +443,46 @@ fn animation_shorthand_reads_auto_as_a_duration() {
     assert_eq!(longhand_value(&serialized, "animation-name"), "auto");
     assert_eq!(longhand_value(&serialized, "animation-duration"), "auto");
 }
+
+fn keyframe_selectors_parse(css: &str) -> bool {
+    CssParser::new(css)
+        .parse_entirely(style::stylesheets::keyframes_rule::KeyframeSelectors::parse)
+        .is_ok()
+}
+
+#[test]
+fn keyframe_selectors_accept_named_timeline_ranges() {
+    // scroll-animations-1's `<timeline-range-name> <percentage>` selector,
+    // whose percentage takes any value, beside the css-animations-1 forms,
+    // whose percentage stays in [0%, 100%].
+    for selector in [
+        "entry 0%",
+        "exit 100%",
+        "cover -20%",
+        "contain 120%",
+        "entry-crossing 50%",
+        "exit-crossing 5%",
+        "scroll 0%",
+        "from, entry 10%, 50%",
+    ] {
+        assert!(
+            keyframe_selectors_parse(selector),
+            "`{selector}` must parse"
+        );
+    }
+    for selector in [
+        "normal 0%",
+        "none 0%",
+        "entry",
+        "0% entry",
+        "entry 10px",
+        "entry to",
+        "120%",
+        "-5%",
+    ] {
+        assert!(
+            !keyframe_selectors_parse(selector),
+            "`{selector}` must not parse"
+        );
+    }
+}
