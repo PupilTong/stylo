@@ -1675,7 +1675,6 @@ pub mod position_try {
     }
 }
 
-#[cfg(feature = "gecko")]
 pub mod scroll_timeline {
     pub use crate::properties::generated::shorthands::scroll_timeline::*;
 
@@ -1732,7 +1731,6 @@ pub mod scroll_timeline {
     }
 }
 
-#[cfg(feature = "gecko")]
 pub mod view_timeline {
     pub use crate::properties::generated::shorthands::view_timeline::*;
 
@@ -1819,7 +1817,6 @@ pub mod view_timeline {
     }
 }
 
-#[cfg(feature = "gecko")]
 pub mod animation_range {
     pub use crate::properties::generated::shorthands::animation_range::*;
 
@@ -3363,7 +3360,7 @@ pub mod animation {
             use crate::Zero;
             use crate::values::specified::easing::TimingFunction;
             use crate::values::specified::{
-                AnimationDirection, AnimationFillMode, AnimationPlayState,
+                AnimationDirection, AnimationDuration, AnimationFillMode, AnimationPlayState,
             };
             use style_traits::values::SequenceWriter;
 
@@ -3436,7 +3433,7 @@ pub mod animation {
 
                 let mut writer = SequenceWriter::new(dest, " ");
 
-                if has_duration || has_delay {
+                if has_duration || has_delay || AnimationDuration::match_keywords(animation_name) {
                     writer.item(&self.animation_duration.0[i])?;
                 }
 

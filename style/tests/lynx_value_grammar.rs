@@ -448,8 +448,10 @@ fn transform_cursor_and_timing_grammars() {
         ],
     );
     rejects("animation-timing-function", &["linear(0, 1)"]);
-    accepts("animation-duration", &["0s", "250ms"]);
-    rejects("animation-duration", &["auto", "100"]);
+    // css-animations-2's `auto`, admitted with the scroll-animations-1
+    // timelines it fills (native Lynx rejects it).
+    accepts("animation-duration", &["0s", "250ms", "auto"]);
+    rejects("animation-duration", &["100", "-1s"]);
 }
 
 #[test]

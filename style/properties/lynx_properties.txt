@@ -241,6 +241,18 @@ scroll-padding
 # css-scroll-snap-2's `scroll-initial-target` (`none | nearest`), the element
 # that sets its nearest scroll container's initial scroll position.
 scroll-initial-target
+# scroll-animations-1 (https://drafts.csswg.org/scroll-animations-1/) is a
+# user-directed W3C extension beyond Lynx's property index: native Lynx has no
+# scroll-driven animations. `animation-timeline` and `animation-range-start`/
+# `-end` were already reachable through the `animation` shorthand; seeding the
+# two timeline shorthands lets the closure pull in scroll-timeline-name/-axis
+# and view-timeline-name/-axis/-inset, and `timeline-scope` and the
+# `animation-range` shorthand are seeded directly. Named-range keyframe
+# selectors (`entry 0% { }`) stay out (pref-gated in keyframes_rule.rs).
+scroll-timeline
+view-timeline
+timeline-scope
+animation-range
 text-align
 text-decoration
 text-indent
