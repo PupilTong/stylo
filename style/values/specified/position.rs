@@ -447,6 +447,18 @@ impl ScopedNameList {
         });
         ALL.clone()
     }
+
+    /// Whether we're the `all` value.
+    pub fn is_all(&self) -> bool {
+        matches!(&*self.0, [name] if name.0 == atom!("all"))
+    }
+
+    /// The listed names, each with its leading `--`; none for `none` and
+    /// `all`.
+    pub fn iter(&self) -> impl Iterator<Item = &Atom> {
+        let names: &[AtomIdent] = if self.is_all() { &[] } else { &self.0 };
+        names.iter().map(|name| &name.0)
+    }
 }
 
 impl Parse for ScopedNameList {

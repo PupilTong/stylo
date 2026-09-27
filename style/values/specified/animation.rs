@@ -154,12 +154,34 @@ impl TransitionBehavior {
 /// A specified value for the `animation-duration` property.
 pub type AnimationDuration = generics::GenericAnimationDuration<Time>;
 
+impl AnimationDuration {
+    /// Whether `auto` is a duration keyword. Lynx admits css-animations-2's
+    /// `auto` with the scroll-animations-1 timelines it fills (native Lynx
+    /// rejects the keyword).
+    #[inline]
+    fn auto_is_keyword() -> bool {
+        cfg!(feature = "lynx") || crate::pref!("layout.css.scroll-driven-animations.enabled")
+    }
+
+    /// Returns true if the name matches the `auto` duration keyword.
+    #[inline]
+    pub fn match_keywords(name: &AnimationName) -> bool {
+        if !Self::auto_is_keyword() {
+            return false;
+        }
+        if let Some(name) = name.as_atom() {
+            #[cfg(feature = "gecko")]
+            return name.with_str(|n| n.eq_ignore_ascii_case("auto"));
+            #[cfg(feature = "servo")]
+            return str::eq_ignore_ascii_case(name, "auto");
+        }
+        false
+    }
+}
+
 impl Parse for AnimationDuration {
     fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
-        #[cfg(not(feature = "lynx"))]
-        if crate::pref!("layout.css.scroll-driven-animations.enabled")
-            && input.try_parse(|i| i.expect_ident_matching("auto")).is_ok()
-        {
+        if Self::auto_is_keyword() && input.try_parse(|i| i.expect_ident_matching("auto")).is_ok() {
             return Ok(Self::auto());
         }
 
@@ -589,6 +611,15 @@ impl TimelineIdent {
     /// Check if this is `none` value.
     pub fn is_none(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// Get the name of the timeline as an `Atom`, including its leading
+    /// `--`; `None` for `none`.
+    pub fn as_atom(&self) -> Option<&Atom> {
+        if self.is_none() {
+            return None;
+        }
+        Some(&self.0 .0)
     }
 }
 
