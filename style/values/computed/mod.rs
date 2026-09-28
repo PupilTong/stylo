@@ -521,6 +521,13 @@ impl<'a> Context<'a> {
     pub fn query_sibling_count(&self) -> u32 {
         self.builder
             .add_flags(ComputedValueFlags::USES_SIBLING_COUNT);
+        // The rule cache is keyed by rule node, not by parent, so a reset
+        // value computed from one parent's child count would be handed to
+        // another parent's children. Upstream marks only sibling-index()
+        // uncacheable; the `lynx` feature, which enables both functions, marks
+        // this one too.
+        #[cfg(feature = "lynx")]
+        self.rule_cache_conditions.borrow_mut().set_uncacheable();
         self.resolve_tree_counting_result().sibling_count
     }
 

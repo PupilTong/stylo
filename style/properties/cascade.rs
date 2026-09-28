@@ -15,6 +15,8 @@ use crate::custom_properties::{
     get_attr_value_for_cycle_resolution, handle_invalid_at_computed_value_time,
     remove_and_insert_initial_value, substitute_references_if_needed_and_apply,
 };
+#[cfg(feature = "lynx")]
+use crate::custom_properties::{ElementStyleQuery, SubstitutionFunctionReference};
 use crate::dom::{AttributeTracker, DummyElementContext, ElementContext, TElement};
 #[cfg(feature = "gecko")]
 use crate::font_metrics::FontMetricsOrientation;
@@ -2064,8 +2066,29 @@ impl<'a> Cascade<'a> {
             return;
         }
         self.may_have_custom_property_cycles = true;
+        self.note_typed_attr_references(context, refs, &value.url_data, attribute_tracker);
+    }
 
+    fn note_typed_attr_references(
+        &mut self,
+        context: &mut computed::Context,
+        refs: &'a References,
+        url_data: &UrlExtraData,
+        attribute_tracker: &mut AttributeTracker,
+    ) {
         for next in &refs.refs {
+            // The branches of an if() hold their own references.
+            #[cfg(feature = "lynx")]
+            for branch in next.if_branches.iter() {
+                for chunk in [&branch.condition, &branch.value] {
+                    self.note_typed_attr_references(
+                        context,
+                        &chunk.references,
+                        url_data,
+                        attribute_tracker,
+                    );
+                }
+            }
             if !next.is_attr_with_type() || !self.seen.custom.attr.insert(&next.name) {
                 // Only type() can have nested references, so we don't need to eagerly look at
                 // others.
@@ -2074,7 +2097,7 @@ impl<'a> Cascade<'a> {
             if let Ok(v) = get_attr_value_for_cycle_resolution(
                 &next.name,
                 &next.attribute_data,
-                &value.url_data,
+                url_data,
                 attribute_tracker,
             ) {
                 context
@@ -2285,8 +2308,10 @@ fn substitute_all(
     /// dependencies) that only exist through an unused fallback don't count.
     ///
     /// We need to bubble up non custom references from unregistered properties.
+    #[cfg_attr(not(feature = "lynx"), allow(unused_variables))]
     fn visit_value_references<'a, 'b, 'c, 'd>(
         var: &VarType,
+        css: &str,
         root: &References,
         url_data: &UrlExtraData,
         index: usize,
@@ -2303,6 +2328,23 @@ fn substitute_all(
         while let Some(refs) = refs_stack.pop() {
             *non_custom_references |= refs.flags;
             for next in &refs.refs {
+                #[cfg(feature = "lynx")]
+                if next.substitution_kind == SubstitutionFunctionKind::If {
+                    visit_if_references(
+                        var,
+                        css,
+                        next,
+                        url_data,
+                        index,
+                        references_from_non_custom_properties,
+                        context,
+                        lowlink,
+                        self_ref,
+                        attribute_tracker,
+                        non_custom_references,
+                    );
+                    continue;
+                }
                 if next.substitution_kind == SubstitutionFunctionKind::Env {
                     // env() doesn't reference custom properties, so it never participates in
                     // cycles; its fallback is used only when the environment doesn't provide
@@ -2361,6 +2403,8 @@ fn substitute_all(
                     },
                     SubstitutionFunctionKind::Attr => context.map().get_attr(&next.name),
                     SubstitutionFunctionKind::Env => unreachable!("Handled above"),
+                    #[cfg(feature = "lynx")]
+                    SubstitutionFunctionKind::If => unreachable!("Handled above"),
                 };
                 // The primary is guaranteed-invalid if it's absent from the map, or still
                 // present but unresolved (i.e. part of a cycle currently being resolved).
@@ -2379,6 +2423,125 @@ fn substitute_all(
                     refs_stack.push(&fallback.references);
                 }
             }
+        }
+    }
+
+    /// Traverse the references of an `if()` in the value of the variable at order index `index`.
+    ///
+    /// Its branches are taken in order, the way "replace an if() function" (css-values-5 §8.3)
+    /// takes them: the substitution functions in a condition, the font-relative units it spells
+    /// and the custom properties its `style()` tests read are traversed, which resolves them, and
+    /// the condition is then evaluated; the value of the first true condition is traversed, and no
+    /// later branch is. A branch that is not reached creates no edge, so a cycle through it does
+    /// not count. Once the variable is found to be in a cycle it is invalid whatever the
+    /// conditions say, and the walk stops.
+    #[cfg(feature = "lynx")]
+    fn visit_if_references<'a, 'b, 'c, 'd>(
+        var: &VarType,
+        css: &str,
+        reference: &SubstitutionFunctionReference,
+        url_data: &UrlExtraData,
+        index: usize,
+        references_from_non_custom_properties: &NonCustomReferenceMap<Vec<Arc<UnparsedValue>>>,
+        context: &mut Context<'a, 'b, 'c, 'd>,
+        lowlink: &mut usize,
+        self_ref: &mut bool,
+        attribute_tracker: &mut AttributeTracker,
+        non_custom_references: &mut ReferenceFlags,
+    ) {
+        // A dependency left on the stack above us belongs to our strongly connected component.
+        let in_cycle = |context: &Context, lowlink: usize, self_ref: bool| {
+            self_ref || lowlink < index || context.stack.last() != Some(&index)
+        };
+        for branch in reference.if_branches.iter() {
+            visit_value_references(
+                var,
+                css,
+                &branch.condition.references,
+                url_data,
+                index,
+                references_from_non_custom_properties,
+                context,
+                lowlink,
+                self_ref,
+                attribute_tracker,
+                non_custom_references,
+            );
+            if in_cycle(context, *lowlink, *self_ref) {
+                return;
+            }
+            if let VarType::Custom(..) = var {
+                // A `style()` test computes its value against this element's font.
+                let is_root = context.computed_context.is_root_element();
+                branch
+                    .condition
+                    .references
+                    .non_custom_references(is_root)
+                    .for_each_non_custom(is_root, |r| {
+                        visit_link(
+                            VarType::NonCustom(r),
+                            index,
+                            references_from_non_custom_properties,
+                            context,
+                            lowlink,
+                            self_ref,
+                            attribute_tracker,
+                        );
+                    });
+                if in_cycle(context, *lowlink, *self_ref) {
+                    return;
+                }
+            }
+            let (condition, _) = {
+                let computed_context = &*context.computed_context;
+                branch.condition(
+                    css,
+                    url_data,
+                    &computed_context.builder.substitution_functions,
+                    context.stylist,
+                    computed_context,
+                    attribute_tracker,
+                    &mut SmallVec::new(),
+                )
+            };
+            let Some(condition) = condition else {
+                continue;
+            };
+            let mut queried = SmallVec::<[Name; 2]>::new();
+            condition.for_each_queried_property(&mut |name| queried.push(name.clone()));
+            for name in queried {
+                visit_link(
+                    VarType::Custom(name),
+                    index,
+                    references_from_non_custom_properties,
+                    context,
+                    lowlink,
+                    self_ref,
+                    attribute_tracker,
+                );
+            }
+            if in_cycle(context, *lowlink, *self_ref) {
+                return;
+            }
+            let computed_context = &*context.computed_context;
+            let subject = ElementStyleQuery::new(&computed_context.builder.substitution_functions);
+            if !condition.matches(computed_context, &subject, url_data, attribute_tracker) {
+                continue;
+            }
+            visit_value_references(
+                var,
+                css,
+                &branch.value.references,
+                url_data,
+                index,
+                references_from_non_custom_properties,
+                context,
+                lowlink,
+                self_ref,
+                attribute_tracker,
+                non_custom_references,
+            );
+            return;
         }
     }
 
@@ -2542,6 +2705,7 @@ fn substitute_all(
             // Visit the references in this value...
             visit_value_references(
                 &var,
+                &v.css,
                 &v.references,
                 &v.url_data,
                 index,
@@ -2602,6 +2766,7 @@ fn substitute_all(
                     let value = &value.variable_value;
                     visit_value_references(
                         &var,
+                        &value.css,
                         &value.references,
                         &value.url_data,
                         index,

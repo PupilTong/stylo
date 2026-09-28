@@ -12,6 +12,8 @@ pub mod condition;
 #[macro_use]
 pub mod feature;
 pub mod feature_expression;
+#[cfg(feature = "lynx")]
+pub mod if_condition;
 pub mod values;
 
 pub use self::condition::QueryCondition;

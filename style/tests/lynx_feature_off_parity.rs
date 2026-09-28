@@ -257,3 +257,36 @@ fn named_range_keyframe_selectors_stay_pref_gated() {
     assert!(!parses("from, cover 50%"));
     assert!(parses("from, 50%, to"));
 }
+
+#[test]
+fn if_is_not_a_substitution_function() {
+    // css-values-5 `if()` is an arbitrary substitution function only under
+    // the `lynx` feature. Otherwise it is an unknown function, which a
+    // property that does not accept it rejects at parse time.
+    assert!(!parses("color", "if(style(--x): red; else: blue)"));
+    assert!(!parses("width", "if(else: 1px)"));
+    assert!(style::properties::ARBITRARY_SUBSTITUTION_FUNCTIONS
+        .iter()
+        .all(|name| *name != "if"));
+    // A custom property keeps it as tokens that reference nothing.
+    let value = style::custom_properties::VariableValue::parse(
+        &mut cssparser::Parser::new("if(style(--x): var(--y)) z"),
+        None,
+        &url_data(),
+    )
+    .unwrap();
+    assert_eq!(
+        value.references.refs.len(),
+        1,
+        "only the var() is a reference"
+    );
+}
+
+#[test]
+fn tree_counting_functions_stay_pref_gated() {
+    // `sibling-index()` / `sibling-count()` are enabled under the `lynx`
+    // feature and otherwise stay behind their pref (false).
+    assert!(!parses("width", "calc(10px * sibling-index())"));
+    assert!(!parses("z-index", "sibling-count()"));
+    assert!(parses("width", "calc(10px * 2)"));
+}
