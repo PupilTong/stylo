@@ -112,6 +112,10 @@ pub trait StyleQuerySubject {
     /// Records on the style being computed that it depends on this query.
     fn note_dependency(&self, _ctx: &computed::Context) {}
 
+    /// Records that a value substituted while evaluating the query was
+    /// attr()-tainted.
+    fn note_attr_taint(&self) {}
+
     /// Whether a feature value that substitutes to the guaranteed-invalid value
     /// matches the subject's value `current`.
     fn invalid_value_matches(&self, current: Option<&ComputedRegisteredValue>) -> bool {
@@ -598,6 +602,9 @@ impl StyleFeaturePlain {
                 Ok(sub) => sub,
                 Err(_) => return subject.invalid_value_matches(current_value),
             };
+        if !attr_taint.is_empty() {
+            subject.note_attr_taint();
+        }
         if registration.is_universal() {
             return match current_value {
                 Some(v) => v.as_universal().is_some_and(|v| v.css == css),

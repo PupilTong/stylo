@@ -1058,6 +1058,9 @@ impl QueryStyleRange {
                     attribute_tracker,
                 )
                 .ok()?;
+                if !substituted.attr_taint.is_empty() {
+                    subject.note_attr_taint();
+                }
                 Self::resolve_universal(
                     &substituted.css,
                     &value.url_data,

@@ -6,6 +6,8 @@
 //!
 //! [custom]: https://drafts.csswg.org/css-variables/
 
+#[cfg(feature = "lynx")]
+use crate::computed_value_flags::ComputedValueFlags;
 use crate::custom_properties_map::{CustomPropertiesMap, OwnMap};
 use crate::device::Device;
 use crate::dom::AttributeTracker;
@@ -36,6 +38,8 @@ use selectors::parser::SelectorParseErrorKind;
 use servo_arc::Arc;
 use smallvec::SmallVec;
 use std::borrow::Cow;
+#[cfg(feature = "lynx")]
+use std::cell::Cell;
 use std::fmt::{self, Write};
 use std::num;
 use std::ops::{Index, IndexMut};
@@ -894,8 +898,8 @@ pub struct IfBranch {
 impl IfBranch {
     /// Substitutes this branch's condition and parses the result as an
     /// `<if-condition>`: css-values-5 §8.3, "replace an if() function", step 1.
-    /// `None` is a parse failure, which skips the branch. The flag is whether
-    /// the condition was attr()-tainted.
+    /// `None` is a parse failure, which skips the branch. The flag, returned
+    /// either way, is whether the condition's text was attr()-tainted.
     ///
     /// When a substitution function in the condition substitutes to the
     /// guaranteed-invalid value, the condition is parsed with its substitution
@@ -915,7 +919,7 @@ impl IfBranch {
         computed_context: &computed::Context,
         attribute_tracker: &mut AttributeTracker,
         seen: &mut SmallVec<[&'a Name; 8]>,
-    ) -> Option<(IfCondition, bool)> {
+    ) -> (Option<IfCondition>, bool) {
         let substituted = self.condition.substitute(
             css,
             url_data,
@@ -935,8 +939,8 @@ impl IfBranch {
                     .intersects(ReferenceFlags::ATTR),
             ),
         };
-        let parsed = IfCondition::parse(text, url_data, computed_context.quirks_mode)?;
-        Some((parsed, attr_tainted))
+        let parsed = IfCondition::parse(text, url_data, computed_context.quirks_mode);
+        (parsed, attr_tainted)
     }
 }
 
@@ -951,6 +955,9 @@ pub(crate) struct ElementStyleQuery<'a> {
     resolved: SmallVec<[(Name, Option<ComputedRegisteredValue>); 1]>,
     /// Queried custom properties whose substitution is in progress.
     cyclic: SmallVec<[Name; 1]>,
+    /// Whether any value the tests read, or substituted while evaluating, was
+    /// attr()-tainted.
+    attr_tainted: Cell<bool>,
 }
 
 #[cfg(feature = "lynx")]
@@ -962,6 +969,16 @@ impl<'a> ElementStyleQuery<'a> {
             substitution_functions,
             resolved: SmallVec::new(),
             cyclic: SmallVec::new(),
+            attr_tainted: Cell::new(false),
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ElementStyleQuery<'_> {
+    fn note_value_read(&self, value: Option<&ComputedRegisteredValue>) {
+        if value.is_some_and(|value| value.attr_tainted) {
+            self.note_attr_taint();
         }
     }
 }
@@ -978,10 +995,12 @@ impl StyleQuerySubject for ElementStyleQuery<'_> {
         registration: &PropertyDescriptors,
         name: &Name,
     ) -> Option<&'b ComputedRegisteredValue> {
-        match self.resolved.iter().find(|(resolved, _)| resolved == name) {
+        let value = match self.resolved.iter().find(|(resolved, _)| resolved == name) {
             Some((_, value)) => value.as_ref(),
             None => self.substitution_functions.get_var(registration, name),
-        }
+        };
+        self.note_value_read(value);
+        value
     }
 
     fn inherited_custom_property<'b>(
@@ -999,7 +1018,17 @@ impl StyleQuerySubject for ElementStyleQuery<'_> {
                     .get(registration, name),
             );
         }
-        Some(ctx.inherited_custom_properties().get(registration, name))
+        if !registration.inherits() {
+            // This style now reads the parent's value of a property that does
+            // not inherit. A change to the parent's non-inherited properties
+            // only recascades the children that say so, the way an explicit
+            // `inherit` of a reset property says so.
+            ctx.builder
+                .add_flags(ComputedValueFlags::INHERITS_RESET_STYLE);
+        }
+        let value = ctx.inherited_custom_properties().get(registration, name);
+        self.note_value_read(value);
+        Some(value)
     }
 
     fn substitution_functions(&self, _: &computed::Context) -> ComputedSubstitutionFunctions {
@@ -1008,6 +1037,10 @@ impl StyleQuerySubject for ElementStyleQuery<'_> {
 
     fn is_cyclic(&self, name: &Name) -> bool {
         self.cyclic.contains(name)
+    }
+
+    fn note_attr_taint(&self) {
+        self.attr_tainted.set(true);
     }
 
     /// css-conditional-5 §6.2: CSS-wide keywords that do not depend on the
@@ -1354,60 +1387,119 @@ fn parse_declaration_value_block(
     references: &mut References,
     missing_closing_characters: &mut String,
 ) -> Result<(TokenSerializationType, TokenSerializationType), ParseError> {
-    parse_declaration_value_block_until(
+    parse_declaration_value_block_until::<BlockEnd>(
         input,
         input_start,
         namespaces,
         references,
         missing_closing_characters,
-        ValueEnd::Block,
     )
 }
 
-/// Where a declaration-value block ends.
-#[derive(Clone, Copy, PartialEq)]
-enum ValueEnd {
-    /// At the end of the block.
-    Block,
-    /// Before a top-level `;`, with a top-level `!` invalid: an `if()` branch value.
-    #[cfg(feature = "lynx")]
-    IfValue,
-    /// Before a top-level `:` or `;`, with a top-level `!` invalid: an `if()` condition.
-    #[cfg(feature = "lynx")]
-    IfCondition,
+/// What a top-level token does to a declaration-value block.
+#[cfg_attr(not(feature = "lynx"), allow(dead_code))]
+enum TopLevelToken {
+    /// It belongs to the block.
+    Continue,
+    /// The block ends before it.
+    End,
+    /// It makes the block invalid.
+    Invalid,
 }
 
-#[cfg_attr(not(feature = "lynx"), allow(unused_variables))]
-fn parse_declaration_value_block_until(
+/// Where a declaration-value block ends. A type parameter rather than a
+/// value, so that an ordinary declaration value, which ends only at the end of
+/// its block, examines no token and saves no parser state for it.
+trait ValueEnd {
+    /// Whether any top-level token ends the block early or makes it invalid.
+    const EXAMINES_TOKENS: bool;
+
+    /// What `token`, at the top level of the block, does to it.
+    fn top_level(token: &Token) -> TopLevelToken;
+}
+
+/// The block ends at its end.
+struct BlockEnd;
+
+impl ValueEnd for BlockEnd {
+    const EXAMINES_TOKENS: bool = false;
+
+    fn top_level(_: &Token) -> TopLevelToken {
+        TopLevelToken::Continue
+    }
+}
+
+/// An `if()` branch value: it ends before a top-level `;`, and a top-level
+/// `!` is invalid.
+#[cfg(feature = "lynx")]
+struct IfValueEnd;
+
+#[cfg(feature = "lynx")]
+impl ValueEnd for IfValueEnd {
+    const EXAMINES_TOKENS: bool = true;
+
+    fn top_level(token: &Token) -> TopLevelToken {
+        match token {
+            Token::Semicolon => TopLevelToken::End,
+            Token::Delim('!') => TopLevelToken::Invalid,
+            _ => TopLevelToken::Continue,
+        }
+    }
+}
+
+/// An `if()` branch condition: it ends before a top-level `:` or `;`, and a
+/// top-level `!`, comma or `{}` block is invalid (css-values-5 §8.3: the
+/// first `<declaration-value>` of `<if-args-branch>` excludes top-level
+/// colons, alongside the commas and `{}` blocks every free-form production
+/// excludes, §3.1.1).
+#[cfg(feature = "lynx")]
+struct IfConditionEnd;
+
+#[cfg(feature = "lynx")]
+impl ValueEnd for IfConditionEnd {
+    const EXAMINES_TOKENS: bool = true;
+
+    fn top_level(token: &Token) -> TopLevelToken {
+        match token {
+            Token::Semicolon | Token::Colon => TopLevelToken::End,
+            Token::Delim('!') | Token::Comma | Token::CurlyBracketBlock => TopLevelToken::Invalid,
+            _ => TopLevelToken::Continue,
+        }
+    }
+}
+
+fn parse_declaration_value_block_until<E: ValueEnd>(
     input: &mut Parser,
     input_start: SourcePosition,
     namespaces: Option<&FxHashMap<Prefix, Namespace>>,
     references: &mut References,
     missing_closing_characters: &mut String,
-    end: ValueEnd,
 ) -> Result<(TokenSerializationType, TokenSerializationType), ParseError> {
     let mut is_first = true;
     let mut first_token_type = TokenSerializationType::Nothing;
     let mut last_token_type = TokenSerializationType::Nothing;
     let mut prev_reference_index: Option<usize> = None;
     loop {
-        #[cfg(feature = "lynx")]
-        let token_state = input.state();
+        let token_state = if E::EXAMINES_TOKENS {
+            Some(input.state())
+        } else {
+            None
+        };
         let token_start = input.position();
         let Ok(token) = input.next_including_whitespace_and_comments() else {
             break;
         };
-        #[cfg(feature = "lynx")]
-        match (end, token) {
-            (ValueEnd::Block, _) => {},
-            (_, Token::Semicolon) | (ValueEnd::IfCondition, Token::Colon) => {
-                input.reset(&token_state);
-                break;
-            },
-            (_, Token::Delim('!')) => {
-                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
-            },
-            _ => {},
+        if E::EXAMINES_TOKENS {
+            match E::top_level(token) {
+                TopLevelToken::Continue => {},
+                TopLevelToken::End => {
+                    input.reset(token_state.as_ref().unwrap());
+                    break;
+                },
+                TopLevelToken::Invalid => {
+                    return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
+                },
+            }
         }
 
         let prev_token_type = last_token_type;
@@ -1517,11 +1609,18 @@ fn parse_declaration_value_block_until(
                         // inserted at the end, ahead of our own `)`.
                         branches.last_mut().unwrap().value.end = end - 1;
                     }
-                    // `style()` reads custom properties, which VAR stands for.
+                    // `style()` reads custom properties, which VAR stands for. Of
+                    // the branches' flags, only which kinds of substitution
+                    // function they hold rise: the non-custom (font-relative
+                    // unit) dependencies of a branch count only once the
+                    // custom-property dependency walk reaches that branch
+                    // (`visit_if_references`), so a branch that is not taken
+                    // does not make a registered property depend on the font.
                     references.flags |= ReferenceFlags::VAR;
                     for branch in &branches {
-                        references.flags |=
-                            branch.condition.references.flags | branch.value.references.flags;
+                        references.flags |= (branch.condition.references.flags
+                            | branch.value.references.flags)
+                            & (ReferenceFlags::ATTR | ReferenceFlags::ENV | ReferenceFlags::VAR);
                     }
                     let reference = &mut references.refs[our_ref_index];
                     reference.end = end;
@@ -1748,12 +1847,11 @@ fn parse_if_arguments(
 ) -> Result<(ThinVec<IfBranch>, bool), ParseError> {
     let mut branches = ThinVec::new();
     loop {
-        let condition = parse_if_chunk(
+        let condition = parse_if_chunk::<IfConditionEnd>(
             input,
             input_start,
             namespaces,
             missing_closing_characters,
-            ValueEnd::IfCondition,
         )?;
         let Some(condition) = condition else {
             // An empty condition, which includes empty arguments. After at least one
@@ -1764,12 +1862,11 @@ fn parse_if_arguments(
             return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         };
         input.expect_colon()?;
-        let value = parse_if_chunk(
+        let value = parse_if_chunk::<IfValueEnd>(
             input,
             input_start,
             namespaces,
             missing_closing_characters,
-            ValueEnd::IfValue,
         )?;
         let (value, value_is_empty) = match value {
             Some(value) => (value, false),
@@ -1787,15 +1884,14 @@ fn parse_if_arguments(
     }
 }
 
-/// Parses one half of an `if()` branch, after leading whitespace, up to `end`.
+/// Parses one half of an `if()` branch, after leading whitespace, up to where `E` ends it.
 /// `None` when it holds no token besides whitespace and comments.
 #[cfg(feature = "lynx")]
-fn parse_if_chunk(
+fn parse_if_chunk<E: ValueEnd>(
     input: &mut Parser,
     input_start: SourcePosition,
     namespaces: Option<&FxHashMap<Prefix, Namespace>>,
     missing_closing_characters: &mut String,
-    end: ValueEnd,
 ) -> Result<Option<SubstitutionChunk>, ParseError> {
     loop {
         let state = input.state();
@@ -1809,13 +1905,12 @@ fn parse_if_chunk(
     }
     let start_position = input.position();
     let mut references = References::default();
-    let (first_token_type, last_token_type) = parse_declaration_value_block_until(
+    let (first_token_type, last_token_type) = parse_declaration_value_block_until::<E>(
         input,
         input_start,
         namespaces,
         &mut references,
         missing_closing_characters,
-        end,
     )?;
     let text = input.slice_from(start_position);
     if Parser::new(text).is_exhausted() {
@@ -2452,8 +2547,13 @@ fn substitute_if<'a>(
     attribute_tracker: &mut AttributeTracker,
     seen: &mut SmallVec<[&'a Name; 8]>,
 ) -> Result<Substitution<'a>, ()> {
+    // css-values-5 §8.7.2: the substitution is attr()-tainted if any
+    // attr()-tainted value was involved in creating it, which is the text of
+    // every condition taken up to the chosen one and every value their tests
+    // read.
+    let mut attr_tainted = false;
     for branch in reference.if_branches.iter() {
-        let Some((condition, condition_attr_tainted)) = branch.condition(
+        let (condition, condition_attr_tainted) = branch.condition(
             css,
             url_data,
             substitution_functions,
@@ -2461,7 +2561,9 @@ fn substitute_if<'a>(
             computed_context,
             attribute_tracker,
             seen,
-        ) else {
+        );
+        attr_tainted |= condition_attr_tainted;
+        let Some(condition) = condition else {
             continue;
         };
         let subject = resolve_queried_properties(
@@ -2472,7 +2574,9 @@ fn substitute_if<'a>(
             attribute_tracker,
             seen,
         );
-        if !condition.matches(computed_context, &subject, url_data, attribute_tracker) {
+        let matches = condition.matches(computed_context, &subject, url_data, attribute_tracker);
+        attr_tainted |= subject.attr_tainted.get();
+        if !matches {
             continue;
         }
         let mut value = branch.value.substitute(
@@ -2484,11 +2588,13 @@ fn substitute_if<'a>(
             attribute_tracker,
             seen,
         )?;
-        // The condition chose the value, so an attr()-tainted condition taints it.
-        value.attr_tainted |= condition_attr_tainted;
+        value.attr_tainted |= attr_tainted;
         return Ok(value);
     }
-    Ok(Substitution::default())
+    Ok(Substitution {
+        attr_tainted,
+        ..Substitution::default()
+    })
 }
 
 /// The subject a `style()` test in `condition` reads, for a substitution that

@@ -103,6 +103,12 @@ fn if_is_an_arbitrary_substitution_function() {
         "if(else: rgb(0, 128, 0))",
         "if(else: a, b: c)",
         "if(else: {a})",
+        // Nested commas and blocks in a condition are not top-level.
+        "if(unknown(a, b): red)",
+        "if((a {b}): red)",
+        // A condition that will not parse as an <if-condition> is still a
+        // well-formed branch; it is skipped at computed-value time.
+        "if(style(--x: 1) foo: red; else: blue)",
         // Unclosed at the end of the value, closed implicitly.
         "if(style(--x): red",
     ] {
@@ -132,6 +138,11 @@ fn if_arguments_that_break_the_argument_grammar_do_not_parse() {
         "if(style(--x): red !important)",
         "if(!style(--x): red)",
         "if(style(--x) !: red)",
+        // A condition excludes top-level commas and `{}` blocks too.
+        "if(style(--x: 1), else: red)",
+        "if(style(--x: 1) {x}: red; else: blue)",
+        "if({else}: red; else: blue)",
+        "if(a, b: c)",
     ] {
         // A custom property takes any token stream, but not a broken if().
         assert!(
@@ -487,4 +498,39 @@ fn tree_counting_functions_stay_out_of_media_queries() {
         ParsingMode::MEDIA_QUERY_CONDITION
     )
     .is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Reachability of `if()` in container style queries.
+
+#[test]
+fn container_style_queries_stay_unreachable_from_a_stylesheet() {
+    // `if` is now a substitution function a `<style-range>` value may name,
+    // so `@container style(if(else: 1) > 0)` would parse as a container
+    // condition. The `@container` rule is gecko-only in
+    // `stylesheets/rule_parser.rs` and style queries are behind
+    // `layout.css.style-queries.enabled` (false), so no stylesheet reaches it:
+    // the rule is dropped.
+    use style::shared_lock::SharedRwLock;
+    use style::stylesheets::{AllowImportRules, StylesheetContents};
+    let lock = SharedRwLock::new();
+    let contents = StylesheetContents::from_str(
+        "@container style(if(else: 1) > 0) { a { color: red } }
+         @container style(--x: if(else: 1)) { a { color: red } }
+         a { color: blue }",
+        url_data(),
+        Origin::Author,
+        &lock,
+        None,
+        None,
+        QuirksMode::NoQuirks,
+        AllowImportRules::Yes,
+        None,
+    );
+    let guard = lock.read();
+    assert_eq!(
+        contents.rules(&guard).len(),
+        1,
+        "only the style rule is kept"
+    );
 }

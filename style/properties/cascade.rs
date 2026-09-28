@@ -2476,7 +2476,7 @@ fn substitute_all(
                     return;
                 }
             }
-            let condition = {
+            let (condition, _) = {
                 let computed_context = &*context.computed_context;
                 branch.condition(
                     css,
@@ -2488,7 +2488,7 @@ fn substitute_all(
                     &mut SmallVec::new(),
                 )
             };
-            let Some((condition, _)) = condition else {
+            let Some(condition) = condition else {
                 continue;
             };
             let mut queried = SmallVec::<[Name; 2]>::new();
