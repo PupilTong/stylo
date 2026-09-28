@@ -42,7 +42,7 @@ pub enum Operator {
 
 /// Whether to allow an `or` condition or not during parsing.
 #[derive(Clone, Copy, Debug, Eq, MallocSizeOf, PartialEq, ToCss)]
-enum AllowOr {
+pub(crate) enum AllowOr {
     Yes,
     No,
 }
@@ -53,12 +53,135 @@ enum StyleFeatureValue {
     Keyword(CSSWideKeyword),
 }
 
+/// Where a `style()` query reads the custom properties it tests.
+///
+/// `@container style()` reads the query container, whose computed style the
+/// container-query context carries as its inherited style
+/// ([`ContainerStyleQuery`]). css-values-5's `if()` reads the element whose
+/// declaration is being substituted.
+pub trait StyleQuerySubject {
+    /// Whether there is a subject at all. Without one, a feature with a value
+    /// is false.
+    fn exists(&self, ctx: &computed::Context) -> bool;
+
+    /// The subject's value of `name`; `None` is the guaranteed-invalid value.
+    fn custom_property<'a>(
+        &'a self,
+        ctx: &'a computed::Context,
+        registration: &PropertyDescriptors,
+        name: &custom_properties::Name,
+    ) -> Option<&'a ComputedRegisteredValue>;
+
+    /// The value of `name` on the subject's parent, which a feature value of
+    /// `inherit` names. `None` when there is no parent value to compare with,
+    /// which makes the feature false.
+    fn inherited_custom_property<'a>(
+        &'a self,
+        ctx: &'a computed::Context,
+        registration: &PropertyDescriptors,
+        name: &custom_properties::Name,
+    ) -> Option<Option<&'a ComputedRegisteredValue>>;
+
+    /// The substitution functions `var()` / `attr()` in a feature value
+    /// substitute against.
+    fn substitution_functions(
+        &self,
+        ctx: &computed::Context,
+    ) -> custom_properties::ComputedSubstitutionFunctions;
+
+    /// Whether testing `name` would re-enter a substitution already in
+    /// progress, which makes the test false.
+    fn is_cyclic(&self, _name: &custom_properties::Name) -> bool {
+        false
+    }
+
+    /// Whether a feature value of `unset` means `inherit` for an inherited
+    /// property and `initial` otherwise, as it does in a declaration. When
+    /// false, `unset` matches only the guaranteed-invalid value.
+    fn unset_follows_inheritance(&self) -> bool {
+        false
+    }
+
+    /// Whether a feature without a value is true only for a value that differs
+    /// from the property's initial value. When false, it is true for any value
+    /// but the guaranteed-invalid value.
+    fn boolean_compares_with_initial(&self) -> bool {
+        false
+    }
+
+    /// Records on the style being computed that it depends on this query.
+    fn note_dependency(&self, _ctx: &computed::Context) {}
+
+    /// Whether a feature value that substitutes to the guaranteed-invalid value
+    /// matches the subject's value `current`.
+    fn invalid_value_matches(&self, current: Option<&ComputedRegisteredValue>) -> bool {
+        current.is_none()
+    }
+
+    /// Whether a feature value equals the subject's value.
+    fn same_value(
+        &self,
+        a: Option<&ComputedRegisteredValue>,
+        b: Option<&ComputedRegisteredValue>,
+    ) -> bool {
+        a == b
+    }
+}
+
+/// The subject of `@container style()`: the query container.
+pub struct ContainerStyleQuery;
+
+impl StyleQuerySubject for ContainerStyleQuery {
+    fn exists(&self, ctx: &computed::Context) -> bool {
+        // If no container, custom props are guaranteed-unknown.
+        ctx.container_info.is_some()
+    }
+
+    fn custom_property<'a>(
+        &'a self,
+        ctx: &'a computed::Context,
+        registration: &PropertyDescriptors,
+        name: &custom_properties::Name,
+    ) -> Option<&'a ComputedRegisteredValue> {
+        ctx.inherited_custom_properties().get(registration, name)
+    }
+
+    fn inherited_custom_property<'a>(
+        &'a self,
+        ctx: &'a computed::Context,
+        registration: &PropertyDescriptors,
+        name: &custom_properties::Name,
+    ) -> Option<Option<&'a ComputedRegisteredValue>> {
+        let inherited = ctx
+            .container_info
+            .as_ref()
+            .expect("queries should provide container info")
+            .inherited_style()?;
+        Some(inherited.custom_properties().get(registration, name))
+    }
+
+    fn substitution_functions(
+        &self,
+        ctx: &computed::Context,
+    ) -> custom_properties::ComputedSubstitutionFunctions {
+        custom_properties::ComputedSubstitutionFunctions::new(
+            Some(ctx.inherited_custom_properties().clone()),
+            None,
+        )
+    }
+
+    fn note_dependency(&self, ctx: &computed::Context) {
+        ctx.builder
+            .add_flags(ComputedValueFlags::DEPENDS_ON_CONTAINER_STYLE_QUERY);
+    }
+}
+
 /// Trait for query elements that parse a series of conditions separated by
 /// AND or OR operators, or prefixed with NOT.
 ///
 /// This is used by both QueryCondition and StyleQuery as they support similar
 /// syntax for combining multiple conditions with a boolean operator.
-trait OperationParser: Sized {
+pub(crate) trait OperationParser: Sized {
     /// https://drafts.csswg.org/mediaqueries-5/#typedef-media-condition or
     /// https://drafts.csswg.org/mediaqueries-5/#typedef-media-condition-without-or
     /// (depending on `allow_or`).
@@ -222,11 +345,19 @@ impl StyleQuery {
             return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 
+        Self::parse_query(context, input)
+    }
+
+    /// Parses a `<style-query>`: the contents of a `style()` function.
+    pub(crate) fn parse_query(
+        context: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
         if let Ok(feature) = input.try_parse(|input| StyleFeature::parse(context, input)) {
             return Ok(Self::Feature(feature));
         }
 
-        let inner = Self::parse_internal(context, input, feature_type, AllowOr::Yes)?;
+        let inner = Self::parse_internal(context, input, FeatureType::Container, AllowOr::Yes)?;
         Ok(Self::InParens(Box::new(inner)))
     }
 
@@ -241,36 +372,49 @@ impl StyleQuery {
             Err(e) => e,
         };
 
-        if let Ok(inner) = Self::parse(context, input, FeatureType::Container) {
+        if let Ok(inner) = Self::parse_query(context, input) {
             return Ok(inner);
         }
 
         Err(feature_error)
     }
 
-    fn matches(
+    /// Evaluates this query against `subject`.
+    pub(crate) fn matches(
         &self,
         ctx: &computed::Context,
+        subject: &dyn StyleQuerySubject,
         attribute_tracker: &mut AttributeTracker,
     ) -> KleeneValue {
-        ctx.builder
-            .add_flags(ComputedValueFlags::DEPENDS_ON_CONTAINER_STYLE_QUERY);
+        subject.note_dependency(ctx);
         match *self {
-            StyleQuery::Feature(ref f) => f.matches(ctx, attribute_tracker),
-            StyleQuery::Not(ref c) => !c.matches(ctx, attribute_tracker),
-            StyleQuery::InParens(ref c) => c.matches(ctx, attribute_tracker),
+            StyleQuery::Feature(ref f) => f.matches(ctx, subject, attribute_tracker),
+            StyleQuery::Not(ref c) => !c.matches(ctx, subject, attribute_tracker),
+            StyleQuery::InParens(ref c) => c.matches(ctx, subject, attribute_tracker),
             StyleQuery::Operation(ref conditions, op) => {
                 debug_assert!(!conditions.is_empty(), "We never create an empty op");
                 match op {
                     Operator::And => KleeneValue::any_false(conditions.iter(), |c| {
-                        c.matches(ctx, attribute_tracker)
+                        c.matches(ctx, subject, attribute_tracker)
                     }),
-                    Operator::Or => {
-                        KleeneValue::any(conditions.iter(), |c| c.matches(ctx, attribute_tracker))
-                    },
+                    Operator::Or => KleeneValue::any(conditions.iter(), |c| {
+                        c.matches(ctx, subject, attribute_tracker)
+                    }),
                 }
             },
             StyleQuery::GeneralEnclosed(_) => KleeneValue::Unknown,
+        }
+    }
+
+    /// Calls `f` with the name of every custom property this query tests by
+    /// name.
+    #[cfg(feature = "lynx")]
+    pub(crate) fn for_each_queried_property(&self, f: &mut dyn FnMut(&custom_properties::Name)) {
+        match self {
+            Self::Feature(feature) => feature.for_each_queried_property(f),
+            Self::GeneralEnclosed(_) => {},
+            Self::InParens(c) | Self::Not(c) => c.for_each_queried_property(f),
+            Self::Operation(c, _) => c.iter().for_each(|c| c.for_each_queried_property(f)),
         }
     }
 
@@ -348,11 +492,20 @@ impl StyleFeature {
     fn matches(
         &self,
         ctx: &computed::Context,
+        subject: &dyn StyleQuerySubject,
         attribute_tracker: &mut AttributeTracker,
     ) -> KleeneValue {
         match self {
-            Self::Plain(plain) => plain.matches(ctx, attribute_tracker),
-            Self::Range(range) => range.evaluate(ctx, attribute_tracker),
+            Self::Plain(plain) => plain.matches(ctx, subject, attribute_tracker),
+            Self::Range(range) => range.evaluate(ctx, subject, attribute_tracker),
+        }
+    }
+
+    #[cfg(feature = "lynx")]
+    fn for_each_queried_property(&self, f: &mut dyn FnMut(&custom_properties::Name)) {
+        match self {
+            Self::Plain(plain) => f(&plain.name),
+            Self::Range(range) => range.for_each_queried_property(f),
         }
     }
 
@@ -429,13 +582,11 @@ impl StyleFeaturePlain {
         registration: &PropertyDescriptors,
         stylist: &Stylist,
         ctx: &computed::Context,
+        subject: &dyn StyleQuerySubject,
         attribute_tracker: &mut AttributeTracker,
         current_value: Option<&ComputedRegisteredValue>,
     ) -> bool {
-        let substitution_functions = custom_properties::ComputedSubstitutionFunctions::new(
-            Some(ctx.inherited_custom_properties().clone()),
-            None,
-        );
+        let substitution_functions = subject.substitution_functions(ctx);
         let custom_properties::SubstitutionResult { css, attr_taint } =
             match custom_properties::substitute(
                 value,
@@ -445,7 +596,7 @@ impl StyleFeaturePlain {
                 attribute_tracker,
             ) {
                 Ok(sub) => sub,
-                Err(_) => return current_value.is_none(),
+                Err(_) => return subject.invalid_value_matches(current_value),
             };
         if registration.is_universal() {
             return match current_value {
@@ -464,27 +615,28 @@ impl StyleFeaturePlain {
             attr_taint,
         )
         .ok();
-        computed.as_ref() == current_value
+        subject.same_value(computed.as_ref(), current_value)
     }
 
     fn matches(
         &self,
         ctx: &computed::Context,
+        subject: &dyn StyleQuerySubject,
         attribute_tracker: &mut AttributeTracker,
     ) -> KleeneValue {
+        if subject.is_cyclic(&self.name) {
+            return KleeneValue::False;
+        }
         // FIXME(emilio): Confirm this is the right style to query.
         let stylist = ctx
             .builder
             .stylist
             .expect("container queries should have a stylist around");
         let registration = stylist.get_custom_property_registration(&self.name);
-        let current_value = ctx
-            .inherited_custom_properties()
-            .get(registration, &self.name);
+        let current_value = subject.custom_property(ctx, registration, &self.name);
         KleeneValue::from(match self.value {
             StyleFeatureValue::Value(Some(ref v)) => {
-                if ctx.container_info.is_none() {
-                    // If no container, custom props are guaranteed-unknown.
+                if !subject.exists(ctx) {
                     false
                 } else if v.has_references() {
                     // If there are --var() references in the query value,
@@ -494,16 +646,37 @@ impl StyleFeaturePlain {
                         registration,
                         stylist,
                         ctx,
+                        subject,
                         attribute_tracker,
                         current_value,
                     )
                 } else {
-                    custom_properties::compute_variable_value(v, registration, ctx).as_ref()
-                        == current_value
+                    subject.same_value(
+                        custom_properties::compute_variable_value(v, registration, ctx).as_ref(),
+                        current_value,
+                    )
                 }
             },
-            StyleFeatureValue::Value(None) => current_value.is_some(),
+            StyleFeatureValue::Value(None) => match registration.initial_value {
+                Some(ref initial) if subject.boolean_compares_with_initial() => !subject
+                    .same_value(
+                        custom_properties::compute_variable_value(initial, registration, ctx)
+                            .as_ref(),
+                        current_value,
+                    ),
+                _ => current_value.is_some(),
+            },
             StyleFeatureValue::Keyword(kw) => {
+                let kw = match kw {
+                    CSSWideKeyword::Unset if subject.unset_follows_inheritance() => {
+                        if registration.inherits() {
+                            CSSWideKeyword::Inherit
+                        } else {
+                            CSSWideKeyword::Initial
+                        }
+                    },
+                    kw => kw,
+                };
                 match kw {
                     CSSWideKeyword::Unset => current_value.is_none(),
                     CSSWideKeyword::Initial => {
@@ -513,22 +686,15 @@ impl StyleFeaturePlain {
                                 registration,
                                 ctx,
                             );
-                            v.as_ref() == current_value
+                            subject.same_value(v.as_ref(), current_value)
                         } else {
                             current_value.is_none()
                         }
                     },
                     CSSWideKeyword::Inherit => {
-                        if let Some(inherited) = ctx
-                            .container_info
-                            .as_ref()
-                            .expect("queries should provide container info")
-                            .inherited_style()
-                        {
-                            inherited.custom_properties().get(registration, &self.name)
-                                == current_value
-                        } else {
-                            false
+                        match subject.inherited_custom_property(ctx, registration, &self.name) {
+                            Some(inherited) => subject.same_value(inherited, current_value),
+                            None => false,
                         }
                     },
                     // Cascade-dependent keywords, such as revert and revert-layer,
@@ -727,7 +893,7 @@ impl ToCss for QueryCondition {
 }
 
 /// <https://drafts.csswg.org/css-syntax-3/#typedef-any-value>
-fn consume_any_value(input: &mut Parser) -> Result<(), ParseError> {
+pub(crate) fn consume_any_value(input: &mut Parser) -> Result<(), ParseError> {
     input.expect_no_error_token().map_err(Into::into)
 }
 
@@ -831,7 +997,7 @@ impl QueryCondition {
             },
             Self::InParens(ref c) => c.matches(context, custom, attribute_tracker),
             Self::Not(ref c) => !c.matches(context, custom, attribute_tracker),
-            Self::Style(ref c) => c.matches(context, attribute_tracker),
+            Self::Style(ref c) => c.matches(context, &ContainerStyleQuery, attribute_tracker),
             Self::MozPref(ref c) => c.matches(context),
             Self::Operation(ref conditions, op) => {
                 debug_assert!(!conditions.is_empty(), "We never create an empty op");
