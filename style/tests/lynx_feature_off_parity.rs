@@ -242,3 +242,18 @@ fn animation_duration_auto_still_serializes_as_zero() {
         .unwrap();
     assert_eq!(duration, "0s");
 }
+
+#[test]
+fn named_range_keyframe_selectors_stay_pref_gated() {
+    // `<timeline-range-name> <percentage>` keyframe selectors are admitted
+    // under the `lynx` feature and otherwise stay behind gecko's
+    // scroll-driven-animations pref (false).
+    let parses = |css: &str| {
+        cssparser::Parser::new(css)
+            .parse_entirely(style::stylesheets::keyframes_rule::KeyframeSelectors::parse)
+            .is_ok()
+    };
+    assert!(!parses("entry 0%"));
+    assert!(!parses("from, cover 50%"));
+    assert!(parses("from, 50%, to"));
+}
