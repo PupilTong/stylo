@@ -752,7 +752,11 @@ impl ShorthandId {
 }
 
 /// The arbitrary substitution functions we support.
+#[cfg(not(feature = "lynx"))]
 pub const ARBITRARY_SUBSTITUTION_FUNCTIONS: &[&str] = &["var", "env", "attr"];
+/// The arbitrary substitution functions we support, including css-values-5's `if()`.
+#[cfg(feature = "lynx")]
+pub const ARBITRARY_SUBSTITUTION_FUNCTIONS: &[&str] = &["var", "env", "attr", "if"];
 
 fn parse_non_custom_property_declaration_value_into(
     declarations: &mut SourcePropertyDeclaration,
@@ -1491,8 +1495,14 @@ pub struct SourcePropertyDeclaration {
 // we only pass `&mut SourcePropertyDeclaration` references around.
 #[cfg(feature = "gecko")]
 size_of_test!(SourcePropertyDeclaration, 632);
-#[cfg(feature = "servo")]
+#[cfg(all(feature = "servo", not(feature = "lynx")))]
 size_of_test!(SourcePropertyDeclaration, 568);
+// Lynx supports the complete shorthand/longhand closure, so its largest
+// expansion can be larger than upstream when combined with Lynx-only value
+// variants. Keep the stack allocation bounded without assuming it is smaller
+// than the upstream Servo configuration.
+#[cfg(feature = "lynx")]
+const_assert!(std::mem::size_of::<SourcePropertyDeclaration>() < 1024);
 
 impl SourcePropertyDeclaration {
     /// Create one with a single PropertyDeclaration.

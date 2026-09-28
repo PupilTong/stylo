@@ -179,7 +179,9 @@ impl KeyframeSelector {
         }
 
         // We parse the the extension of keyframe selector for scroll-driven animation.
-        if !crate::pref!("layout.css.scroll-driven-animations.enabled") {
+        // Lynx admits it with the scroll-animations-1 timelines it resolves against.
+        if !(cfg!(feature = "lynx") || crate::pref!("layout.css.scroll-driven-animations.enabled"))
+        {
             return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
 

@@ -1213,7 +1213,9 @@ impl CalcNode {
                     })
                 },
                 MathFunction::SiblingCount | MathFunction::SiblingIndex => {
-                    if !crate::pref!("layout.css.tree-counting-functions.enabled") {
+                    if !(cfg!(feature = "lynx")
+                        || crate::pref!("layout.css.tree-counting-functions.enabled"))
+                    {
                         return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
                     }
 

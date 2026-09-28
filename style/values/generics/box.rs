@@ -391,7 +391,6 @@ impl<L> Perspective<L> {
     Copy,
     Debug,
     MallocSizeOf,
-    Parse,
     PartialEq,
     SpecifiedValueInfo,
     ToComputedValue,
@@ -400,6 +399,7 @@ impl<L> Perspective<L> {
     ToShmem,
     ToTyped,
 )]
+#[cfg_attr(not(feature = "lynx"), derive(Parse))]
 #[repr(u8)]
 #[allow(missing_docs)]
 pub enum PositionProperty {

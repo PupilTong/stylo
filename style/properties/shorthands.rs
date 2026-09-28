@@ -120,6 +120,7 @@ pub fn parse_border(
     ))
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod border_block {
     use super::*;
     pub use crate::properties::generated::shorthands::border_block::*;
@@ -231,6 +232,7 @@ pub mod border_radius {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod corner_shape {
     pub use crate::properties::generated::shorthands::corner_shape::*;
 
@@ -494,7 +496,6 @@ pub mod border {
             {
                 return Ok(());
             }
-
             let all_equal = {
                 let border_top_width = self.border_top_width;
                 let border_top_style = self.border_top_style;
@@ -545,7 +546,6 @@ pub mod border {
     }
 }
 
-#[cfg(feature = "gecko")]
 pub mod container {
     use super::*;
     pub use crate::properties::generated::shorthands::container::*;
@@ -743,6 +743,7 @@ pub mod offset {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod columns {
     pub use crate::properties::generated::shorthands::columns::*;
 
@@ -1004,7 +1005,9 @@ pub mod white_space {
     }
 }
 
-#[cfg(feature = "gecko")]
+// Available under servo too (not gecko-only): the `-webkit-text-stroke`
+// shorthand is now servo-visible behind `layout.unimplemented` to back Lynx's
+// unprefixed `text-stroke`, and its sub-longhand parses are servo-available.
 pub mod _webkit_text_stroke {
     pub use crate::properties::generated::shorthands::_webkit_text_stroke::*;
 
@@ -1035,6 +1038,7 @@ pub mod _webkit_text_stroke {
     }
 }
 
+#[cfg(not(feature = "lynx"))]
 pub mod list_style {
     pub use crate::properties::generated::shorthands::list_style::*;
 
@@ -1393,6 +1397,11 @@ pub mod place_self {
         let justify = match justify {
             Ok(v) => v,
             Err(..) => {
+                #[cfg(feature = "lynx")]
+                if !align.is_valid_on_both_axes() {
+                    return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
+                }
+                #[cfg(not(feature = "lynx"))]
                 debug_assert!(align.is_valid_on_both_axes());
                 align
             },
@@ -1430,9 +1439,20 @@ pub mod place_items {
         input: &mut Parser,
     ) -> Result<Longhands, ParseError> {
         let align = ItemPlacement::parse_block(context, input)?;
+        #[cfg(not(feature = "lynx"))]
         let justify = input
             .try_parse(|input| ItemPlacement::parse_inline(context, input))
-            .unwrap_or(align);
+            .unwrap_or_else(|_| align.clone());
+        #[cfg(feature = "lynx")]
+        let justify = match input.try_parse(|input| ItemPlacement::parse_inline(context, input)) {
+            Ok(value) => value,
+            Err(..) => {
+                if !align.is_valid_on_both_axes() {
+                    return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
+                }
+                align.clone()
+            },
+        };
 
         Ok(expanded! {
             align_items: align,
@@ -1659,7 +1679,6 @@ pub mod position_try {
     }
 }
 
-#[cfg(feature = "gecko")]
 pub mod scroll_timeline {
     pub use crate::properties::generated::shorthands::scroll_timeline::*;
 
@@ -1716,7 +1735,6 @@ pub mod scroll_timeline {
     }
 }
 
-#[cfg(feature = "gecko")]
 pub mod view_timeline {
     pub use crate::properties::generated::shorthands::view_timeline::*;
 
@@ -1803,7 +1821,6 @@ pub mod view_timeline {
     }
 }
 
-#[cfg(feature = "gecko")]
 pub mod animation_range {
     pub use crate::properties::generated::shorthands::animation_range::*;
 
@@ -3377,7 +3394,7 @@ pub mod animation {
         {
             use crate::values::specified::easing::TimingFunction;
             use crate::values::specified::{
-                AnimationDirection, AnimationFillMode, AnimationPlayState,
+                AnimationDirection, AnimationDuration, AnimationFillMode, AnimationPlayState,
             };
             use crate::Zero;
             use style_traits::values::SequenceWriter;
@@ -3451,7 +3468,7 @@ pub mod animation {
 
                 let mut writer = SequenceWriter::new(dest, " ");
 
-                if has_duration || has_delay {
+                if has_duration || has_delay || AnimationDuration::match_keywords(animation_name) {
                     writer.item(&self.animation_duration.0[i])?;
                 }
 

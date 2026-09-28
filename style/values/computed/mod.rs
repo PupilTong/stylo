@@ -6,6 +6,8 @@
 
 use self::transform::DirectionVector;
 use super::animated::ToAnimatedValue;
+#[cfg(feature = "lynx")]
+use super::generics::grid::FlowTolerance as GenericFlowTolerance;
 use super::generics::grid::GridTemplateComponent as GenericGridTemplateComponent;
 use super::generics::grid::ImplicitGridTracks as GenericImplicitGridTracks;
 use super::generics::grid::{GenericGridLine, GenericTrackBreadth};
@@ -157,6 +159,8 @@ pub mod image;
 pub mod length;
 pub mod length_percentage;
 pub mod list;
+#[cfg(feature = "lynx")]
+pub mod lynx_layout;
 pub mod motion;
 pub mod outline;
 pub mod page;
@@ -501,6 +505,13 @@ impl<'a> Context<'a> {
     pub fn query_sibling_count(&self) -> u32 {
         self.builder
             .add_flags(ComputedValueFlags::USES_SIBLING_COUNT);
+        // The rule cache is keyed by rule node, not by parent, so a reset
+        // value computed from one parent's child count would be handed to
+        // another parent's children. Upstream marks only sibling-index()
+        // uncacheable; the `lynx` feature, which enables both functions, marks
+        // this one too.
+        #[cfg(feature = "lynx")]
+        self.rule_cache_conditions.borrow_mut().set_uncacheable();
         self.resolve_tree_counting_result().sibling_count
     }
 
@@ -535,6 +546,10 @@ impl<'a> Context<'a> {
 
     /// Apply text-zoom if enabled.
     pub fn maybe_zoom_text(&self, size: CSSPixelLength) -> CSSPixelLength {
+        #[cfg(feature = "lynx")]
+        return size;
+
+        #[cfg(not(feature = "lynx"))]
         if self
             .style()
             .get_font()
@@ -992,6 +1007,7 @@ impl From<GreaterThanOrEqualToOneNumber> for CSSFloat {
     ToCss,
     ToResolvedValue,
 )]
+#[cfg_attr(feature = "lynx", derive(ToTyped))]
 #[repr(C, u8)]
 pub enum NumberOrPercentage {
     Percentage(Percentage),
@@ -1113,6 +1129,14 @@ pub type GridLine = GenericGridLine<Integer>;
 
 /// `<grid-template-rows> | <grid-template-columns>`
 pub type GridTemplateComponent = GenericGridTemplateComponent<LengthPercentage, Integer>;
+
+/// The computed value of `flow-tolerance`
+/// (`normal | <length-percentage [0,∞]> | infinite`).
+///
+/// `normal` stays a keyword here: its used value (`1em`) is resolved by
+/// layout, not by the cascade.
+#[cfg(feature = "lynx")]
+pub type FlowTolerance = GenericFlowTolerance<NonNegativeLengthPercentage>;
 
 impl ClipRect {
     /// Given a border box, resolves the clip rect against the border box

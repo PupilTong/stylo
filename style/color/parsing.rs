@@ -15,11 +15,13 @@ use super::{
 };
 use crate::derives::*;
 use crate::typed_om::{NumericBaseType, NumericType};
+#[cfg(not(feature = "lynx"))]
+use crate::values::generics::Optional;
 use crate::{
     parser::{Parse, ParserContext},
     values::{
         computed::Color as ComputedColor,
-        generics::{calc::CalcType, Optional},
+        generics::calc::CalcType,
         specified::{
             angle::NoCalcAngle,
             calc::{Leaf, PercentageContext},
@@ -27,10 +29,10 @@ use crate::{
         },
     },
 };
-use cssparser::{
-    color::{parse_hash_color, PredefinedColorSpace, OPAQUE},
-    match_ignore_ascii_case, CowRcStr, Parser, Token,
-};
+#[cfg(not(feature = "lynx"))]
+use cssparser::color::PredefinedColorSpace;
+use cssparser::color::{parse_hash_color, OPAQUE};
+use cssparser::{match_ignore_ascii_case, CowRcStr, Parser, Token};
 use style_traits::{CssWriter, ParseError, StyleParseErrorKind, ToCss};
 
 /// Represents a channel keyword inside a color.
@@ -174,6 +176,7 @@ pub fn parse_color_keyword(ident: &str) -> Result<SpecifiedColor, ()> {
         "transparent" => {
             SpecifiedColor::from_absolute_color(AbsoluteColor::srgb_legacy(0u8, 0u8, 0u8, 0.0))
         },
+        #[cfg(not(feature = "lynx"))]
         "currentcolor" => SpecifiedColor::CurrentColor,
         _ => {
             let (r, g, b) = cssparser::color::parse_named_color(ident)?;
@@ -226,12 +229,19 @@ fn parse_color_function<'i>(
     let color = match_ignore_ascii_case! { &name,
         "rgb" | "rgba" => parse_rgb(context, arguments, origin_color),
         "hsl" | "hsla" => parse_hsl(context, arguments, origin_color),
+        #[cfg(not(feature = "lynx"))]
         "hwb" => parse_hwb(context, arguments, origin_color),
+        #[cfg(not(feature = "lynx"))]
         "lab" => parse_lab_like(context, arguments, origin_color, ColorFunction::Lab),
+        #[cfg(not(feature = "lynx"))]
         "lch" => parse_lch_like(context, arguments, origin_color, ColorFunction::Lch),
+        #[cfg(not(feature = "lynx"))]
         "oklab" => parse_lab_like(context, arguments, origin_color, ColorFunction::Oklab),
+        #[cfg(not(feature = "lynx"))]
         "oklch" => parse_lch_like(context, arguments, origin_color, ColorFunction::Oklch),
+        #[cfg(not(feature = "lynx"))]
         "color" => parse_color_with_color_space(context, arguments, origin_color),
+        #[cfg(not(feature = "lynx"))]
         "alpha" if crate::pref!("layout.css.alpha-color-function.enabled") => {
             parse_relative_alpha(
                 context,
@@ -247,19 +257,24 @@ fn parse_color_function<'i>(
 
 /// Parse the relative color syntax "from" syntax `from <color>`.
 fn parse_origin_color(
-    context: &ParserContext,
-    arguments: &mut Parser,
+    _context: &ParserContext,
+    _arguments: &mut Parser,
 ) -> Result<Option<SpecifiedColor>, ParseError> {
+    #[cfg(feature = "lynx")]
+    return Ok(None);
+
     // Not finding the from keyword is not an error, it just means we don't
     // have an origin color.
-    if arguments
+    #[cfg(not(feature = "lynx"))]
+    if _arguments
         .try_parse(|p| p.expect_ident_matching("from"))
         .is_err()
     {
         return Ok(None);
     }
 
-    SpecifiedColor::parse(context, arguments).map(Some)
+    #[cfg(not(feature = "lynx"))]
+    return SpecifiedColor::parse(_context, _arguments).map(Option::Some);
 }
 
 #[inline]
@@ -358,6 +373,7 @@ fn parse_hsl(
 ///
 /// <https://drafts.csswg.org/css-color/#the-hbw-notation>
 #[inline]
+#[cfg(not(feature = "lynx"))]
 fn parse_hwb(
     context: &ParserContext,
     arguments: &mut Parser,
@@ -383,6 +399,7 @@ fn parse_hwb(
     ))
 }
 
+#[cfg(not(feature = "lynx"))]
 type IntoLabFn<Output> = fn(
     origin: Optional<SpecifiedColor>,
     l: ColorComponent<NumberOrPercentageComponent>,
@@ -392,6 +409,7 @@ type IntoLabFn<Output> = fn(
 ) -> Output;
 
 #[inline]
+#[cfg(not(feature = "lynx"))]
 fn parse_lab_like(
     context: &ParserContext,
     arguments: &mut Parser,
@@ -412,6 +430,7 @@ fn parse_lab_like(
     Ok(into_color(origin_color.into(), lightness, a, b, alpha))
 }
 
+#[cfg(not(feature = "lynx"))]
 type IntoLchFn<Output> = fn(
     origin: Optional<SpecifiedColor>,
     l: ColorComponent<NumberOrPercentageComponent>,
@@ -421,6 +440,7 @@ type IntoLchFn<Output> = fn(
 ) -> Output;
 
 #[inline]
+#[cfg(not(feature = "lynx"))]
 fn parse_lch_like(
     context: &ParserContext,
     arguments: &mut Parser,
@@ -449,6 +469,7 @@ fn parse_lch_like(
 
 /// Parse the color() function.
 #[inline]
+#[cfg(not(feature = "lynx"))]
 fn parse_color_with_color_space(
     context: &ParserContext,
     arguments: &mut Parser,
@@ -488,6 +509,7 @@ fn parse_color_with_color_space(
 
 /// Parse the alpha() function.
 #[inline]
+#[cfg(not(feature = "lynx"))]
 fn parse_relative_alpha(
     context: &ParserContext,
     arguments: &mut Parser,

@@ -131,6 +131,14 @@ impl Inner {
         self.parent.as_ref()?.get(name)
     }
 
+    #[cfg(feature = "lynx")]
+    fn get_key_value(&self, name: &Name) -> Option<(&Name, &ComputedRegisteredValue)> {
+        if let Some((name, value)) = self.own_properties.get_key_value(name) {
+            return Some((name, value.as_ref()?));
+        }
+        self.parent.as_ref()?.get_key_value(name)
+    }
+
     fn insert(&mut self, name: &Name, value: Option<ComputedRegisteredValue>) {
         let new = self.own_properties.insert(name.clone(), value).is_none();
         if new && self.parent.as_ref().is_none_or(|p| p.get(name).is_none()) {
@@ -171,6 +179,12 @@ impl CustomPropertiesMap {
     /// Returns a given property value by name.
     pub fn get(&self, name: &Name) -> Option<&ComputedRegisteredValue> {
         self.0.get(name)
+    }
+
+    /// Returns the stored name and the value of a property.
+    #[cfg(feature = "lynx")]
+    pub fn get_key_value(&self, name: &Name) -> Option<(&Name, &ComputedRegisteredValue)> {
+        self.0.get_key_value(name)
     }
 
     fn do_insert(&mut self, name: &Name, value: Option<ComputedRegisteredValue>) {

@@ -47,6 +47,16 @@ servo = [
     "selectors/to_shmem",
     "to_shmem/servo",
 ]
+# Lynx: makes stylo behave like LynxJS's CSS engine. Additive on top of `servo`
+# (the Lynx runtime is built on the servo configuration). Turning it on:
+#   * enables the Lynx-only additions — the rpx length unit,
+#     `display: linear | relative`, and the linear-*/relative-* longhands
+#     (otherwise `#[cfg(feature = "lynx")]`-gated out for upstream parity), and
+#   * emits the documented Lynx property set plus its full shorthand/longhand
+#     closure; names outside that compile-time surface do not enter the author
+#     parser table (see `lynx_properties.txt` and properties/data.py), and
+#     unsupported keyword arms are `#[cfg(not(feature = "lynx"))]`-gated.
+lynx = ["servo"]
 gecko_debug = []
 gecko_refcount_logging = []
 nsstring = []

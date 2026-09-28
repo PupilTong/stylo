@@ -24,14 +24,16 @@ use crate::rule_tree::{CascadeLevel, CascadeOrigin, RuleCascadeFlags};
 use crate::selector_parser::PseudoElement;
 use crate::shared_lock::{Locked, SharedRwLock};
 use crate::style_resolver::StyleResolverForElement;
-use crate::stylesheets::keyframes_rule::{KeyframesAnimation, KeyframesStep, KeyframesStepValue};
+use crate::stylesheets::keyframes_rule::{
+    KeyframeSelector, KeyframesAnimation, KeyframesStep, KeyframesStepValue,
+};
 use crate::stylesheets::layer_rule::LayerOrder;
 use crate::values::animated::{Animate, Procedure};
-use crate::values::computed::TimingFunction;
+use crate::values::computed::{AnimationTimeline, TimingFunction};
 use crate::values::generics::easing::BeforeFlag;
+use crate::values::specified::animation::TimelineRangeName;
 use crate::values::specified::TransitionBehavior;
-use crate::Atom;
-use debug_unreachable::debug_unreachable;
+use crate::{ArcSlice, Atom};
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use servo_arc::Arc;
@@ -60,31 +62,69 @@ impl PropertyAnimation {
         self.from.id()
     }
 
+    /// The value this animation starts from.
+    pub fn from(&self) -> &AnimationValue {
+        &self.from
+    }
+
+    /// The value this animation ends at.
+    pub fn to(&self) -> &AnimationValue {
+        &self.to
+    }
+
+    /// The timing function applied to this animation's progress.
+    pub fn timing_function(&self) -> &TimingFunction {
+        &self.timing_function
+    }
+
     /// The output of the timing function given the progress ration of this animation.
     fn timing_function_output(&self, progress: f64) -> f64 {
-        let epsilon = 1. / (200. * self.duration);
-        // FIXME: Need to set the before flag correctly.
-        // In order to get the before flag, we have to know the current animation phase
-        // and whether the iteration is reversed. For now, we skip this calculation
-        // by treating as if the flag is unset at all times.
-        // https://drafts.csswg.org/css-easing/#step-timing-function-algo
-        self.timing_function
-            .calculate_output(progress, BeforeFlag::Unset, epsilon)
+        eased(&self.timing_function, self.duration, progress)
     }
 
     /// Update the given animation at a given point of progress.
     fn calculate_value(&self, progress: f64) -> AnimationValue {
-        let progress = self.timing_function_output(progress);
-        let procedure = Procedure::Interpolate { progress };
-        self.from.animate(&self.to, procedure).unwrap_or_else(|()| {
-            // Fall back to discrete interpolation
-            if progress < 0.5 {
-                self.from.clone()
-            } else {
-                self.to.clone()
-            }
-        })
+        interpolate(
+            &self.from,
+            &self.to,
+            &self.timing_function,
+            self.duration,
+            progress,
+        )
     }
+}
+
+/// The output of `timing_function` at `progress` through an interval
+/// `duration` long, which sets the precision of its solution.
+fn eased(timing_function: &TimingFunction, duration: f64, progress: f64) -> f64 {
+    let epsilon = 1. / (200. * duration);
+    // FIXME: Need to set the before flag correctly.
+    // In order to get the before flag, we have to know the current animation phase
+    // and whether the iteration is reversed. For now, we skip this calculation
+    // by treating as if the flag is unset at all times.
+    // https://drafts.csswg.org/css-easing/#step-timing-function-algo
+    timing_function.calculate_output(progress, BeforeFlag::Unset, epsilon)
+}
+
+/// The value `progress` through the interpolation from `from` to `to`, eased
+/// by `timing_function` over an interval `duration` long.
+fn interpolate(
+    from: &AnimationValue,
+    to: &AnimationValue,
+    timing_function: &TimingFunction,
+    duration: f64,
+    progress: f64,
+) -> AnimationValue {
+    let progress = eased(timing_function, duration, progress);
+    let procedure = Procedure::Interpolate { progress };
+    from.animate(to, procedure).unwrap_or_else(|()| {
+        // Fall back to discrete interpolation
+        if progress < 0.5 {
+            from.clone()
+        } else {
+            to.clone()
+        }
+    })
 }
 
 /// This structure represents the state of an animation.
@@ -128,7 +168,175 @@ pub enum KeyframesIterationState {
     Finite(f64, f64),
 }
 
-/// A temporary data structure used when calculating ComputedKeyframes for an
+/// The fields iterating an animation moves, apart from the animation, so a
+/// sampler can advance a copy of them.
+#[derive(Clone, Debug)]
+struct IterationCursor {
+    started_at: f64,
+    iteration_state: KeyframesIterationState,
+    current_direction: AnimationDirection,
+}
+
+impl IterationCursor {
+    /// See [`Animation::iterate_by`].
+    fn iterate_by(&mut self, n: f64, duration: f64, direction: AnimationDirection) -> f64 {
+        let n = n.trunc().min(self.remaining_iterations().ceil() - 1.0);
+        if n < 1. {
+            return 0.;
+        }
+
+        match self.iteration_state {
+            KeyframesIterationState::Finite(ref mut current, max) => {
+                *current = (*current + n).min(max);
+            },
+            KeyframesIterationState::Infinite(ref mut current) => {
+                *current += n;
+            },
+        }
+
+        // Update the next iteration direction if applicable.
+        self.started_at += duration * n;
+        match direction {
+            AnimationDirection::Alternate | AnimationDirection::AlternateReverse
+                if n % 2. == 1.0 =>
+            {
+                self.current_direction = match self.current_direction {
+                    AnimationDirection::Normal => AnimationDirection::Reverse,
+                    AnimationDirection::Reverse => AnimationDirection::Normal,
+                    _ => unreachable!(
+                        "Current animation direction can only be `normal` or `reverse`."
+                    ),
+                };
+            },
+            _ => {},
+        }
+
+        n
+    }
+
+    /// See [`Animation::iterate_to`].
+    fn iterate_to(&mut self, now: f64, duration: f64, direction: AnimationDirection) -> bool {
+        // Below this every integer is exact, so `whole` counts iterations.
+        const EXACT: f64 = (1u64 << 52) as f64;
+        // The single steps after the jump: one or two, one more after a jump
+        // one iteration shorter, and one for rounding.
+        const TAIL: usize = 4;
+
+        if !self.iteration_over(now, duration) {
+            return false;
+        }
+        let mut iterated = false;
+        // All but the last one or two whole iterations elapsed, in one step
+        // that stays short of `now`: one iteration fewer when rounding
+        // carries `whole` to or past it, none when that does too.
+        let whole = ((now - self.started_at) / duration).ceil() - 2.;
+        if whole >= 1. && whole < EXACT {
+            let jump = [whole, whole - 1.]
+                .into_iter()
+                .find(|n| self.started_at + duration * n < now);
+            if let Some(n) = jump {
+                iterated = self.iterate_by(n, duration, direction) > 0.;
+            }
+        }
+        // The rest one at a time, with the check `iterate_if_necessary`
+        // makes; a step that leaves `started_at` unchanged ends the walk.
+        for _ in 0..TAIL {
+            let started_at = self.started_at;
+            let over = self.iteration_over(now, duration);
+            if !over || self.iterate_by(1., duration, direction) == 0. {
+                break;
+            }
+            iterated = true;
+            if self.started_at == started_at {
+                break;
+            }
+        }
+        iterated
+    }
+
+    fn remaining_iterations(&self) -> f64 {
+        match self.iteration_state {
+            KeyframesIterationState::Finite(current, max) => max - current,
+            KeyframesIterationState::Infinite(_) => f64::INFINITY,
+        }
+    }
+
+    fn current_iteration_end_progress(&self) -> f64 {
+        self.remaining_iterations().min(1.)
+    }
+
+    fn iteration_over(&self, time: f64, duration: f64) -> bool {
+        time > (self.started_at + self.current_iteration_end_progress() * duration)
+    }
+
+    /// Whether a running animation's current iteration has reached its end
+    /// progress at `time`.
+    fn iteration_ended(&self, time: f64, duration: f64) -> bool {
+        (time - self.started_at) / duration >= self.current_iteration_end_progress()
+    }
+
+    fn on_last_iteration(&self) -> bool {
+        self.remaining_iterations() <= 1.
+    }
+}
+
+/// Where an animation stands in its current iteration: the simple iteration
+/// progress (css-animations-1 / web-animations-1 §4.7, before the direction
+/// is applied) and whether the iteration runs reversed.
+/// [`Animation::sample_at`] applies the direction itself: a reversed
+/// iteration reads the keyframe offset `1 - progress`. Never NaN.
+#[derive(Clone, Copy, Debug, MallocSizeOf, PartialEq)]
+pub struct AnimationProgress {
+    /// In `[0, 1]`, or negative in a backwards-filled before phase.
+    progress: f64,
+    /// `normal` or `reverse`.
+    direction: AnimationDirection,
+}
+
+impl AnimationProgress {
+    /// A simple iteration progress through an iteration running forward, or
+    /// reversed when `reversed`; `progress` is clamped to `[0, 1]`, NaN
+    /// reading as 0.
+    pub fn new(progress: f64, reversed: bool) -> Self {
+        Self {
+            // `f64::max` answers 0 for NaN.
+            progress: progress.max(0.).min(1.),
+            direction: Self::direction_of(reversed),
+        }
+    }
+
+    /// A backwards-filled before phase: the negative progress the time path
+    /// reads there. [`Animation::sample_at`] then samples offset 0 (1 when
+    /// `reversed`), taking a keyframe there without easing it, as the before
+    /// flag requires for `steps(jump-start)`.
+    pub fn before_phase(reversed: bool) -> Self {
+        Self {
+            progress: -1.,
+            direction: Self::direction_of(reversed),
+        }
+    }
+
+    fn direction_of(reversed: bool) -> AnimationDirection {
+        if reversed {
+            AnimationDirection::Reverse
+        } else {
+            AnimationDirection::Normal
+        }
+    }
+
+    /// The progress: in `[0, 1]`, or negative in a backwards-filled before
+    /// phase.
+    pub fn progress(&self) -> f64 {
+        self.progress
+    }
+
+    /// The direction the iteration runs: `normal` or `reverse`.
+    pub fn direction(&self) -> AnimationDirection {
+        self.direction
+    }
+}
+
+/// A temporary data structure used when calculating DeclaredKeyframes for an
 /// animation. This data structure is used to collapse information for steps
 /// which may be spread across multiple keyframe declarations into a single
 /// instance per `start_percentage`.
@@ -180,6 +388,36 @@ impl IntermediateComputedKeyframe {
         debug_assert!(intermediate_steps.last().unwrap().start_percentage == 1.);
 
         intermediate_steps
+    }
+
+    /// Walk through the keyframes attached to a named timeline range in
+    /// specified order, and collapse those with the same selector into the
+    /// earliest of them (csswg-drafts#8507), each with its range name; the
+    /// `start_percentage` is the selector's percentage, of any value.
+    fn generate_for_range_keyframes(
+        animation: &KeyframesAnimation,
+        context: &SharedStyleContext,
+        base_style: &ComputedValues,
+    ) -> Vec<(TimelineRangeName, Self)> {
+        let mut steps: Vec<(TimelineRangeName, Self)> = Vec::new();
+        for step in animation.steps_with_range_name.iter() {
+            let KeyframeSelector {
+                range_name,
+                percentage,
+            } = step.start_offset;
+            let percentage = percentage.0 as f64;
+            let index = steps
+                .iter()
+                .position(|(name, merged)| {
+                    *name == range_name && merged.start_percentage == percentage
+                })
+                .unwrap_or_else(|| {
+                    steps.push((range_name, IntermediateComputedKeyframe::new(percentage)));
+                    steps.len() - 1
+                });
+            steps[index].1.update_from_step(step, context, base_style);
+        }
+        steps
     }
 
     fn update_from_step(
@@ -270,38 +508,395 @@ impl IntermediateComputedKeyframe {
     }
 }
 
-#[derive(Clone, Debug, MallocSizeOf)]
-struct PropertyDeclarationOffsets {
-    /// The absolute index of the most recent preceding keyframe that declared
-    /// the given property.
-    preceding_declaration: usize,
-    /// The absolute index of the next keyframe that will declare the given
-    /// property.
-    following_declaration: usize,
+/// The named timeline ranges a range keyframe selector names, in the order
+/// [`TimelineRanges`] stores them.
+const NAMED_RANGES: [TimelineRangeName; 7] = [
+    TimelineRangeName::Cover,
+    TimelineRangeName::Contain,
+    TimelineRangeName::Entry,
+    TimelineRangeName::Exit,
+    TimelineRangeName::EntryCrossing,
+    TimelineRangeName::ExitCrossing,
+    TimelineRangeName::Scroll,
+];
+
+/// The named timeline ranges of an animation's timeline (scroll-animations-1
+/// §3), each as the fractions of the animation's attachment range its start
+/// and end sit at: 0 at the attachment range's start, 1 at its end. They
+/// place the animation's range keyframes (§5). Every bound is finite.
+#[derive(Clone, Copy, Debug, MallocSizeOf, PartialEq)]
+pub struct TimelineRanges(#[ignore_malloc_size_of = "Holds no heap data"] [[f64; 2]; 7]);
+
+impl TimelineRanges {
+    /// The ranges `range` answers for each named range, or `None` when it
+    /// answers none for one or a bound is not finite.
+    pub fn from_fn(mut range: impl FnMut(TimelineRangeName) -> Option<[f64; 2]>) -> Option<Self> {
+        let mut ranges = [[0.; 2]; 7];
+        for (slot, name) in ranges.iter_mut().zip(NAMED_RANGES) {
+            *slot = range(name).filter(|bounds| bounds.iter().all(|bound| bound.is_finite()))?;
+        }
+        Some(Self(ranges))
+    }
+
+    /// The keyframe offset `percentage` (a fraction, of any value) of the
+    /// range `name` sits at, exact at both ends of the range; `None` for a
+    /// name that is no named range, or an offset that is not finite.
+    fn offset(&self, name: TimelineRangeName, percentage: f64) -> Option<f64> {
+        let [start, end] = self.0[NAMED_RANGES.iter().position(|named| *named == name)?];
+        let offset = (1. - percentage) * start + percentage * end;
+        offset.is_finite().then_some(offset)
+    }
 }
 
-#[derive(Clone, Debug, MallocSizeOf)]
-enum AnimationValueOrReference {
-    /// This keyframe declares the property with the given value.
-    AnimationValue(AnimationValue),
-    /// This keyframe does not declare the property.
-    NotDefinedHere(PropertyDeclarationOffsets),
+/// Where a keyframe selector attaches its keyframe.
+#[derive(Clone, Copy, Debug, MallocSizeOf)]
+enum KeyframePosition {
+    /// A percentage, `from` and `to` included: the keyframe offset, in
+    /// `[0, 1]`.
+    Offset(f64),
+    /// `<timeline-range-name> <percentage>`, the percentage as a fraction of
+    /// any value: placed by the animation's [`TimelineRanges`], and ignored
+    /// without them.
+    Range(TimelineRangeName, f64),
 }
 
-/// A single computed keyframe for a CSS Animation.
+impl KeyframePosition {
+    /// The keyframe offset, or `None` when the keyframe is ignored.
+    fn resolve(&self, ranges: Option<&TimelineRanges>) -> Option<f64> {
+        match *self {
+            Self::Offset(offset) => Some(offset),
+            Self::Range(name, percentage) => ranges?.offset(name, percentage),
+        }
+    }
+}
+
+/// One keyframe of an `@keyframes` rule, merged with the keyframes it
+/// collapses with: the percentage keyframes of one percentage, or the range
+/// keyframes of one selector.
 #[derive(Clone, Debug, MallocSizeOf)]
-struct ComputedKeyframe {
-    /// The timing function to use for transitions between this step
-    /// and the next one.
+struct DeclaredKeyframe {
+    position: KeyframePosition,
+    /// The timing function of the segments this keyframe starts.
     timing_function: TimingFunction,
+    /// For each animating property, the value this keyframe declares,
+    /// composited onto the base value, or `None` where it declares none.
+    values: Box<[Option<AnimationValue>]>,
+}
 
-    /// The starting percentage (a number between 0 and 1) which represents
-    /// at what point in an animation iteration this step is.
-    start_percentage: f64,
+/// An animation's keyframes as its `@keyframes` rule declares them, computed
+/// once against the element's style: what [`DeclaredKeyframes::tracks`]
+/// places for a timeline.
+#[derive(Clone, Debug, MallocSizeOf)]
+struct DeclaredKeyframes {
+    /// The percentage keyframes ascending, then the range keyframes in
+    /// specified order: css-animations-2's computed keyframe order, which
+    /// breaks ties between equal offsets. Each declares an animating
+    /// property.
+    keyframes: Box<[DeclaredKeyframe]>,
+    /// The base value of each animating property: an automatic keyframe's
+    /// value.
+    base: Box<[AnimationValue]>,
+    /// The timing functions of the automatic 0% and 100% keyframes: those of
+    /// the rule's 0% and 100% keyframes, else the animation's.
+    automatic_timing: [TimingFunction; 2],
+}
 
-    /// The animation values to transition to and from when processing this
-    /// keyframe animation step.
-    values: Box<[AnimationValueOrReference]>,
+impl DeclaredKeyframes {
+    fn new<E>(
+        element: E,
+        animation: &KeyframesAnimation,
+        context: &SharedStyleContext,
+        base_style: &Arc<ComputedValues>,
+        default_timing_function: TimingFunction,
+        default_composition: AnimationComposition,
+        resolver: &mut StyleResolverForElement<E>,
+        animating_properties: &PropertyDeclarationIdSet,
+    ) -> Self
+    where
+        E: TElement,
+    {
+        let base: Box<[AnimationValue]> = animating_properties
+            .iter()
+            .map(|property| {
+                AnimationValue::from_computed_values(property, &**base_style)
+                    .expect("Unexpected non-animatable property.")
+            })
+            .collect();
+
+        let percentage_steps =
+            IntermediateComputedKeyframe::generate_for_keyframes(animation, context, base_style);
+        let range_steps = IntermediateComputedKeyframe::generate_for_range_keyframes(
+            animation, context, base_style,
+        );
+        let timing_of = |step: Option<&IntermediateComputedKeyframe>| {
+            step.and_then(|step| step.timing_function.clone())
+                .unwrap_or_else(|| default_timing_function.clone())
+        };
+        let automatic_timing = [
+            timing_of(percentage_steps.first()),
+            timing_of(percentage_steps.last()),
+        ];
+
+        let steps =
+            percentage_steps
+                .into_iter()
+                .map(|step| (KeyframePosition::Offset(step.start_percentage), step))
+                .chain(range_steps.into_iter().map(|(name, step)| {
+                    (KeyframePosition::Range(name, step.start_percentage), step)
+                }));
+        let mut keyframes = Vec::new();
+        for (position, step) in steps {
+            let declared = step.declarations.property_ids().clone();
+            if !animating_properties
+                .iter()
+                .any(|property| declared.contains(property))
+            {
+                continue;
+            }
+            let timing_function = step
+                .timing_function
+                .clone()
+                .unwrap_or_else(|| default_timing_function.clone());
+            let composition = step.composition.unwrap_or(default_composition);
+            let step_style = step.resolve_style(element, context, base_style, resolver);
+            let values = animating_properties
+                .iter()
+                .zip(base.iter())
+                .map(|(property, base)| {
+                    declared.contains(property).then(|| {
+                        let value =
+                            AnimationValue::from_computed_values(property, &step_style).unwrap();
+                        composite_animation_value(base, value, composition)
+                    })
+                })
+                .collect();
+            keyframes.push(DeclaredKeyframe {
+                position,
+                timing_function,
+                values,
+            });
+        }
+
+        DeclaredKeyframes {
+            keyframes: keyframes.into_boxed_slice(),
+            base,
+            automatic_timing,
+        }
+    }
+
+    /// Whether a keyframe is attached to a named timeline range.
+    fn has_range_keyframes(&self) -> bool {
+        self.keyframes
+            .iter()
+            .any(|keyframe| matches!(keyframe.position, KeyframePosition::Range(..)))
+    }
+
+    /// One track per animating property, with the range keyframes placed by
+    /// `ranges` and ignored without them. This is the one place a track is
+    /// built.
+    ///
+    /// A property's track holds the keyframes declaring it by offset, equal
+    /// offsets in computed keyframe order, plus an automatic keyframe at 0
+    /// with the base value when none sits at or below 0, and one at 1 when
+    /// none sits at or above 1 (scroll-animations-1 §5). A property every
+    /// keyframe declaring it is ignored for is not animated: its track is
+    /// empty.
+    fn tracks(&self, ranges: Option<&TimelineRanges>) -> ArcSlice<PropertyTrack> {
+        let mut placed: Vec<(f64, &DeclaredKeyframe)> = self
+            .keyframes
+            .iter()
+            .filter_map(|keyframe| Some((keyframe.position.resolve(ranges)?, keyframe)))
+            .collect();
+        // A stable sort: equal offsets keep the computed keyframe order.
+        // Every offset is finite.
+        placed.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        ArcSlice::from_iter(self.base.iter().enumerate().map(|(index, base)| {
+            let mut keyframes: Vec<TrackKeyframe> = placed
+                .iter()
+                .filter_map(|&(offset, keyframe)| {
+                    Some(TrackKeyframe {
+                        offset,
+                        timing_function: keyframe.timing_function.clone(),
+                        value: keyframe.values[index].clone()?,
+                    })
+                })
+                .collect();
+            let declared = self
+                .keyframes
+                .iter()
+                .any(|keyframe| keyframe.values[index].is_some());
+            if keyframes.is_empty() && declared {
+                return PropertyTrack(Box::new([]));
+            }
+            let automatic = |offset: f64, timing_function: &TimingFunction| TrackKeyframe {
+                offset,
+                timing_function: timing_function.clone(),
+                value: base.clone(),
+            };
+            if keyframes
+                .first()
+                .is_none_or(|keyframe| keyframe.offset > 0.)
+            {
+                keyframes.insert(0, automatic(0., &self.automatic_timing[0]));
+            }
+            if keyframes.last().is_none_or(|keyframe| keyframe.offset < 1.) {
+                keyframes.push(automatic(1., &self.automatic_timing[1]));
+            }
+            PropertyTrack(keyframes.into_boxed_slice())
+        }))
+    }
+}
+
+/// One keyframe of a [`PropertyTrack`].
+#[derive(Clone, Debug, MallocSizeOf)]
+struct TrackKeyframe {
+    /// The keyframe offset: a fraction of the iteration, of any value.
+    offset: f64,
+    /// The timing function of the segments this keyframe starts.
+    timing_function: TimingFunction,
+    value: AnimationValue,
+}
+
+impl TrackKeyframe {
+    fn data(&self) -> KeyframeDataForProperty<'_> {
+        KeyframeDataForProperty {
+            timing_function: &self.timing_function,
+            start_percentage: self.offset,
+            value: &self.value,
+        }
+    }
+}
+
+/// The keyframes of one animating property, ascending by offset, equal
+/// offsets in computed keyframe order. Either empty, the property not
+/// animated, or holding a keyframe at an offset at or below 0 and one at or
+/// above 1, so every iteration offset in `[0, 1]` lies on a keyframe or
+/// between two. Only [`DeclaredKeyframes::tracks`] builds one.
+#[derive(Clone, Debug, MallocSizeOf)]
+struct PropertyTrack(Box<[TrackKeyframe]>);
+
+impl PropertyTrack {
+    /// The value at simple iteration progress `progress` (negative in a
+    /// backwards-filled before phase) through an iteration `duration` long,
+    /// running reversed when `reversed`: the iteration offset is `progress`,
+    /// or `1 - progress` reversed. `None` when the property is not animated.
+    ///
+    /// Between the last keyframe at or below the offset and the first above
+    /// it, the value is interpolated with the keyframes' own offsets, eased by
+    /// the lower keyframe's timing function running forward and by the upper
+    /// one's over progress running from it to the lower one reversed; past
+    /// the last keyframe it is the last one's value. So at equal offsets the
+    /// value jumps to the later keyframe's. The before phase stands at offset
+    /// 0 (1 reversed), and a reversed iteration's end at 0; a keyframe at that
+    /// offset gives its value there without easing, as the before flag
+    /// requires for `steps(jump-start)`.
+    fn sample(&self, progress: f64, reversed: bool, duration: f64) -> Option<AnimationValue> {
+        let keyframes = &*self.0;
+        let (progress, held) = if progress < 0. {
+            (0., Some(if reversed { 1. } else { 0. }))
+        } else if reversed && progress == 1. {
+            (1., Some(0.))
+        } else {
+            (progress, None)
+        };
+        if let Some(offset) = held {
+            if let Some(keyframe) = keyframes
+                .iter()
+                .rev()
+                .find(|keyframe| keyframe.offset == offset)
+            {
+                return Some(keyframe.value.clone());
+            }
+        }
+
+        // The offset is compared as each direction reads it.
+        let (lower, upper) = if reversed {
+            let lower = keyframes
+                .iter()
+                .rposition(|keyframe| progress <= 1. - keyframe.offset)?;
+            (lower, keyframes.get(lower + 1))
+        } else {
+            let upper = keyframes
+                .iter()
+                .position(|keyframe| progress < keyframe.offset);
+            let lower = upper.unwrap_or(keyframes.len()).checked_sub(1)?;
+            (lower, upper.map(|upper| &keyframes[upper]))
+        };
+        let lower = &keyframes[lower];
+        let Some(upper) = upper else {
+            return Some(lower.value.clone());
+        };
+
+        let between = (upper.offset - lower.offset).abs();
+        let (from, to, start) = if reversed {
+            (upper, lower, 1. - upper.offset)
+        } else {
+            (lower, upper, lower.offset)
+        };
+        Some(interpolate(
+            &from.value,
+            &to.value,
+            &from.timing_function,
+            between * duration,
+            (progress - start) / between,
+        ))
+    }
+
+    /// The consecutive pairs of keyframes whose span meets `[0, 1]`, pairs
+    /// of equal offsets included: every value a sample at an iteration
+    /// offset in `[0, 1]` can return is an endpoint of, or lies on, one of
+    /// them.
+    fn segments(&self) -> impl Iterator<Item = KeyframeSegment<'_>> {
+        self.0
+            .windows(2)
+            .filter(|pair| pair[0].offset <= 1. && pair[1].offset > 0.)
+            .map(|pair| KeyframeSegment {
+                from: pair[0].data(),
+                to: pair[1].data(),
+            })
+    }
+}
+
+/// An animation's keyframes: one track per animating property.
+#[derive(Clone, MallocSizeOf)]
+struct AnimationKeyframes {
+    /// Indexed as [`Animation::animating_properties`] enumerates them; shared
+    /// by clones.
+    #[conditional_malloc_size_of]
+    tracks: ArcSlice<PropertyTrack>,
+    /// Present when a keyframe is attached to a named timeline range: what
+    /// the tracks are rebuilt from when the ranges change.
+    ranged: Option<RangedKeyframes>,
+}
+
+/// The keyframes of an animation with range keyframes.
+#[derive(Clone, MallocSizeOf)]
+struct RangedKeyframes {
+    /// Shared by clones.
+    #[conditional_malloc_size_of]
+    declared: Arc<DeclaredKeyframes>,
+    /// The ranges the tracks place the range keyframes with; `None` ignores
+    /// them.
+    ranges: Option<TimelineRanges>,
+}
+
+impl AnimationKeyframes {
+    /// `declared`, with its range keyframes ignored until
+    /// [`Animation::set_timeline_ranges`] places them. The declared keyframes
+    /// are kept only where a later placement can rebuild the tracks.
+    fn new(declared: DeclaredKeyframes) -> Self {
+        let tracks = declared.tracks(None);
+        let ranged = if declared.has_range_keyframes() {
+            Some(RangedKeyframes {
+                declared: Arc::new(declared),
+                ranges: None,
+            })
+        } else {
+            None
+        };
+        AnimationKeyframes { tracks, ranged }
+    }
 }
 
 /// Composite a keyframe value with the underlying value according to the
@@ -323,237 +918,34 @@ fn composite_animation_value(
         .unwrap_or(keyframe_value)
 }
 
-/// Caches the indices of keyframes that declare a specific property.
-///
-/// While traversing the list of keyframes, this is used to avoid repeatedly
-/// searching for the next or last keyframe that declares the property. That
-/// would result in quadratic runtime with respect to the number of keyframes.
-#[derive(Clone, Copy, Debug, Default)]
-struct KeyframeOffsetCacheForProperty {
-    /// The index of a previous keyframe that declares the property.
-    ///
-    /// Note that if the first keyframe does not declare a property, then it implicitly
-    /// uses the computed value of that property. That's why there's always a preceding keyframe
-    /// with the property.
-    last_keyframe_that_defined_property: usize,
-
-    /// The index of a future keyframe or `None` if we have not yet walked the list of keyframes
-    /// to find the next index.
-    ///
-    /// There will always be a next keyframe because the last keyframe (like the first keyframe)
-    /// declares *all* animating properties.
-    next_keyframe_that_defines_property: Option<usize>,
-}
-
-struct KeyframeDataForProperty<'a> {
-    /// The timing function to use for transitions between this step
-    /// and the next one.
-    timing_function: &'a TimingFunction,
-
-    /// The starting percentage (a number between 0 and 1) which represents
-    /// at what point in an animation iteration this step is.
-    start_percentage: f64,
-
-    value: &'a AnimationValue,
-}
-
+/// One keyframe that declares a given property.
 #[derive(Clone, Copy, Debug)]
-enum Direction {
-    Forward,
-    Backward,
+pub struct KeyframeDataForProperty<'a> {
+    /// The timing function to use for transitions between this step
+    /// and the next one in the iteration's direction: a forward iteration
+    /// eases a segment by its lower keyframe's, a reverse one by its upper
+    /// keyframe's.
+    pub timing_function: &'a TimingFunction,
+
+    /// The keyframe offset: the fraction of an iteration this keyframe sits
+    /// at, outside `[0, 1]` for a range keyframe placed there.
+    pub start_percentage: f64,
+
+    /// The value this keyframe declares, or the base value for an automatic
+    /// keyframe.
+    pub value: &'a AnimationValue,
 }
 
-impl Direction {
-    fn relative_to_animation_direction(&self, reverse: bool) -> Self {
-        match self {
-            Self::Forward if reverse => Self::Backward,
-            Self::Backward if reverse => Self::Forward,
-            _ => *self,
-        }
-    }
-}
-
-impl Animation {
-    /// Starting from the keyframe at `keyframe_index`, returns the contents of the next keyframe in `direction`
-    /// that sets the property at `property_index`.
-    ///
-    /// Returns `None` if there is no keyframe in the specified direction that sets the property.
-    fn next_relevant_keyframe_for_property_in_direction(
-        &self,
-        property_index: usize,
-        keyframe_index: usize,
-        direction: Direction,
-    ) -> Option<KeyframeDataForProperty<'_>> {
-        let relevant_keyframe = &self.computed_steps[keyframe_index];
-        let parameters = match &relevant_keyframe.values[property_index] {
-            AnimationValueOrReference::AnimationValue(animation_value) => KeyframeDataForProperty {
-                timing_function: &relevant_keyframe.timing_function,
-                start_percentage: relevant_keyframe.start_percentage,
-                value: animation_value,
-            },
-            AnimationValueOrReference::NotDefinedHere(offsets) => {
-                let next_relevant_keyframe_index = match direction {
-                    Direction::Forward => offsets.following_declaration,
-                    Direction::Backward => offsets.preceding_declaration,
-                };
-                let next_relevant_keyframe = &self.computed_steps[next_relevant_keyframe_index];
-                let AnimationValueOrReference::AnimationValue(animation_value) =
-                    &next_relevant_keyframe.values[property_index]
-                else {
-                    panic!("Referenced keyframe does not set property");
-                };
-
-                KeyframeDataForProperty {
-                    timing_function: &next_relevant_keyframe.timing_function,
-                    start_percentage: next_relevant_keyframe.start_percentage,
-                    value: &animation_value,
-                }
-            },
-        };
-
-        Some(parameters)
-    }
-}
-impl ComputedKeyframe {
-    fn generate_for_keyframes<E>(
-        element: E,
-        animation: &KeyframesAnimation,
-        context: &SharedStyleContext,
-        base_style: &Arc<ComputedValues>,
-        default_timing_function: TimingFunction,
-        default_composition: AnimationComposition,
-        resolver: &mut StyleResolverForElement<E>,
-        animating_properties: PropertyDeclarationIdSet,
-        number_of_animating_properties: usize,
-    ) -> Box<[Self]>
-    where
-        E: TElement,
-    {
-        let animation_values_from_style: Vec<AnimationValue> = animating_properties
-            .iter()
-            .map(|property| {
-                AnimationValue::from_computed_values(property, &**base_style)
-                    .expect("Unexpected non-animatable property.")
-            })
-            .collect();
-
-        let intermediate_steps =
-            IntermediateComputedKeyframe::generate_for_keyframes(animation, context, base_style);
-
-        // Used while iterating over the keyframes to, for each property, remember the most recent and
-        // next keyframe that declares the property. That avoids a quadratic number of traversals per
-        // property.
-        let mut keyframe_offset_caches: Vec<KeyframeOffsetCacheForProperty> =
-            vec![Default::default(); number_of_animating_properties];
-
-        let mut computed_steps: Vec<Self> = Vec::with_capacity(intermediate_steps.len());
-        let mut remaining_steps = intermediate_steps.into_iter();
-        let mut step_index = 0;
-        while let Some(step) = remaining_steps.next() {
-            let start_percentage = step.start_percentage;
-            let properties_changed_in_step = step.declarations.property_ids().clone();
-            let timing_function = step
-                .timing_function
-                .clone()
-                .unwrap_or_else(|| default_timing_function.clone());
-            let composition = step.composition.unwrap_or(default_composition);
-            let step_style = step.resolve_style(element, context, base_style, resolver);
-
-            let values: Box<[_]> = {
-                // For each property that is animating, pull the value from the resolved
-                // style for this step if it's in one of the declarations.
-                animating_properties
-                    .iter()
-                    .enumerate()
-                    .map(|(property_index, property_declaration)| {
-                        let keyframe_offset_cache = &mut keyframe_offset_caches[property_index];
-                        if properties_changed_in_step.contains(property_declaration) {
-                            keyframe_offset_cache.last_keyframe_that_defined_property = step_index;
-                            let animation_value = AnimationValue::from_computed_values(
-                                property_declaration,
-                                &step_style,
-                            )
-                            .unwrap();
-                            let animation_value = composite_animation_value(
-                                &animation_values_from_style[property_index],
-                                animation_value,
-                                composition,
-                            );
-                            return AnimationValueOrReference::AnimationValue(animation_value);
-                        }
-
-                        // https://drafts.csswg.org/css-animations/#keyframes
-                        // > If a 0% or from keyframe is not specified, then the user agent constructs a 0% keyframe
-                        // > using the computed values of the properties being animated. If a 100% or to keyframe is
-                        // > not specified, then the user agent constructs a 100% keyframe using the computed values
-                        // > of the properties being animated.
-                        if step_index == 0 || remaining_steps.as_slice().is_empty() {
-                            return AnimationValueOrReference::AnimationValue(
-                                animation_values_from_style[property_index].clone(),
-                            );
-                        }
-
-                        // This animating property is not defined on this keyframe - we should act as if this keyframe
-                        // didn't exist for this property, so we calculate an interpolated value.
-                        // (https://drafts.csswg.org/css-animations/#keyframes)
-                        //
-                        // If the property was not defined on any previous keyframe then we use the value from style.
-                        // and if it's not defined on any following keyframe then we've already finished animating it.
-                        let preceding_declaration =
-                            keyframe_offset_cache.last_keyframe_that_defined_property;
-                        let following_declaration = keyframe_offset_cache
-                            .next_keyframe_that_defines_property
-                            .filter(|offset| *offset > step_index)
-                            .unwrap_or_else(|| {
-                                let relative_offset = remaining_steps
-                                    .as_slice()
-                                    .iter()
-                                    .position(|step| {
-                                        step.declarations.contains(property_declaration)
-                                    })
-                                    .unwrap_or(remaining_steps.as_slice().len() - 1);
-                                let absolute_offset = step_index + 1 + relative_offset;
-
-                                keyframe_offset_cache.next_keyframe_that_defines_property =
-                                    Some(absolute_offset);
-                                absolute_offset
-                            });
-
-                        AnimationValueOrReference::NotDefinedHere(PropertyDeclarationOffsets {
-                            preceding_declaration,
-                            following_declaration,
-                        })
-                    })
-                    .collect()
-            };
-            debug_assert_eq!(values.len(), number_of_animating_properties);
-
-            computed_steps.push(ComputedKeyframe {
-                timing_function,
-                start_percentage,
-                values,
-            });
-
-            step_index += 1;
-        }
-
-        // The first and last steps (at 0% and 100% respectively) should declare all animating properties.
-        // If they don't then we should have filled the missing properties with the computed values.
-        debug_assert!(computed_steps.first().is_none_or(|first_step| {
-            first_step
-                .values
-                .iter()
-                .all(|value| matches!(value, AnimationValueOrReference::AnimationValue(_)))
-        }));
-        debug_assert!(computed_steps.last().is_none_or(|first_step| {
-            first_step
-                .values
-                .iter()
-                .all(|value| matches!(value, AnimationValueOrReference::AnimationValue(_)))
-        }));
-
-        computed_steps.into_boxed_slice()
-    }
+/// Two consecutive keyframes declaring one property: the segment an
+/// animation interpolates that property over. A forward iteration eases it
+/// by `from.timing_function`, a reverse one by `to.timing_function` over
+/// progress running from `to` back to `from`.
+#[derive(Clone, Copy, Debug)]
+pub struct KeyframeSegment<'a> {
+    /// The lower keyframe.
+    pub from: KeyframeDataForProperty<'a>,
+    /// The upper keyframe.
+    pub to: KeyframeDataForProperty<'a>,
 }
 
 /// A CSS Animation
@@ -565,17 +957,17 @@ pub struct Animation {
     /// The properties that change in this animation.
     properties_changed: PropertyDeclarationIdSet,
 
-    /// The computed style for each keyframe of this animation.
-    computed_steps: Box<[ComputedKeyframe]>,
+    /// The keyframes of this animation, one track per animating property.
+    keyframes: AnimationKeyframes,
 
     /// The time this animation started at, which is the current value of the animation
     /// timeline when this animation was created plus any animation delay.
     pub started_at: f64,
 
-    /// The duration of this animation.
+    /// The duration of this animation; a nominal 1 for a progress-driven one.
     pub duration: f64,
 
-    /// The delay of the animation.
+    /// The delay of the animation; 0 for a progress-driven one.
     pub delay: f64,
 
     /// The `animation-fill-mode` property of this animation.
@@ -599,9 +991,40 @@ pub struct Animation {
     /// Whether or not this animation is new and or has already been tracked
     /// by the script thread.
     pub is_new: bool,
+
+    /// The computed `animation-timeline` of this animation: `auto` for the
+    /// document timeline, otherwise a scroll or view progress timeline.
+    pub timeline: AnimationTimeline,
+
+    /// A progress-driven animation's simple iteration progress and iteration
+    /// direction, resolved by the embedder from its timeline (range, phase,
+    /// fill and iteration applied; [`Self::sample_at`] applies the
+    /// direction); `None` contributes nothing. Unread for an animation on the
+    /// document timeline. The embedder writes the first sample even when the
+    /// animation starts paused and holds it while paused, so one created
+    /// under `animation-play-state: paused` shows the value at the scroll
+    /// position of that moment rather than the base value.
+    pub timeline_sample: Option<AnimationProgress>,
+}
+
+/// Whether `timeline` is `none`: an animation with no timeline is inactive.
+fn is_none_timeline(timeline: &AnimationTimeline) -> bool {
+    matches!(timeline, AnimationTimeline::Timeline(name) if name.value.is_none())
 }
 
 impl Animation {
+    /// Whether this animation follows a progress timeline instead of the
+    /// document timeline: its progress is `timeline_sample`, and the clock
+    /// neither iterates nor ends it.
+    pub fn is_progress_driven(&self) -> bool {
+        !self.timeline.is_auto()
+    }
+
+    /// Whether the clock has to tick this animation.
+    fn needs_to_be_ticked(&self) -> bool {
+        !self.is_progress_driven() && self.state.needs_to_be_ticked()
+    }
+
     /// Whether or not this animation is cancelled by changes from a new style.
     fn is_cancelled_in_new_style(&self, new_style: &Arc<ComputedValues>) -> bool {
         let new_ui = new_style.get_ui();
@@ -613,6 +1036,13 @@ impl Animation {
             None => return true,
         };
 
+        let timeline = new_ui.animation_timeline_mod(index);
+        if is_none_timeline(&timeline) {
+            return true;
+        }
+        if !timeline.is_auto() {
+            return false;
+        }
         new_ui.animation_duration_mod(index).seconds() == 0.
     }
 
@@ -620,6 +1050,9 @@ impl Animation {
     /// updates times, and then toggles the direction if appropriate. Otherwise
     /// does nothing. Returns true if this animation has iterated.
     pub fn iterate_if_necessary(&mut self, time: f64) -> bool {
+        if self.is_progress_driven() {
+            return false;
+        }
         if !self.iteration_over(time) {
             return false;
         }
@@ -632,22 +1065,33 @@ impl Animation {
         self.iterate_by(1.) == 1.
     }
 
+    /// Advances a running animation past every whole iteration elapsed by
+    /// `now`: the iteration count and direction a loop of
+    /// `iterate_if_necessary(now)` reaches, with `started_at` equal to it up
+    /// to f64 rounding (one `duration · n` step against repeated additions).
+    /// One jump plus at most four checked single steps, so the cost does not
+    /// grow with the iterations elapsed; idempotent at a fixed `now` unless
+    /// `duration` is below the rounding of `started_at` or 2^52 iterations
+    /// elapsed, where it stops short. Returns true if this animation has
+    /// iterated.
+    pub fn iterate_to(&mut self, now: f64) -> bool {
+        if self.state != AnimationState::Running || self.is_progress_driven() {
+            return false;
+        }
+        let mut cursor = self.cursor();
+        let iterated = cursor.iterate_to(now, self.duration, self.direction);
+        self.set_cursor(cursor);
+        iterated
+    }
+
     /// Attempts to advance this animation by `n` iterations, but stops when reaching
     /// the last iteration, and doesn't perform fractional iterations.
     /// Returns the actual number of iterations that happened.
     fn iterate_by(&mut self, n: f64) -> f64 {
-        let n = n.trunc().min(self.remaining_iterations().ceil() - 1.0);
+        let mut cursor = self.cursor();
+        let n = cursor.iterate_by(n, self.duration, self.direction);
         if n < 1. {
             return 0.;
-        }
-
-        match self.iteration_state {
-            KeyframesIterationState::Finite(ref mut current, max) => {
-                *current = (*current + n).min(max);
-            },
-            KeyframesIterationState::Infinite(ref mut current) => {
-                *current += n;
-            },
         }
 
         if let AnimationState::Paused(ref mut progress) = self.state {
@@ -655,31 +1099,23 @@ impl Animation {
             *progress -= n;
         }
 
-        // Update the next iteration direction if applicable.
-        self.started_at += self.duration * n;
-        match self.direction {
-            AnimationDirection::Alternate | AnimationDirection::AlternateReverse
-                if n % 2. == 1.0 =>
-            {
-                self.current_direction = match self.current_direction {
-                    AnimationDirection::Normal => AnimationDirection::Reverse,
-                    AnimationDirection::Reverse => AnimationDirection::Normal,
-                    _ => unreachable!(
-                        "Current animation direction can only be `normal` or `reverse`."
-                    ),
-                };
-            },
-            _ => {},
-        }
-
+        self.set_cursor(cursor);
         n
     }
 
-    fn remaining_iterations(&self) -> f64 {
-        match self.iteration_state {
-            KeyframesIterationState::Finite(current, max) => max - current,
-            KeyframesIterationState::Infinite(_) => f64::INFINITY,
+    /// A copy of the fields iterating moves.
+    fn cursor(&self) -> IterationCursor {
+        IterationCursor {
+            started_at: self.started_at,
+            iteration_state: self.iteration_state.clone(),
+            current_direction: self.current_direction,
         }
+    }
+
+    fn set_cursor(&mut self, cursor: IterationCursor) {
+        self.started_at = cursor.started_at;
+        self.iteration_state = cursor.iteration_state;
+        self.current_direction = cursor.current_direction;
     }
 
     /// A number (> 0 and <= 1) which represents the fraction of a full iteration
@@ -687,7 +1123,7 @@ impl Animation {
     /// if the current iteration is the fractional remainder of a non-integral
     /// iteration count.
     pub fn current_iteration_end_progress(&self) -> f64 {
-        self.remaining_iterations().min(1.)
+        self.cursor().current_iteration_end_progress()
     }
 
     /// The duration of the current iteration of this animation which may be less
@@ -699,30 +1135,132 @@ impl Animation {
     /// Whether or not the current iteration is over. Note that this method assumes that
     /// the animation is still running.
     fn iteration_over(&self, time: f64) -> bool {
-        time > (self.started_at + self.current_iteration_duration())
-    }
-
-    /// Assuming this animation is running, whether or not it is on the last iteration.
-    fn on_last_iteration(&self) -> bool {
-        self.remaining_iterations() <= 1.
+        self.cursor().iteration_over(time, self.duration)
     }
 
     /// Whether or not this animation has finished at the provided time. This does
     /// not take into account canceling i.e. when an animation or transition is
     /// canceled due to changes in the style.
     pub fn has_ended(&self, time: f64) -> bool {
-        if !self.on_last_iteration() {
+        self.has_ended_at(&self.cursor(), time)
+    }
+
+    /// [`Self::has_ended`] with the iteration fields of `cursor`.
+    fn has_ended_at(&self, cursor: &IterationCursor, time: f64) -> bool {
+        if self.is_progress_driven() || !cursor.on_last_iteration() {
             return false;
         }
 
-        let progress = match self.state {
-            AnimationState::Finished => return true,
-            AnimationState::Paused(progress) => progress,
-            AnimationState::Running => (time - self.started_at) / self.duration,
-            AnimationState::Pending | AnimationState::Canceled => return false,
-        };
+        match self.state {
+            AnimationState::Finished => true,
+            AnimationState::Paused(progress) => progress >= cursor.current_iteration_end_progress(),
+            AnimationState::Running => cursor.iteration_ended(time, self.duration),
+            AnimationState::Pending | AnimationState::Canceled => false,
+        }
+    }
 
-        progress >= self.current_iteration_end_progress()
+    /// Whether this animation, running and iterated to `time` as
+    /// [`Self::progress_at`] iterates it, has ended at `time`.
+    fn run_ended_at(&self, time: f64) -> bool {
+        let mut cursor = self.cursor();
+        cursor.iterate_to(time, self.duration, self.direction);
+        cursor.on_last_iteration() && cursor.iteration_ended(time, self.duration)
+    }
+
+    /// The first instant a finite running or pending animation, iterated as
+    /// [`Self::progress_at`] iterates it, has ended at: it contributes at the
+    /// instant before, and `has_ended` holds from it on after `iterate_to`.
+    /// `None` for one that never ends on its own: infinite, paused, finished,
+    /// canceled or progress-driven.
+    pub fn expires_at(&self) -> Option<f64> {
+        // Rounding puts that instant within a few ulps of the estimate.
+        const ULPS: usize = 8;
+
+        if self.is_progress_driven() {
+            return None;
+        }
+        match (&self.state, &self.iteration_state) {
+            (
+                AnimationState::Running | AnimationState::Pending,
+                KeyframesIterationState::Finite(..),
+            ) => {},
+            _ => return None,
+        }
+        let mut last = self.cursor();
+        let before_last = last.remaining_iterations().ceil() - 1.;
+        last.iterate_by(before_last, self.duration, self.direction);
+        let estimate = last.started_at + self.duration * last.current_iteration_end_progress();
+        let mut cursor = self.cursor();
+        cursor.iterate_to(estimate, self.duration, self.direction);
+        let mut end = cursor.started_at + self.duration * cursor.current_iteration_end_progress();
+        for _ in 0..ULPS {
+            if self.run_ended_at(end) {
+                break;
+            }
+            end = end.next_up();
+        }
+        for _ in 0..ULPS {
+            if !self.run_ended_at(end.next_down()) {
+                break;
+            }
+            end = end.next_down();
+        }
+        Some(end)
+    }
+
+    /// The properties this animation's keyframes animate, each with the
+    /// index [`Self::keyframe_segments`] takes. A property every keyframe
+    /// declaring it is ignored for is not one of them.
+    pub fn animating_properties(&self) -> impl Iterator<Item = (usize, PropertyDeclarationId<'_>)> {
+        self.keyframes
+            .tracks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, track)| Some((index, track.0.first()?.value.id())))
+    }
+
+    /// The segments of the property at `property_index` that a sample at an
+    /// iteration offset in `[0, 1]` can reach: pairs of consecutive keyframes
+    /// of its track, ascending, pairs of equal offsets included. Every value
+    /// such a sample can return is an endpoint of, or lies on, one of them.
+    pub fn keyframe_segments(
+        &self,
+        property_index: usize,
+    ) -> impl Iterator<Item = KeyframeSegment<'_>> {
+        self.keyframes
+            .tracks
+            .get(property_index)
+            .into_iter()
+            .flat_map(PropertyTrack::segments)
+    }
+
+    /// Whether a keyframe of this animation is attached to a named timeline
+    /// range (scroll-animations-1 §5): [`Self::set_timeline_ranges`] places
+    /// it.
+    pub fn has_range_keyframes(&self) -> bool {
+        self.keyframes.ranged.is_some()
+    }
+
+    /// Places the range keyframes with `ranges`, the named ranges of the
+    /// animation's timeline as fractions of its attachment range, or ignores
+    /// them with `None`. Rebuilds the keyframe tracks when `ranges` differs
+    /// from the ranges they were built with, and answers whether it did. An
+    /// animation without range keyframes has nothing to place.
+    pub fn set_timeline_ranges(&mut self, ranges: Option<TimelineRanges>) -> bool {
+        let Some(ranged) = &mut self.keyframes.ranged else {
+            return false;
+        };
+        if ranged.ranges == ranges {
+            return false;
+        }
+        self.keyframes.tracks = ranged.declared.tracks(ranges.as_ref());
+        ranged.ranges = ranges;
+        true
+    }
+
+    /// The ranges the range keyframes are placed with.
+    fn timeline_ranges(&self) -> Option<TimelineRanges> {
+        self.keyframes.ranged.as_ref()?.ranges
     }
 
     /// Updates the appropiate state from other animation.
@@ -739,6 +1277,21 @@ impl Animation {
             "KeyframesAnimationState::update_from_other({:?}, {:?})",
             self, other
         );
+
+        // A progress-driven animation has no time state to carry over, only
+        // what the embedder last wrote: the progress, and the ranges its
+        // range keyframes are placed with, which place the new keyframes
+        // until the embedder resolves them again. `maybe_start_animations`
+        // replaces an animation whose timeline kind changed.
+        if other.is_progress_driven() {
+            debug_assert_eq!(self.is_progress_driven(), other.is_progress_driven());
+            let timeline_sample = self.timeline_sample;
+            let timeline_ranges = self.timeline_ranges();
+            *self = other.clone();
+            self.timeline_sample = timeline_sample;
+            self.set_timeline_ranges(timeline_ranges);
+            return;
+        }
 
         // NB: We shall not touch the started_at field, since we don't want to
         // restart the animation.
@@ -841,174 +1394,89 @@ impl Animation {
     /// Fill in an `AnimationValueMap` with values calculated from this animation at
     /// the given time value.
     fn get_property_declaration_at_time(&self, now: f64, map: &mut AnimationValueMap) {
-        if self.computed_steps.is_empty() {
+        if let Some(at) = self.progress_of(&self.cursor(), now) {
+            self.sample_at(at, map);
+        }
+    }
+
+    /// Where this animation stands at `now`, without moving `self`: its
+    /// iteration fields as `iterate_to(now)` leaves them, read as the cascade
+    /// reads them. `None` when the animation contributes nothing at `now`.
+    pub fn progress_at(&self, now: f64) -> Option<AnimationProgress> {
+        let mut cursor = self.cursor();
+        if self.state == AnimationState::Running && !self.is_progress_driven() {
+            cursor.iterate_to(now, self.duration, self.direction);
+        }
+        self.progress_of(&cursor, now)
+    }
+
+    /// Where this animation stands at `now` with the iteration fields of
+    /// `cursor`: the fill and `has_ended` rules applied, the progress clamped
+    /// to the current iteration unless a backwards fill reads it negative. A
+    /// progress-driven animation stands at its `timeline_sample`, paused or
+    /// not.
+    fn progress_of(&self, cursor: &IterationCursor, now: f64) -> Option<AnimationProgress> {
+        if self.keyframes.tracks.is_empty() {
             // Nothing to do.
-            return;
+            return None;
+        }
+        if self.is_progress_driven() {
+            return match self.state {
+                AnimationState::Canceled => None,
+                _ => self.timeline_sample,
+            };
         }
 
         // Raw progress ratio of the animation: can be negative (before start) or
         // >1.0 (after end or during multiple iterations).
         let progress = match self.state {
             AnimationState::Running | AnimationState::Pending | AnimationState::Finished => {
-                (now - self.started_at) / self.duration
+                (now - cursor.started_at) / self.duration
             },
             AnimationState::Paused(progress) => progress,
-            AnimationState::Canceled => return,
+            AnimationState::Canceled => return None,
         };
 
         if progress < 0.
             && self.fill_mode != AnimationFillMode::Backwards
             && self.fill_mode != AnimationFillMode::Both
         {
-            return;
+            return None;
         }
-        if self.has_ended(now)
+        if self.has_ended_at(cursor, now)
             && self.fill_mode != AnimationFillMode::Forwards
             && self.fill_mode != AnimationFillMode::Both
         {
-            return;
+            return None;
         }
 
-        // If we only need to take into account one keyframe, then exit early
-        // in order to avoid doing more work.
-        let mut add_declarations_to_map = |keyframe: &ComputedKeyframe| {
-            for value_or_reference in keyframe.values.iter() {
-                let AnimationValueOrReference::AnimationValue(value) = value_or_reference else {
-                    unreachable!("First or last keyframes define all properties");
-                };
-                map.insert(value.id().to_owned(), value.clone());
-            }
+        let progress = if progress < 0.0 {
+            progress
+        } else {
+            // Progress clamped to the current iteration [0.0, 1.0].
+            progress
+                .min(cursor.current_iteration_end_progress())
+                .max(0.0)
         };
+        Some(AnimationProgress {
+            progress,
+            direction: cursor.current_direction,
+        })
+    }
 
-        // Handle negative progress (before animation start) with backwards/both fill mode
-        if progress < 0.0 {
-            if let Some(keyframe) = match self.current_direction {
-                AnimationDirection::Normal => self.computed_steps.first(),
-                AnimationDirection::Reverse => self.computed_steps.last(),
-                _ => unreachable!("Current animation direction can only be `normal` or `reverse`."),
-            } {
-                add_declarations_to_map(keyframe);
-            }
-            return;
-        }
-
-        // Progress clamped to the current iteration [0.0, 1.0].
-        let total_progress = progress.min(self.current_iteration_end_progress()).max(0.0);
-
-        // At 1.0 there is nothing left to interpolate. Return end keyframe.
-        if total_progress == 1.0 {
-            let keyframe = match self.current_direction {
-                AnimationDirection::Normal => self.computed_steps.last().unwrap(),
-                AnimationDirection::Reverse => self.computed_steps.first().unwrap(),
-                _ => unreachable!("Current animation direction can only be `normal` or `reverse`."),
-            };
-            add_declarations_to_map(keyframe);
-            return;
-        }
-
-        // Get the indices of the previous (from) keyframe and the next (to) keyframe.
-        let next_keyframe_index;
-        let prev_keyframe_index;
-        let num_steps = self.computed_steps.len();
-        match self.current_direction {
-            AnimationDirection::Normal => {
-                next_keyframe_index = self
-                    .computed_steps
-                    .iter()
-                    .position(|step| total_progress < step.start_percentage);
-                prev_keyframe_index = next_keyframe_index
-                    .and_then(|pos| if pos != 0 { Some(pos - 1) } else { None })
-                    .unwrap_or(0);
-            },
-            AnimationDirection::Reverse => {
-                next_keyframe_index = self
-                    .computed_steps
-                    .iter()
-                    .rev()
-                    .position(|step| total_progress <= 1. - step.start_percentage)
-                    .map(|pos| num_steps - pos - 1);
-                prev_keyframe_index = next_keyframe_index
-                    .and_then(|pos| {
-                        if pos != num_steps - 1 {
-                            Some(pos + 1)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or(num_steps - 1)
-            },
-            _ => unreachable!(),
-        }
-
-        debug!(
-            "Animation::get_property_declaration_at_time: keyframe from {:?} to {:?}",
-            prev_keyframe_index, next_keyframe_index
-        );
-
-        let prev_keyframe = &self.computed_steps[prev_keyframe_index];
-        let Some(next_keyframe_index) = next_keyframe_index else {
-            unsafe {
-                debug_unreachable!(
-                    "next_keyframe_index should always be Some: \
-                     total_progress is in [0, 1) at this point. \
-                     Normal direction: keyframe with start_percentage 1.0 always satisfies. \
-                     Reverse direction: keyframe with start_percentage 0.0 always satisfies."
-                );
-            }
+    /// Fill in an `AnimationValueMap` with this animation's values at `at`,
+    /// applying its direction: each animated property's track sampled at the
+    /// iteration offset `at` reads (see `PropertyTrack::sample`).
+    pub fn sample_at(&self, at: AnimationProgress, map: &mut AnimationValueMap) {
+        let reversed = match at.direction {
+            AnimationDirection::Normal => false,
+            AnimationDirection::Reverse => true,
+            _ => unreachable!("Current animation direction can only be `normal` or `reverse`."),
         };
-
-        // Prevent division by zero from percentage_between_keyframes.
-        // This can happen for reverse direction at total_progress == 0.0.
-        if prev_keyframe_index == next_keyframe_index {
-            add_declarations_to_map(&prev_keyframe);
-            return;
-        }
-
-        // Interpolate a new value for each animating property
-        let reversed = self.current_direction != AnimationDirection::Normal;
-        for property_index in 0..self.number_of_animating_properties {
-            let Some(previous_keyframe) = self.next_relevant_keyframe_for_property_in_direction(
-                property_index,
-                prev_keyframe_index,
-                Direction::Backward.relative_to_animation_direction(reversed),
-            ) else {
-                // Animation of this property has not started yet
-                continue;
-            };
-
-            let Some(next_keyframe) = self.next_relevant_keyframe_for_property_in_direction(
-                property_index,
-                next_keyframe_index,
-                Direction::Forward.relative_to_animation_direction(reversed),
-            ) else {
-                // This property has finished animating, just use the previous data
-                map.insert(
-                    previous_keyframe.value.id().to_owned(),
-                    previous_keyframe.value.clone(),
-                );
-                continue;
-            };
-
-            let percentage_between_keyframes =
-                (next_keyframe.start_percentage - previous_keyframe.start_percentage).abs();
-            let duration_between_keyframes = percentage_between_keyframes * self.duration;
-            let direction_aware_prev_keyframe_start_percentage = match self.current_direction {
-                AnimationDirection::Normal => previous_keyframe.start_percentage,
-                AnimationDirection::Reverse => 1. - previous_keyframe.start_percentage,
-                _ => unreachable!(),
-            };
-            let progress_between_keyframes = (total_progress
-                - direction_aware_prev_keyframe_start_percentage)
-                / percentage_between_keyframes;
-            let animation = PropertyAnimation {
-                from: previous_keyframe.value.clone(),
-                to: next_keyframe.value.clone(),
-                timing_function: previous_keyframe.timing_function.clone(),
-                duration: duration_between_keyframes,
-            };
-
-            let value = animation.calculate_value(progress_between_keyframes);
-            map.insert(value.id().to_owned(), value);
+        for track in self.keyframes.tracks.iter() {
+            if let Some(value) = track.sample(at.progress, reversed, self.duration) {
+                map.insert(value.id().to_owned(), value);
+            }
         }
     }
 }
@@ -1024,6 +1492,8 @@ impl fmt::Debug for Animation {
             .field("state", &self.state)
             .field("direction", &self.direction)
             .field("current_direction", &self.current_direction)
+            .field("timeline", &self.timeline)
+            .field("timeline_sample", &self.timeline_sample)
             .field("cascade_style", &())
             .finish()
     }
@@ -1245,22 +1715,23 @@ impl ElementAnimationSet {
     }
 
     /// Whether or not this state needs animation ticks for its transitions
-    /// or animations.
+    /// or animations. A progress-driven animation never does.
     pub fn needs_animation_ticks(&self) -> bool {
         self.animations
             .iter()
-            .any(|animation| animation.state.needs_to_be_ticked())
+            .any(|animation| animation.needs_to_be_ticked())
             || self
                 .transitions
                 .iter()
                 .any(|transition| transition.state.needs_to_be_ticked())
     }
 
-    /// The number of running animations and transitions for this `ElementAnimationSet`.
+    /// The number of running animations and transitions for this
+    /// `ElementAnimationSet`, progress-driven animations excluded.
     pub fn running_animation_and_transition_count(&self) -> usize {
         self.animations
             .iter()
-            .filter(|animation| animation.state.needs_to_be_ticked())
+            .filter(|animation| animation.needs_to_be_ticked())
             .count()
             + self
                 .transitions
@@ -1815,8 +2286,15 @@ pub fn maybe_start_animations<E>(
         };
 
         debug!("maybe_start_animations: name={}", name);
+        let timeline = style.animation_timeline_mod(i);
+        if is_none_timeline(&timeline) {
+            continue;
+        }
+        // A progress-driven animation stands where the embedder's
+        // `timeline_sample` puts it, whatever its duration.
+        let progress_driven = !timeline.is_auto();
         let duration = style.animation_duration_mod(i).seconds() as f64;
-        if duration == 0. {
+        if duration == 0. && !progress_driven {
             continue;
         }
 
@@ -1829,7 +2307,16 @@ pub fn maybe_start_animations<E>(
         // NB: This delay may be negative, meaning that the animation may be created
         // in a state where we have advanced one or more iterations or even that the
         // animation begins in a finished state.
-        let delay = style.animation_delay_mod(i).seconds() as f64;
+        //
+        // A progress-driven animation takes a nominal duration, which keeps
+        // its easing tolerance equal to the embedder's own sampler's, and no
+        // delay: the embedder reads the specified ones from the style to place
+        // it within its timeline.
+        let (duration, delay) = if progress_driven {
+            (1., 0.)
+        } else {
+            (duration, style.animation_delay_mod(i).seconds() as f64)
+        };
 
         let iteration_count = style.animation_iteration_count_mod(i);
         let iteration_state = if iteration_count.0.is_infinite() {
@@ -1852,9 +2339,10 @@ pub fn maybe_start_animations<E>(
         let now = context.current_time_for_animations;
         let started_at = now + delay;
         let starting_progress = (now - started_at) / duration;
-        let state = match style.animation_play_state_mod(i) {
-            AnimationPlayState::Paused => AnimationState::Paused(starting_progress),
-            AnimationPlayState::Running => AnimationState::Pending,
+        let state = match (style.animation_play_state_mod(i), progress_driven) {
+            (AnimationPlayState::Paused, _) => AnimationState::Paused(starting_progress),
+            (AnimationPlayState::Running, false) => AnimationState::Pending,
+            (AnimationPlayState::Running, true) => AnimationState::Running,
         };
 
         // Determine the set of animating properties. This is not equivalent to the set of changed properties
@@ -1870,7 +2358,7 @@ pub fn maybe_start_animations<E>(
             }
         }
 
-        let computed_steps = ComputedKeyframe::generate_for_keyframes(
+        let declared = DeclaredKeyframes::new(
             element,
             &keyframe_animation,
             context,
@@ -1878,14 +2366,13 @@ pub fn maybe_start_animations<E>(
             style.animation_timing_function_mod(i),
             style.animation_composition_mod(i),
             resolver,
-            animating_properties,
-            number_of_animating_properties,
+            &animating_properties,
         );
 
         let mut new_animation = Animation {
             name: name.clone(),
             properties_changed: keyframe_animation.properties_changed.clone(),
-            computed_steps,
+            keyframes: AnimationKeyframes::new(declared),
             started_at,
             duration,
             fill_mode: style.animation_fill_mode_mod(i),
@@ -1896,11 +2383,15 @@ pub fn maybe_start_animations<E>(
             current_direction: initial_direction,
             number_of_animating_properties,
             is_new: true,
+            timeline,
+            timeline_sample: None,
         };
 
         // If we started with a negative delay, make sure we iterate the animation if
         // the delay moves us past the first iteration.
-        new_animation.iterate_by(starting_progress);
+        if !progress_driven {
+            new_animation.iterate_by(starting_progress);
+        }
 
         animation_state.dirty = true;
 
@@ -1911,8 +2402,14 @@ pub fn maybe_start_animations<E>(
             }
 
             if new_animation.name == existing_animation.name {
-                existing_animation
-                    .update_from_other(&new_animation, context.current_time_for_animations);
+                // A change between the document timeline and a progress
+                // timeline starts the animation over.
+                if existing_animation.is_progress_driven() != progress_driven {
+                    *existing_animation = new_animation;
+                } else {
+                    existing_animation
+                        .update_from_other(&new_animation, context.current_time_for_animations);
+                }
                 return;
             }
         }
