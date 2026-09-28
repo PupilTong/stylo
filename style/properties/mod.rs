@@ -752,7 +752,11 @@ impl ShorthandId {
 }
 
 /// The arbitrary substitution functions we support.
+#[cfg(not(feature = "lynx"))]
 pub const ARBITRARY_SUBSTITUTION_FUNCTIONS: &[&str] = &["var", "env", "attr"];
+/// The arbitrary substitution functions we support, including css-values-5's `if()`.
+#[cfg(feature = "lynx")]
+pub const ARBITRARY_SUBSTITUTION_FUNCTIONS: &[&str] = &["var", "env", "attr", "if"];
 
 fn parse_non_custom_property_declaration_value_into(
     declarations: &mut SourcePropertyDeclaration,

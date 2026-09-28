@@ -226,6 +226,14 @@ impl<Component: PartialEq> PartialEq for Value<Component> {
     }
 }
 
+#[cfg(feature = "lynx")]
+impl<Component: PartialEq> Value<Component> {
+    /// Whether the two values are equal once their attr()-taint is disregarded.
+    pub(crate) fn eq_ignoring_attr_taint(&self, other: &Self) -> bool {
+        self.v == other.v
+    }
+}
+
 impl<Component: Animate> Animate for Value<Component> {
     fn animate(&self, other: &Self, procedure: Procedure) -> Result<Self, ()> {
         let v = self.v.animate(&other.v, procedure)?;
