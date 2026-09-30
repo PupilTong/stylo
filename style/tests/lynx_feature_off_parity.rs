@@ -292,14 +292,29 @@ fn tree_counting_functions_stay_pref_gated() {
 }
 
 #[test]
-fn anchor_positioning_subset_stays_pref_gated() {
-    // `anchor-name` is ported to servo for the `lynx` feature's benefit
-    // behind `layout.unimplemented`, and `anchor-size()` is enabled under the
-    // `lynx` feature; a stock Servo build keeps both behind their prefs
-    // (false), like the rest of css-anchor-position-1.
+fn anchor_positioning_stays_pref_gated() {
+    // css-anchor-position-1 is ported to servo for the `lynx` feature's
+    // benefit: its properties behind `layout.unimplemented`, `anchor()`,
+    // `anchor-size()`, `anchor-center` and `@position-try` behind
+    // `anchor_positioning_enabled()` (the lynx feature or the
+    // anchor-positioning pref). A stock Servo build keeps all of it out
+    // (both prefs false).
+    for name in [
+        "anchor-name",
+        "anchor-scope",
+        "position-anchor",
+        "position-area",
+        "position-try",
+        "position-try-fallbacks",
+        "position-try-order",
+        "position-visibility",
+    ] {
+        assert!(
+            PropertyId::parse_enabled_for_all_content(name).is_err(),
+            "stock servo must keep `{name}` pref-gated"
+        );
+    }
     for (name, value) in [
-        ("anchor-name", "--a"),
-        ("anchor-name", "none"),
         ("width", "anchor-size(--a width)"),
         ("height", "calc(100% - anchor-size(--a height, 0px))"),
         ("max-height", "anchor-size(height)"),
@@ -309,14 +324,35 @@ fn anchor_positioning_subset_stays_pref_gated() {
         ("margin-top", "anchor-size(--a height)"),
         ("top", "anchor(--a top)"),
         ("top", "calc(anchor(--a top) + 1px)"),
+        ("inset", "anchor(--a top) 0"),
+        ("justify-self", "anchor-center"),
+        ("align-self", "anchor-center"),
+        ("place-self", "anchor-center"),
     ] {
         assert!(
             !parses(name, value),
             "stock servo must keep `{name}: {value}` pref-gated"
         );
     }
-    assert!(PropertyId::parse_enabled_for_all_content("anchor-name").is_err());
     assert!(parses("top", "calc(100% - 10px)"));
     assert!(parses("margin-top", "auto"));
     assert!(parses("max-height", "none"));
+    assert!(parses("justify-self", "center"));
+
+    // `@position-try` is an unknown at-rule.
+    let lock = style::shared_lock::SharedRwLock::new();
+    let sheet = style::stylesheets::Stylesheet::from_str(
+        "@position-try --flip { top: 0 } a { color: red }",
+        url_data(),
+        Origin::Author,
+        servo_arc::Arc::new(lock.wrap(style::media_queries::MediaList::empty())),
+        lock.clone(),
+        None,
+        None,
+        QuirksMode::NoQuirks,
+        style::stylesheets::AllowImportRules::Yes,
+    );
+    let guard = lock.read();
+    use style::stylesheets::StylesheetInDocument;
+    assert_eq!(sheet.contents(&guard).rules(&guard).len(), 1);
 }

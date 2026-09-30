@@ -451,17 +451,16 @@ where
     }
 }
 
-/// Whether css-anchor-position-1's `anchor-size()` parses in the properties
-/// that accept it (sizes, min/max sizes, insets and margins, plain or inside
-/// a math function).
+/// Whether css-anchor-position-1's value-level syntax parses: `anchor()` (in
+/// the inset properties) and `anchor-size()` (in the sizing, inset and margin
+/// properties), plain or inside a math function; alignment's `anchor-center`
+/// keyword; and the `@position-try` rule.
 ///
-/// Under the `lynx` feature `anchor-size()` is on unconditionally: lynx-vello
-/// implements the `anchor-name` + `anchor-size()` subset of anchor
-/// positioning. `anchor()` and alignment's `anchor-center` are not part of
-/// that subset and keep checking the anchor-positioning pref directly, which
-/// is off for servo, so they never parse there.
+/// Under the `lynx` feature this is on unconditionally: lynx-vello implements
+/// the module. Otherwise it is the anchor-positioning pref, which is off for
+/// servo, so none of it parses there.
 #[inline]
-pub fn anchor_size_function_enabled() -> bool {
+pub fn anchor_positioning_enabled() -> bool {
     cfg!(feature = "lynx") || crate::pref!("layout.css.anchor-positioning.enabled", gecko = true)
 }
 
@@ -645,7 +644,7 @@ where
     fn collect_completion_keywords(f: style_traits::KeywordsCollectFn) {
         LP::collect_completion_keywords(f);
         f(&["auto"]);
-        if anchor_size_function_enabled() {
+        if anchor_positioning_enabled() {
             f(&["anchor-size"]);
         }
     }

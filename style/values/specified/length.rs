@@ -17,7 +17,7 @@ use crate::typed_om::{NumericType, NumericValue, ToTyped, TypedValue, UnitValue}
 use crate::values::computed::{self, CSSPixelLength, Context, FontSize};
 use crate::values::generics::length as generics;
 use crate::values::generics::length::{
-    anchor_size_function_enabled, GenericAnchorSizeFunction, GenericLengthOrNumber,
+    anchor_positioning_enabled, GenericAnchorSizeFunction, GenericLengthOrNumber,
     GenericLengthPercentageOrNormal, GenericMargin, GenericMaxSize, GenericSize,
 };
 use crate::values::generics::NonNegative;
@@ -1994,7 +1994,7 @@ impl Size {
         parse_fit_content_function!(Size, input, context, allow_quirks);
 
         let allow_anchor =
-            allow_anchor_functions == ParseAnchorFunctions::Yes && anchor_size_function_enabled();
+            allow_anchor_functions == ParseAnchorFunctions::Yes && anchor_positioning_enabled();
         match input
             .try_parse(|i| NonNegativeLengthPercentage::parse_quirky(context, i, allow_quirks))
         {
@@ -2076,7 +2076,7 @@ impl Parse for MaxSize {
 impl MaxSize {
     /// Lynx max-size grammar: a non-negative length or percentage, plus
     /// css-anchor-position-1's `anchor-size()` on its own or inside a math
-    /// function (lynx-vello's anchor-positioning subset). The unbounded
+    /// function (css-anchor-position-1 §5.1). The unbounded
     /// `None` variant remains the internal initial value only.
     #[cfg(feature = "lynx")]
     pub fn parse_lynx_max_size(
@@ -2117,7 +2117,7 @@ impl MaxSize {
             .try_parse(|i| NonNegativeLengthPercentage::parse_quirky(context, i, allow_quirks))
         {
             Ok(length) => return Ok(GenericMaxSize::LengthPercentage(length)),
-            Err(e) if !anchor_size_function_enabled() => return Err(e.into()),
+            Err(e) if !anchor_positioning_enabled() => return Err(e.into()),
             Err(_) => (),
         };
         if let Ok(length) = input.try_parse(|i| {
@@ -2158,7 +2158,7 @@ impl Margin {
         }
         match input.try_parse(|i| i.expect_ident_matching("auto")) {
             Ok(_) => return Ok(Self::Auto),
-            Err(e) if !anchor_size_function_enabled() => return Err(e.into()),
+            Err(e) if !anchor_positioning_enabled() => return Err(e.into()),
             Err(_) => (),
         };
         if let Ok(l) = input.try_parse(|i| {
