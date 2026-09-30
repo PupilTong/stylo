@@ -213,6 +213,16 @@ sub_properties = ["overscroll-behavior-x", "overscroll-behavior-y"]
 spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properties"
 kind = "two_properties"
 
+# lynx-vello's per-axis `scroll-capture-x`/`-y` (see longhands.toml), with
+# the `overscroll-behavior` shape: one value sets both axes, two are x then y.
+# A value is `auto` or `nearest` with an optional direction, parsed greedily,
+# so `nearest forward auto` is x `nearest forward`, y `auto`.
+[scroll-capture]
+lynx_only = true
+sub_properties = ["scroll-capture-x", "scroll-capture-y"]
+spec = "Nonstandard lynx-vello scroll chaining property"
+kind = "two_properties"
+
 [container]
 # Un-gecko'd for the `lynx` feature (css-contain-3 size query containers, so
 # that `cqw`/`cqh` are a standard implementation). It carries the same

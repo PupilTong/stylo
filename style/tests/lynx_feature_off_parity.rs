@@ -90,6 +90,10 @@ fn lynx_only_names_and_values_do_not_exist() {
         ("flow-tolerance", "0"),
         ("width", "1rpx"),
         ("overscroll-behavior-x", "contain-bounce"),
+        ("scroll-capture", "nearest"),
+        ("scroll-capture", "nearest forward auto"),
+        ("scroll-capture-x", "nearest"),
+        ("scroll-capture-y", "nearest forward"),
     ] {
         assert!(
             !parses(name, value),
