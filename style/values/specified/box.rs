@@ -2505,3 +2505,123 @@ impl Parse for PositionProperty {
         })
     }
 }
+
+/// A `scroll-capture-x` / `scroll-capture-y` value:
+/// `auto | nearest [ forward | backward ]?` (lynx-vello's own per-axis
+/// nested-scroll ordering switch; see its entry in `longhands.toml`). The
+/// computed value is the specified value.
+///
+/// Directions are relative to the scroll offset on the longhand's own axis: a
+/// delta on that axis is *forward* when it increases that offset (toward the
+/// end edge) and *backward* when it decreases it.
+#[cfg(feature = "lynx")]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    Hash,
+    MallocSizeOf,
+    PartialEq,
+    Serialize,
+    ToComputedValue,
+    ToResolvedValue,
+    ToShmem,
+)]
+#[repr(u8)]
+pub enum ScrollCapture {
+    /// `auto`: the ordinary inner-first chain.
+    Auto,
+    /// `nearest`: the nearest ancestor scroll container scrolls first, for a
+    /// delta in either direction.
+    Nearest,
+    /// `nearest forward`: the nearest ancestor first for a forward delta
+    /// only.
+    NearestForward,
+    /// `nearest backward`: the nearest ancestor first for a backward delta
+    /// only.
+    NearestBackward,
+}
+
+#[cfg(feature = "lynx")]
+impl ScrollCapture {
+    /// Whether the value is one of the `nearest` forms.
+    #[inline]
+    pub fn is_nearest(self) -> bool {
+        !matches!(self, Self::Auto)
+    }
+
+    /// Whether the nearest ancestor goes first for a delta that increases
+    /// the scroll offset (`nearest` or `nearest forward`).
+    #[inline]
+    pub fn covers_forward(self) -> bool {
+        matches!(self, Self::Nearest | Self::NearestForward)
+    }
+
+    /// Whether the nearest ancestor goes first for a delta that decreases
+    /// the scroll offset (`nearest` or `nearest backward`).
+    #[inline]
+    pub fn covers_backward(self) -> bool {
+        matches!(self, Self::Nearest | Self::NearestBackward)
+    }
+
+    /// Whether the nearest ancestor goes first for this signed delta:
+    /// positive is forward, negative is backward, and a zero or NaN delta is
+    /// never captured.
+    #[inline]
+    pub fn covers_delta(self, delta: f32) -> bool {
+        if delta > 0. {
+            self.covers_forward()
+        } else if delta < 0. {
+            self.covers_backward()
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl Parse for ScrollCapture {
+    fn parse(_: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
+        let nearest = try_match_ident_ignore_ascii_case! { input,
+            "auto" => false,
+            "nearest" => true,
+        };
+        if !nearest {
+            return Ok(Self::Auto);
+        }
+        let direction = input.try_parse(|input| -> Result<Self, ParseError> {
+            Ok(try_match_ident_ignore_ascii_case! { input,
+                "forward" => Self::NearestForward,
+                "backward" => Self::NearestBackward,
+            })
+        });
+        Ok(direction.unwrap_or(Self::Nearest))
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToCss for ScrollCapture {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        dest.write_str(match *self {
+            Self::Auto => "auto",
+            Self::Nearest => "nearest",
+            Self::NearestForward => "nearest forward",
+            Self::NearestBackward => "nearest backward",
+        })
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl SpecifiedValueInfo for ScrollCapture {
+    fn collect_completion_keywords(f: KeywordsCollectFn) {
+        f(&["auto", "nearest", "forward", "backward"]);
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToTyped for ScrollCapture {}
