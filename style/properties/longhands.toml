@@ -179,11 +179,21 @@ spec = "https://drafts.csswg.org/css-inline-3/#alignment-baseline"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
+# lynx-vello: css-anchor-position-1's `anchor-name` is a user-directed W3C
+# extension beyond Lynx's property index; the engine's `anchor-size()` subset
+# (see the `lynx` gates in values/specified/{calc,length,position}.rs) reads
+# the anchors it names. Ported to servo behind the experimental pref, the
+# -webkit-text-stroke*/offset-distance pattern, so the `lynx` feature
+# force-enables the seeded spelling while stock servo keeps it out of its
+# author surface. The servo default `servo_restyle_damage = "rebuild_box"`
+# relays out when an anchor name changes. The rest of the family
+# (`anchor-scope`, `position-anchor`, `position-area`, `position-try-*`,
+# `position-visibility`) stays gecko-only.
 [anchor-name]
 type = "AnchorName"
 initial = "computed::AnchorName::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-anchor-name"
 affects = ""

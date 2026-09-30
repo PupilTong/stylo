@@ -17,6 +17,13 @@
 align-content
 align-items
 align-self
+# css-anchor-position-1's `anchor-name`
+# (https://drafts.csswg.org/css-anchor-position-1/#name) is a user-directed
+# W3C extension beyond Lynx's property index. lynx-vello implements the
+# `anchor-name` + `anchor-size()` subset only: `anchor()`, `anchor-scope`,
+# `position-anchor`, `position-area`, `position-try-*`, `position-visibility`
+# and `@position-try` stay out.
+anchor-name
 animation-delay
 animation-direction
 animation-duration

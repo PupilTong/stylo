@@ -422,7 +422,10 @@ where
         LP::collect_completion_keywords(f);
         f(&["auto"]);
         if crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) {
-            f(&["anchor", "anchor-size"]);
+            f(&["anchor"]);
+        }
+        if crate::values::generics::length::anchor_size_function_enabled() {
+            f(&["anchor-size"]);
         }
     }
 }

@@ -14,7 +14,6 @@ use crate::selector_map::PrecomputedHashMap;
 use crate::str::HTML_SPACE_CHARACTERS;
 use crate::values::computed::LengthPercentage as ComputedLengthPercentage;
 use crate::values::computed::{Context, Percentage, ToComputedValue};
-use crate::values::generics::length::GenericAnchorSizeFunction;
 use crate::values::generics::position::PositionComponent as GenericPositionComponent;
 use crate::values::generics::position::PositionOrAuto as GenericPositionOrAuto;
 use crate::values::generics::position::ZIndex as GenericZIndex;
@@ -2175,7 +2174,7 @@ impl Inset {
         }
         match input.try_parse(|i| i.expect_ident_matching("auto")) {
             Ok(_) => return Ok(Self::Auto),
-            Err(e) if !crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) => {
+            Err(e) if !crate::values::generics::length::anchor_size_function_enabled() => {
                 return Err(e.into());
             },
             Err(_) => (),
@@ -2201,15 +2200,21 @@ impl Inset {
         allow_quirks: AllowQuirks,
     ) -> Result<Self, ParseError> {
         debug_assert!(
-            crate::pref!("layout.css.anchor-positioning.enabled", gecko = true),
+            crate::values::generics::length::anchor_size_function_enabled(),
             "How are we parsing with pref off?"
         );
+        // Under the `lynx` feature only `anchor-size()` is enabled:
+        // `AnchorFunction::parse` still checks the anchor-positioning pref and
+        // fails, so an `anchor()` inset (plain, as a fallback, or inside
+        // `calc()`) is a parse error rather than an `AnchorFunction`.
         if let Ok(inner) = input.try_parse(|i| AnchorFunction::parse(context, i)) {
             return Ok(Self::AnchorFunction(Box::new(inner)));
         }
-        if let Ok(inner) =
-            input.try_parse(|i| GenericAnchorSizeFunction::<Inset>::parse(context, i))
-        {
+        if let Ok(inner) = input.try_parse(|i| {
+            specified::length::parse_anchor_size_function(context, i, |i| {
+                LengthPercentage::parse(context, i).map(Self::LengthPercentage)
+            })
+        }) {
             return Ok(Self::AnchorSizeFunction(Box::new(inner)));
         }
         Ok(Self::AnchorContainingCalcFunction(input.try_parse(

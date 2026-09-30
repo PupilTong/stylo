@@ -290,3 +290,33 @@ fn tree_counting_functions_stay_pref_gated() {
     assert!(!parses("z-index", "sibling-count()"));
     assert!(parses("width", "calc(10px * 2)"));
 }
+
+#[test]
+fn anchor_positioning_subset_stays_pref_gated() {
+    // `anchor-name` is ported to servo for the `lynx` feature's benefit
+    // behind `layout.unimplemented`, and `anchor-size()` is enabled under the
+    // `lynx` feature; a stock Servo build keeps both behind their prefs
+    // (false), like the rest of css-anchor-position-1.
+    for (name, value) in [
+        ("anchor-name", "--a"),
+        ("anchor-name", "none"),
+        ("width", "anchor-size(--a width)"),
+        ("height", "calc(100% - anchor-size(--a height, 0px))"),
+        ("max-height", "anchor-size(height)"),
+        ("min-width", "anchor-size(--a)"),
+        ("top", "anchor-size(--a height, 0px)"),
+        ("left", "calc(anchor-size(--a width) * 2)"),
+        ("margin-top", "anchor-size(--a height)"),
+        ("top", "anchor(--a top)"),
+        ("top", "calc(anchor(--a top) + 1px)"),
+    ] {
+        assert!(
+            !parses(name, value),
+            "stock servo must keep `{name}: {value}` pref-gated"
+        );
+    }
+    assert!(PropertyId::parse_enabled_for_all_content("anchor-name").is_err());
+    assert!(parses("top", "calc(100% - 10px)"));
+    assert!(parses("margin-top", "auto"));
+    assert!(parses("max-height", "none"));
+}

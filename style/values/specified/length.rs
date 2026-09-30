@@ -17,8 +17,8 @@ use crate::typed_om::{NumericType, NumericValue, ToTyped, TypedValue, UnitValue}
 use crate::values::computed::{self, CSSPixelLength, Context, FontSize};
 use crate::values::generics::length as generics;
 use crate::values::generics::length::{
-    GenericAnchorSizeFunction, GenericLengthOrNumber, GenericLengthPercentageOrNormal,
-    GenericMargin, GenericMaxSize, GenericSize,
+    anchor_size_function_enabled, GenericAnchorSizeFunction, GenericLengthOrNumber,
+    GenericLengthPercentageOrNormal, GenericMargin, GenericMaxSize, GenericSize,
 };
 use crate::values::generics::NonNegative;
 use crate::values::specified::calc::{
@@ -1919,6 +1919,34 @@ enum ParseAnchorFunctions {
     No,
 }
 
+/// Parses a plain (not math-function) `anchor-size()` in a property whose
+/// value type is `T`.
+///
+/// Under the `lynx` feature the fallback is css-anchor-position-1 §5.1's
+/// `<length-percentage>` only, parsed by `lynx_fallback`: the property's other
+/// keywords (`auto`, `none`, `min-content`, ...) and `anchor()` are not
+/// fallbacks. Other builds keep upstream's fallback, a full `T`.
+pub(crate) fn parse_anchor_size_function<T, F>(
+    context: &ParserContext,
+    input: &mut Parser,
+    lynx_fallback: F,
+) -> Result<GenericAnchorSizeFunction<T>, ParseError>
+where
+    T: Parse,
+    F: FnOnce(&mut Parser) -> Result<T, ParseError>,
+{
+    #[cfg(feature = "lynx")]
+    {
+        input.expect_function_matching("anchor-size")?;
+        GenericAnchorSizeFunction::parse_inner(context, input, lynx_fallback)
+    }
+    #[cfg(not(feature = "lynx"))]
+    {
+        let _ = lynx_fallback;
+        GenericAnchorSizeFunction::parse(context, input)
+    }
+}
+
 impl Size {
     /// Parses, with quirks.
     pub fn parse_quirky(
@@ -1965,8 +1993,8 @@ impl Size {
                                "auto" => Auto);
         parse_fit_content_function!(Size, input, context, allow_quirks);
 
-        let allow_anchor = allow_anchor_functions == ParseAnchorFunctions::Yes
-            && crate::pref!("layout.css.anchor-positioning.enabled", gecko = true);
+        let allow_anchor =
+            allow_anchor_functions == ParseAnchorFunctions::Yes && anchor_size_function_enabled();
         match input
             .try_parse(|i| NonNegativeLengthPercentage::parse_quirky(context, i, allow_quirks))
         {
@@ -1984,7 +2012,9 @@ impl Size {
             return Ok(GenericSize::AnchorContainingCalcFunction(length));
         }
         Ok(Self::AnchorSizeFunction(Box::new(
-            GenericAnchorSizeFunction::parse(context, input)?,
+            parse_anchor_size_function(context, input, |i| {
+                NonNegativeLengthPercentage::parse(context, i).map(Self::LengthPercentage)
+            })?,
         )))
     }
 
@@ -2044,14 +2074,32 @@ impl Parse for MaxSize {
 }
 
 impl MaxSize {
-    /// Lynx max-size grammar: a non-negative length or percentage. The
-    /// unbounded `None` variant remains the internal initial value only.
+    /// Lynx max-size grammar: a non-negative length or percentage, plus
+    /// css-anchor-position-1's `anchor-size()` on its own or inside a math
+    /// function (lynx-vello's anchor-positioning subset). The unbounded
+    /// `None` variant remains the internal initial value only.
     #[cfg(feature = "lynx")]
     pub fn parse_lynx_max_size(
         context: &ParserContext,
         input: &mut Parser,
     ) -> Result<Self, ParseError> {
-        NonNegativeLengthPercentage::parse(context, input).map(Self::LengthPercentage)
+        if let Ok(length) = input.try_parse(|i| NonNegativeLengthPercentage::parse(context, i)) {
+            return Ok(Self::LengthPercentage(length));
+        }
+        if let Ok(length) = input.try_parse(|i| {
+            NonNegativeLengthPercentage::parse_non_negative_with_anchor_size(
+                context,
+                i,
+                AllowQuirks::No,
+            )
+        }) {
+            return Ok(GenericMaxSize::AnchorContainingCalcFunction(length));
+        }
+        Ok(Self::AnchorSizeFunction(Box::new(
+            parse_anchor_size_function(context, input, |i| {
+                NonNegativeLengthPercentage::parse(context, i).map(Self::LengthPercentage)
+            })?,
+        )))
     }
 
     /// Parses, with quirks.
@@ -2069,9 +2117,7 @@ impl MaxSize {
             .try_parse(|i| NonNegativeLengthPercentage::parse_quirky(context, i, allow_quirks))
         {
             Ok(length) => return Ok(GenericMaxSize::LengthPercentage(length)),
-            Err(e) if !crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) => {
-                return Err(e.into())
-            },
+            Err(e) if !anchor_size_function_enabled() => return Err(e.into()),
             Err(_) => (),
         };
         if let Ok(length) = input.try_parse(|i| {
@@ -2084,7 +2130,9 @@ impl MaxSize {
             return Ok(GenericMaxSize::AnchorContainingCalcFunction(length));
         }
         Ok(Self::AnchorSizeFunction(Box::new(
-            GenericAnchorSizeFunction::parse(context, input)?,
+            parse_anchor_size_function(context, input, |i| {
+                NonNegativeLengthPercentage::parse(context, i).map(Self::LengthPercentage)
+            })?,
         )))
     }
 }
@@ -2110,9 +2158,7 @@ impl Margin {
         }
         match input.try_parse(|i| i.expect_ident_matching("auto")) {
             Ok(_) => return Ok(Self::Auto),
-            Err(e) if !crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) => {
-                return Err(e.into())
-            },
+            Err(e) if !anchor_size_function_enabled() => return Err(e.into()),
             Err(_) => (),
         };
         if let Ok(l) = input.try_parse(|i| {
@@ -2120,7 +2166,9 @@ impl Margin {
         }) {
             return Ok(Self::AnchorContainingCalcFunction(l));
         }
-        let inner = GenericAnchorSizeFunction::<Margin>::parse(context, input)?;
+        let inner = parse_anchor_size_function(context, input, |i| {
+            LengthPercentage::parse(context, i).map(Self::LengthPercentage)
+        })?;
         Ok(Self::AnchorSizeFunction(Box::new(inner)))
     }
 }
