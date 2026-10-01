@@ -954,6 +954,116 @@ fn anchor_size_parses_and_round_trips_in_every_listed_property() {
 }
 
 #[test]
+fn anchor_size_fallbacks_nest_anchor_size_per_wpt() {
+    // WPT anchor-size-parse-valid.html: the `<length-percentage>` fallback
+    // may itself use anchor-size(), plain or in a math function, in every
+    // property that accepts anchor-size().
+    let sizes = [
+        "width",
+        "height",
+        "block",
+        "inline",
+        "self-block",
+        "self-inline",
+    ];
+    let fallbacks = [
+        None,
+        Some("1px"),
+        Some("50%"),
+        Some("calc(50% + 1px)"),
+        Some("anchor-size(block)"),
+        Some("anchor-size(--bar block)"),
+        Some("anchor-size(--bar block, anchor-size(--baz inline))"),
+    ];
+    for &property in ANCHOR_SIZE_PROPERTIES {
+        for name in ["", "--foo"] {
+            for size in sizes {
+                for fallback in fallbacks {
+                    let tail = fallback.map_or(String::new(), |f| format!(", {f}"));
+                    let value = if name.is_empty() {
+                        format!("anchor-size({size}{tail})")
+                    } else {
+                        format!("anchor-size({name} {size}{tail})")
+                    };
+                    assert_valid(property, &value, &value);
+                    if !name.is_empty() {
+                        assert_valid(
+                            property,
+                            &format!("anchor-size({size} {name}{tail})"),
+                            &value,
+                        );
+                    }
+                }
+            }
+        }
+        for (value, expected) in [
+            (
+                "anchor-size(--foo width, calc(0.5 * anchor-size(--bar height)))",
+                "anchor-size(--foo width, calc(0.5 * anchor-size(--bar height)))",
+            ),
+            (
+                "anchor-size(--a width, anchor-size(--b width, 10px))",
+                "anchor-size(--a width, anchor-size(--b width, 10px))",
+            ),
+            (
+                "anchor-size(--a, anchor-size(--b, anchor-size(--c, 1px)))",
+                "anchor-size(--a, anchor-size(--b, anchor-size(--c, 1px)))",
+            ),
+            (
+                "anchor-size(--a, min(10px, anchor-size(--b height)))",
+                "anchor-size(--a, min(10px, anchor-size(--b height)))",
+            ),
+            (
+                "calc(anchor-size(--a width, anchor-size(--b width)) + 1px)",
+                "calc(anchor-size(--a width, anchor-size(--b width)) + 1px)",
+            ),
+        ] {
+            assert_valid(property, value, expected);
+        }
+        // The nested function's own fallback keeps the same grammar.
+        for value in [
+            "anchor-size(--a, anchor-size(--b, auto))",
+            "anchor-size(--a, anchor-size(--b, none))",
+            "anchor-size(--a, anchor-size(b))",
+            "anchor-size(--a, anchor-size(--b top))",
+            "anchor-size(--a, anchor-size(--b, anchor(--c top)))",
+            "anchor-size(--a, calc(anchor(--c top)))",
+        ] {
+            assert_rejects(property, value);
+        }
+    }
+}
+
+#[test]
+fn nested_anchor_size_fallbacks_compute_to_themselves() {
+    for (name, value) in [
+        (
+            "width",
+            "anchor-size(--a width, anchor-size(--b width, 10px))",
+        ),
+        ("max-height", "anchor-size(--a, anchor-size(--b height))"),
+        (
+            "min-width",
+            "anchor-size(--a, calc(0.5 * anchor-size(--b width)))",
+        ),
+        (
+            "margin-left",
+            "anchor-size(--a width, anchor-size(--b width))",
+        ),
+        (
+            "top",
+            "anchor-size(--a height, anchor-size(--b height, 5%))",
+        ),
+    ] {
+        assert_eq!(
+            computed("", &format!("position: absolute; {name}: {value}"), name),
+            value,
+            "`{name}: {value}`"
+        );
+    }
+}
+
+#[test]
 fn anchor_size_keeps_the_spec_grammar() {
     for &name in ANCHOR_SIZE_PROPERTIES {
         for value in [

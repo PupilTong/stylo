@@ -2360,9 +2360,20 @@ impl Inset {
             return Ok(Self::AnchorFunction(Box::new(inner)));
         }
         if let Ok(inner) = input.try_parse(|i| {
-            specified::length::parse_anchor_size_function(context, i, |i| {
-                LengthPercentage::parse(context, i).map(Self::LengthPercentage)
-            })
+            specified::length::parse_anchor_size_function(
+                context,
+                i,
+                |i| LengthPercentage::parse(context, i).map(Self::LengthPercentage),
+                |i| {
+                    LengthPercentage::parse_quirky_with_anchor_size_function(
+                        context,
+                        i,
+                        AllowQuirks::No,
+                    )
+                    .map(Self::AnchorContainingCalcFunction)
+                },
+                |f| Self::AnchorSizeFunction(Box::new(f)),
+            )
         }) {
             return Ok(Self::AnchorSizeFunction(Box::new(inner)));
         }
