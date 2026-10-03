@@ -1007,6 +1007,17 @@ class PropertiesData(object):
             StyleStruct("UI", inherited=False, gecko_name="UIReset"),
             StyleStruct("XUL", inherited=False),
         ]
+        if self.lynx:
+            # css-anchor-position-1's element-level properties (anchor-name,
+            # anchor-scope, position-anchor, position-try-fallbacks,
+            # position-try-order, position-visibility) live in their own
+            # reset struct under the `lynx` feature (`lynx_struct = "anchor"`
+            # in longhands.toml). In `Box` / `Position` they grew those hot
+            # structs (Box 312 -> 344 bytes, Position 464 -> 504) and moved
+            # the fields layout reads per box. `position-area` stays in
+            # `Position`, where the style adjuster sets it. Gecko has no
+            # such struct, so it exists only in this configuration.
+            self.style_structs.append(StyleStruct("Anchor", inherited=False))
 
         longhands_toml = toml.loads(open(os.path.join(os.path.dirname(__file__), "longhands.toml")).read())
         shorthands_toml = toml.loads(open(os.path.join(os.path.dirname(__file__), "shorthands.toml")).read())
