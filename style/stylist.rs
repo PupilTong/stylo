@@ -14,7 +14,7 @@ use crate::custom_properties::{parse_name, SpecifiedValue};
 use crate::derives::*;
 use crate::device::Device;
 use crate::dom::TElement;
-#[cfg(feature = "gecko")]
+#[cfg(any(feature = "gecko", feature = "lynx"))]
 use crate::dom::TShadowRoot;
 #[cfg(feature = "gecko")]
 use crate::gecko_bindings::structs::{ServoStyleSetSizes, StyleRuleInclusion};
@@ -26,7 +26,7 @@ use crate::invalidation::media_queries::{
     EffectiveMediaQueryResults, MediaListKey, ToMediaListKey,
 };
 use crate::invalidation::stylesheets::{RuleChangeKind, StylesheetInvalidationSet};
-#[cfg(feature = "gecko")]
+#[cfg(any(feature = "gecko", feature = "lynx"))]
 use crate::properties::StyleBuilder;
 use crate::properties::{
     self, AnimationDeclarations, CascadeMode, ComputedValues, FirstLineReparenting,
@@ -68,7 +68,7 @@ use crate::stylesheets::{
     ViewTransitionRule,
 };
 use crate::stylesheets::{CustomMediaEvaluator, CustomMediaMap};
-#[cfg(feature = "gecko")]
+#[cfg(any(feature = "gecko", feature = "lynx"))]
 use crate::values::specified::position::PositionTryFallbacksItem;
 use crate::values::specified::position::PositionTryFallbacksTryTactic;
 use crate::values::{computed, AtomIdent, Parser, SourceLocation};
@@ -1382,7 +1382,18 @@ impl Stylist {
     }
 
     /// Computes a fallback style lazily given the current and parent styles, and name.
-    #[cfg(feature = "gecko")]
+    ///
+    /// `style` is the element's base style (its position fallback base
+    /// styles, css-anchor-position-1 §6.5), `scope` the cascade level the
+    /// `position-try-fallbacks` declaration came from (its tree scope decides
+    /// which `@position-try` rules its `<dashed-ident>`s see), and
+    /// `fallback_item` one entry of that property. Returns the option's style:
+    /// the named `@position-try` rule's declarations in the Position Fallback
+    /// Origin, then the item's try tactic (§6.5.2); or, for a
+    /// `<position-area>` item, the base style with only `position-area`
+    /// replaced. `None` when the item names an unknown `@position-try` rule
+    /// (§6.1: the entry has no effect).
+    #[cfg(any(feature = "gecko", feature = "lynx"))]
     pub fn resolve_position_try<E>(
         &self,
         style: &ComputedValues,
@@ -1838,7 +1849,7 @@ impl Stylist {
 
     /// Returns the registered `@position-try-rule` animation for the specified name.
     #[inline]
-    #[cfg(feature = "gecko")]
+    #[cfg(any(feature = "gecko", feature = "lynx"))]
     fn lookup_position_try<'a, E>(
         &'a self,
         name: &Atom,

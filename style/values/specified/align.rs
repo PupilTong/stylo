@@ -360,6 +360,7 @@ impl SelfAlignment {
                 | AlignFlags::CENTER
                 | AlignFlags::START
                 | AlignFlags::END
+                | AlignFlags::ANCHOR_CENTER
         );
 
         #[cfg(not(feature = "lynx"))]
@@ -396,6 +397,10 @@ impl SelfAlignment {
                 "flex-start" if axis == AxisDirection::Block => AlignFlags::FLEX_START,
                 "flex-end" if axis == AxisDirection::Block => AlignFlags::FLEX_END,
                 "baseline" if axis == AxisDirection::Block => AlignFlags::BASELINE,
+                // css-anchor-position-1 §4.2, on `justify-self` /
+                // `align-self` (and so `place-self`) only: the `*-items`
+                // properties have their own parser.
+                "anchor-center" => AlignFlags::ANCHOR_CENTER,
             };
             return Ok(SelfAlignment(value));
         }
@@ -485,6 +490,7 @@ impl SpecifiedValueInfo for SelfAlignment {
             "flex-start",
             "flex-end",
             "baseline",
+            "anchor-center",
         ]);
 
         #[cfg(not(feature = "lynx"))]
