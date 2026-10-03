@@ -236,12 +236,15 @@ relative-top-of
 right
 row-gap
 grid-row-gap
-# `scroll-capture` is a lynx-vello-only property with no W3C or Lynx
-# counterpart: `nearest` lets a gesture on this scroll container scroll the
-# nearest ancestor scroll container first, and this container only once that
-# ancestor cannot move. The default `auto` keeps the ordinary inner-first
-# chain.
+# `scroll-capture` (shorthand) and `scroll-capture-x`/`-y` are lynx-vello-only
+# properties with no W3C or Lynx counterpart: on an axis, `nearest` lets a
+# gesture on this scroll container scroll the nearest ancestor scroll
+# container first, and this container only once that ancestor cannot move;
+# `nearest forward` / `nearest backward` do so for one direction of that
+# axis's delta only. The default `auto` keeps the ordinary inner-first chain.
 scroll-capture
+scroll-capture-x
+scroll-capture-y
 # css-scroll-snap-1 (https://drafts.csswg.org/css-scroll-snap-1/) is a
 # user-directed W3C extension beyond Lynx's property index: the container's
 # `scroll-snap-type` and `scroll-padding`, the snap areas' `scroll-snap-align`,
