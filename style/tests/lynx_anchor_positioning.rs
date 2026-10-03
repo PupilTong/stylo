@@ -1520,8 +1520,9 @@ fn position_try_shorthand_per_wpt() {
 
 // ---------------------------------------------------------------------------
 // §6.6 `position-visibility` (WPT parsing/position-visibility-*.html, in the
-// Editor's Draft spelling: `anchors-valid` / `anchors-visible` are legacy
-// aliases of `anchor-valid` / `anchor-visible` and serialize as those).
+// Editor's Draft spelling `anchor-valid` / `anchor-visible`; the legacy
+// `anchors-valid` / `anchors-visible` aliases WPT still uses are not
+// accepted).
 
 #[test]
 fn position_visibility_parses_per_the_editors_draft() {
@@ -1564,15 +1565,8 @@ fn position_visibility_parses_per_the_editors_draft() {
             "no-overflow anchor-visible anchor-valid",
             "anchor-valid anchor-visible no-overflow",
         ),
-        // The legacy aliases.
-        ("anchors-valid", "anchor-valid"),
-        ("anchors-visible", "anchor-visible"),
-        (
-            "anchors-visible anchors-valid",
-            "anchor-valid anchor-visible",
-        ),
-        ("no-overflow anchors-valid", "anchor-valid no-overflow"),
-        ("ANCHORS-VISIBLE", "anchor-visible"),
+        // Keywords are ASCII case-insensitive.
+        ("ANCHOR-VISIBLE", "anchor-visible"),
     ] {
         assert_valid(p, value, expected);
         assert_eq!(
@@ -1593,10 +1587,15 @@ fn position_visibility_parses_per_the_editors_draft() {
         "no-overflow foobar",
         "anchor-valid no-overflow foobar",
         "anchor-valid no-overflow anchor-valid anchor-visible",
-        // An alias and its current spelling are the same flag.
-        "anchor-valid anchors-valid",
-        "anchors-visible anchor-visible",
         "",
+        // The legacy spellings are not aliases here.
+        "anchors-valid",
+        "anchors-visible",
+        "ANCHORS-VISIBLE",
+        "anchors-visible anchors-valid",
+        "no-overflow anchors-valid",
+        "anchor-valid anchors-visible",
+        "anchors-valid anchor-visible no-overflow",
     ] {
         assert_rejects(p, value);
     }

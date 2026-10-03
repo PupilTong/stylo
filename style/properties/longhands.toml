@@ -2033,9 +2033,13 @@ animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#position-try-order-property"
 affects = "layout"
 
+# Under the `lynx` feature only the Editor's Draft spelling parses
+# (`always | [ anchor-valid || anchor-visible || no-overflow ]`); the legacy
+# `anchors-valid` / `anchors-visible` aliases are rejected.
 [position-visibility]
 type = "PositionVisibility"
 initial = "computed::PositionVisibility::ANCHORS_VISIBLE"
+lynx_initial = "computed::PositionVisibility::ANCHOR_VISIBLE"
 struct = "position"
 servo_pref = "layout.unimplemented"
 animation_type = "discrete"
