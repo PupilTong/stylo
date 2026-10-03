@@ -837,6 +837,7 @@ impl PositionTryOrder {
     Debug,
     Eq,
     MallocSizeOf,
+    Parse,
     PartialEq,
     Serialize,
     SpecifiedValueInfo,
@@ -846,7 +847,6 @@ impl PositionTryOrder {
     ToShmem,
     ToTyped,
 )]
-#[cfg_attr(not(feature = "lynx"), derive(Parse))]
 #[cfg_attr(
     not(feature = "lynx"),
     css(bitflags(single = "always", mixed = "anchors-valid,anchors-visible,no-overflow"))
@@ -859,9 +859,10 @@ impl PositionTryOrder {
 /// Specified keyword values for the position-visibility property.
 ///
 /// Under the `lynx` feature the grammar is the Editor's Draft's
-/// `always | [ anchor-valid || anchor-visible || no-overflow ]`: the legacy
-/// `anchors-valid` / `anchors-visible` spellings parse as aliases and
-/// serialize in the current spelling.
+/// `always | [ anchor-valid || anchor-visible || no-overflow ]` only: the
+/// legacy `anchors-valid` / `anchors-visible` spellings (optional aliases in
+/// the spec) are parse errors. `ANCHORS_VALID` / `ANCHORS_VISIBLE` are the
+/// upstream constant names of the same flags.
 pub struct PositionVisibility(u8);
 bitflags! {
     impl PositionVisibility: u8 {
@@ -884,35 +885,6 @@ impl PositionVisibility {
     /// `anchor-visible` (the initial value): hide the box when its default
     /// anchor box is invisible or clipped by intervening boxes.
     pub const ANCHOR_VISIBLE: Self = Self::ANCHORS_VISIBLE;
-}
-
-#[cfg(feature = "lynx")]
-impl Parse for PositionVisibility {
-    fn parse(_: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
-        if input
-            .try_parse(|i| i.expect_ident_matching("always"))
-            .is_ok()
-        {
-            return Ok(Self::ALWAYS);
-        }
-        let mut result = Self::empty();
-        while let Ok(flag) = input.try_parse(|i| {
-            Ok::<_, ParseError>(try_match_ident_ignore_ascii_case! { i,
-                "anchor-valid" | "anchors-valid" => Self::ANCHOR_VALID,
-                "anchor-visible" | "anchors-visible" => Self::ANCHOR_VISIBLE,
-                "no-overflow" => Self::NO_OVERFLOW,
-            })
-        }) {
-            if result.intersects(flag) {
-                return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
-            }
-            result.insert(flag);
-        }
-        if result.is_empty() {
-            return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
-        }
-        Ok(result)
-    }
 }
 
 impl Default for PositionVisibility {
