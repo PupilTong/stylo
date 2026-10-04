@@ -15,7 +15,6 @@ use crate::selector_map::PrecomputedHashMap;
 use crate::str::HTML_SPACE_CHARACTERS;
 use crate::values::computed::LengthPercentage as ComputedLengthPercentage;
 use crate::values::computed::{Context, Percentage, ToComputedValue};
-use crate::values::generics::length::GenericAnchorSizeFunction;
 use crate::values::generics::position::PositionComponent as GenericPositionComponent;
 use crate::values::generics::position::PositionOrAuto as GenericPositionOrAuto;
 use crate::values::generics::position::ZIndex as GenericZIndex;
@@ -527,12 +526,19 @@ pub enum PositionAnchorKeyword {
     Auto,
     /// `<dashed-ident>`
     Ident(DashedIdent),
+    /// `match-parent`: the parent's default anchor element, if that is an
+    /// acceptable anchor element for this box (css-anchor-position-1 §2.4,
+    /// the Editor's Draft). Resolving it is the layout engine's job.
+    #[cfg(feature = "lynx")]
+    MatchParent,
 }
 
 impl IsTreeScoped for PositionAnchorKeyword {
     fn is_tree_scoped(&self) -> bool {
         match *self {
             Self::Normal | Self::None | Self::Auto => false,
+            #[cfg(feature = "lynx")]
+            Self::MatchParent => false,
             Self::Ident(_) => true,
         }
     }
@@ -839,9 +845,22 @@ impl PositionTryOrder {
     ToShmem,
     ToTyped,
 )]
-#[css(bitflags(single = "always", mixed = "anchors-valid,anchors-visible,no-overflow"))]
+#[cfg_attr(
+    not(feature = "lynx"),
+    css(bitflags(single = "always", mixed = "anchors-valid,anchors-visible,no-overflow"))
+)]
+#[cfg_attr(
+    feature = "lynx",
+    css(bitflags(single = "always", mixed = "anchor-valid,anchor-visible,no-overflow"))
+)]
 #[repr(C)]
 /// Specified keyword values for the position-visibility property.
+///
+/// Under the `lynx` feature the grammar is the Editor's Draft's
+/// `always | [ anchor-valid || anchor-visible || no-overflow ]` only: the
+/// legacy `anchors-valid` / `anchors-visible` spellings (optional aliases in
+/// the spec) are parse errors. `ANCHORS_VALID` / `ANCHORS_VISIBLE` are the
+/// upstream constant names of the same flags.
 pub struct PositionVisibility(u8);
 bitflags! {
     impl PositionVisibility: u8 {
@@ -856,7 +875,25 @@ bitflags! {
     }
 }
 
+#[cfg(feature = "lynx")]
+impl PositionVisibility {
+    /// `anchor-valid`: hide the box when it references its default anchor
+    /// box but that box cannot be resolved.
+    pub const ANCHOR_VALID: Self = Self::ANCHORS_VALID;
+    /// `anchor-visible` (the initial value): hide the box when its default
+    /// anchor box is invisible or clipped by intervening boxes.
+    pub const ANCHOR_VISIBLE: Self = Self::ANCHORS_VISIBLE;
+}
+
 impl Default for PositionVisibility {
+    /// The initial value: `anchor-visible` under the `lynx` feature, which
+    /// matches the property's declared initial value.
+    #[cfg(feature = "lynx")]
+    fn default() -> Self {
+        Self::ANCHOR_VISIBLE
+    }
+
+    #[cfg(not(feature = "lynx"))]
     fn default() -> Self {
         Self::ALWAYS
     }
@@ -864,7 +901,8 @@ impl Default for PositionVisibility {
 
 impl PositionVisibility {
     #[inline]
-    /// Returns the initial value of position-visibility
+    /// Returns the `always` value (the property's initial value is
+    /// `anchor-visible`).
     pub fn always() -> Self {
         Self::ALWAYS
     }
@@ -1462,6 +1500,7 @@ impl PositionArea {
         self
     }
 
+    #[cfg(not(feature = "lynx"))]
     fn flip_logical_axis(&mut self, wm: WritingMode, axis: LogicalAxis) {
         if self.first.axis().to_logical(wm, LogicalAxis::Block) == Some(axis) {
             self.first = self.first.flip_track();
@@ -1470,7 +1509,61 @@ impl PositionArea {
         }
     }
 
+    /// The logical axis each keyword of an explicit pair selects in: an
+    /// explicit axis resolves against `wm`; an axis-less keyword (`center`,
+    /// `span-all`) takes the axis its partner leaves; otherwise (`start end`,
+    /// `center start`) the first keyword is the block axis and the second the
+    /// inline axis.
+    #[cfg(feature = "lynx")]
+    fn logical_axes(&self, wm: WritingMode) -> (LogicalAxis, LogicalAxis) {
+        let explicit = |k: PositionAreaKeyword| match k.axis() {
+            PositionAreaAxis::Inferred | PositionAreaAxis::None => None,
+            axis => axis.to_logical(wm, LogicalAxis::Block),
+        };
+        let other = |axis: LogicalAxis| match axis {
+            LogicalAxis::Block => LogicalAxis::Inline,
+            LogicalAxis::Inline => LogicalAxis::Block,
+        };
+        match (explicit(self.first), explicit(self.second)) {
+            (Some(first), Some(second)) => (first, second),
+            (Some(first), None) => (first, other(first)),
+            (None, Some(second)) => (other(second), second),
+            (None, None) => (LogicalAxis::Block, LogicalAxis::Inline),
+        }
+    }
+
+    /// Flips the track of the keyword that selects in `axis` (§6.5.2).
+    #[cfg(feature = "lynx")]
+    fn flip_logical_axis(&mut self, wm: WritingMode, axis: LogicalAxis) {
+        let (first, _) = self.logical_axes(wm);
+        if first == axis {
+            self.first = self.first.flip_track();
+        } else {
+            self.second = self.second.flip_track();
+        }
+    }
+
+    #[cfg(not(feature = "lynx"))]
     fn flip_start(&mut self) {
+        self.first = self.first.with_axis(self.first.axis().flip());
+        self.second = self.second.with_axis(self.second.axis().flip());
+    }
+
+    /// Swaps the block and inline selections (§6.5.2 `flip-start`): an
+    /// explicit axis becomes the other one; a pair whose axes come from
+    /// their position (`start end`, `center start`) swaps positions.
+    #[cfg(feature = "lynx")]
+    fn flip_start(&mut self) {
+        let positional = |k: PositionAreaKeyword| {
+            matches!(
+                k.axis(),
+                PositionAreaAxis::Inferred | PositionAreaAxis::None
+            )
+        };
+        if positional(self.first) && positional(self.second) {
+            std::mem::swap(&mut self.first, &mut self.second);
+            return;
+        }
         self.first = self.first.with_axis(self.first.axis().flip());
         self.second = self.second.with_axis(self.second.axis().flip());
     }
@@ -1485,6 +1578,8 @@ impl PositionArea {
         let axis_to_flip = match tactic {
             PositionTryFallbacksTryTacticKeyword::FlipStart => {
                 self.flip_start();
+                #[cfg(feature = "lynx")]
+                self.simplify();
                 return self;
             },
             PositionTryFallbacksTryTacticKeyword::FlipBlock => LogicalAxis::Block,
@@ -1505,7 +1600,36 @@ impl PositionArea {
             },
         };
         self.flip_logical_axis(wm, axis_to_flip);
+        #[cfg(feature = "lynx")]
+        self.simplify();
         self
+    }
+
+    /// Brings a keyword pair back to the form parsing produces (implied
+    /// `span-all` dropped, a repeated keyword collapsed, canonical order), so
+    /// a value a try tactic produced computes and serializes like the same
+    /// value written by the author (`top left` flipped by `flip-start` is
+    /// `left top`, not `top left`).
+    #[cfg(feature = "lynx")]
+    fn simplify(&mut self) {
+        if self.second.is_none() {
+            return;
+        }
+        if matches!(
+            self.get_type(),
+            PositionAreaType::Physical | PositionAreaType::Logical | PositionAreaType::SelfLogical
+        ) {
+            if self.second == PositionAreaKeyword::SpanAll {
+                self.second = PositionAreaKeyword::None;
+            } else if self.first == PositionAreaKeyword::SpanAll {
+                self.first = self.second;
+                self.second = PositionAreaKeyword::None;
+            }
+        }
+        if self.first == self.second {
+            self.second = PositionAreaKeyword::None;
+        }
+        self.canonicalize_order();
     }
 }
 
@@ -2039,7 +2163,7 @@ impl Inset {
         }
         match input.try_parse(|i| i.expect_ident_matching("auto")) {
             Ok(_) => return Ok(Self::Auto),
-            Err(e) if !crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) => {
+            Err(e) if !crate::values::generics::length::anchor_positioning_enabled() => {
                 return Err(e.into());
             },
             Err(_) => (),
@@ -2065,15 +2189,28 @@ impl Inset {
         allow_quirks: AllowQuirks,
     ) -> Result<Self, ParseError> {
         debug_assert!(
-            crate::pref!("layout.css.anchor-positioning.enabled", gecko = true),
+            crate::values::generics::length::anchor_positioning_enabled(),
             "How are we parsing with pref off?"
         );
         if let Ok(inner) = input.try_parse(|i| AnchorFunction::parse(context, i)) {
             return Ok(Self::AnchorFunction(Box::new(inner)));
         }
-        if let Ok(inner) =
-            input.try_parse(|i| GenericAnchorSizeFunction::<Inset>::parse(context, i))
-        {
+        if let Ok(inner) = input.try_parse(|i| {
+            specified::length::parse_anchor_size_function(
+                context,
+                i,
+                |i| LengthPercentage::parse(context, i).map(Self::LengthPercentage),
+                |i| {
+                    LengthPercentage::parse_quirky_with_anchor_size_function(
+                        context,
+                        i,
+                        AllowQuirks::No,
+                    )
+                    .map(Self::AnchorContainingCalcFunction)
+                },
+                |f| Self::AnchorSizeFunction(Box::new(f)),
+            )
+        }) {
             return Ok(Self::AnchorSizeFunction(Box::new(inner)));
         }
         Ok(Self::AnchorContainingCalcFunction(input.try_parse(
@@ -2093,7 +2230,7 @@ pub type AnchorFunction = GenericAnchorFunction<specified::Percentage, Inset>;
 
 impl Parse for AnchorFunction {
     fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
-        if !crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) {
+        if !crate::values::generics::length::anchor_positioning_enabled() {
             return Err(ParseError::custom(StyleParseErrorKind::UnspecifiedError));
         }
         input.expect_function_matching("anchor")?;

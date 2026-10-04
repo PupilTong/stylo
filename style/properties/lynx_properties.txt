@@ -17,6 +17,16 @@
 align-content
 align-items
 align-self
+# css-anchor-position-1 (https://drafts.csswg.org/css-anchor-position-1/) is
+# a user-directed W3C extension beyond Lynx's property index, implemented in
+# full in its current spellings: `anchor-name`, `anchor-scope`,
+# `position-anchor`, `position-area`, `position-try` (+ its longhands
+# `position-try-fallbacks` / `position-try-order`) and `position-visibility`
+# below, plus `anchor()` / `anchor-size()`, alignment's `anchor-center` and the
+# `@position-try` rule. The withdrawn spellings (`inset-area`,
+# `position-try-options`, `anchor-default`, ...) stay out.
+anchor-name
+anchor-scope
 animation-delay
 animation-direction
 animation-duration
@@ -202,6 +212,12 @@ padding
 perspective
 pointer-events
 position
+position-anchor
+position-area
+position-try
+position-try-fallbacks
+position-try-order
+position-visibility
 relative-align-bottom
 relative-align-inline-end
 relative-align-inline-start

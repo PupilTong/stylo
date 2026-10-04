@@ -874,7 +874,9 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         debug_assert!(!tactic.is_empty());
         // TODO: This is supposed to use the containing block's WM (bug 1995256).
         let wm = self.style.writing_mode;
-        // TODO: Flip inset / margin / sizes percentages and anchor lookup sides as necessary.
+        // The swapped values' anchor() sides and percentages and anchor-size() axes are rewritten
+        // by their `TryTacticAdjustment` impls as they are swapped (swap_insets / swap_margins /
+        // swap_sizes below).
         for tactic in tactic.iter() {
             use PositionTryFallbacksTryTacticKeyword::*;
             match tactic {
@@ -898,12 +900,10 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
                     self.flip_start();
                 },
             }
-            #[cfg(not(feature = "lynx"))]
             self.apply_position_area_tactic(*tactic);
         }
     }
 
-    #[cfg(not(feature = "lynx"))]
     fn apply_position_area_tactic(&mut self, tactic: PositionTryFallbacksTryTacticKeyword) {
         let pos = self.style.get_position();
         let old = *pos.get_position_area();
