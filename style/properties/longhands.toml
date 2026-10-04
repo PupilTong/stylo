@@ -179,11 +179,19 @@ spec = "https://drafts.csswg.org/css-inline-3/#alignment-baseline"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
+# lynx-vello: css-anchor-position-1 is a user-directed W3C extension beyond
+# Lynx's property index. Its properties (`anchor-name`, `anchor-scope`,
+# `position-anchor`, `position-area`, `position-try-fallbacks`,
+# `position-try-order`, `position-visibility`) are ported to servo behind the
+# experimental pref, the -webkit-text-stroke*/offset-distance pattern, so the
+# `lynx` feature force-enables the seeded spellings while stock servo keeps
+# them out of its author surface. The servo default
+# `servo_restyle_damage = "rebuild_box"` relays out when any of them changes.
 [anchor-name]
 type = "AnchorName"
 initial = "computed::AnchorName::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-anchor-name"
 affects = ""
@@ -192,7 +200,7 @@ affects = ""
 type = "ScopedName"
 initial = "computed::ScopedName::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-scope"
 affects = ""
@@ -1991,7 +1999,7 @@ affects = "layout"
 type = "PositionAnchor"
 initial = "computed::PositionAnchor::normal()"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 rule_types_allowed = ["style", "keyframe", "scope", "position-try"]
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-position-anchor"
@@ -2020,16 +2028,20 @@ affects = "layout"
 type = "PositionTryOrder"
 initial = "computed::PositionTryOrder::normal()"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#position-try-order-property"
 affects = "layout"
 
+# Under the `lynx` feature only the Editor's Draft spelling parses
+# (`always | [ anchor-valid || anchor-visible || no-overflow ]`); the legacy
+# `anchors-valid` / `anchors-visible` aliases are rejected.
 [position-visibility]
 type = "PositionVisibility"
 initial = "computed::PositionVisibility::ANCHORS_VISIBLE"
+lynx_initial = "computed::PositionVisibility::ANCHOR_VISIBLE"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-position-visibility"
 affects = "layout"

@@ -953,7 +953,6 @@ LYNX_INTERNAL_LONGHANDS = frozenset(
         "math-depth",
         "math-style",
         "mix-blend-mode",
-        "position-try-fallbacks",
         "rotate",
         "scale",
         "text-orientation",
