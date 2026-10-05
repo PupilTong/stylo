@@ -27,6 +27,9 @@ pub use crate::values::specified::box_::{
     Visibility, WillChange, WritingModeProperty,
 };
 
+#[cfg(feature = "lynx")]
+pub use crate::values::specified::box_::ScrollCapture;
+
 /// A computed value for the `baseline-shift` property.
 pub type BaselineShift = GenericBaselineShift<LengthPercentage>;
 

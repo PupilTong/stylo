@@ -688,6 +688,7 @@ class Longhand(Property):
                 "RubyPosition",
                 "SVGPaintOrder",
                 "ScrollbarGutter",
+                "ScrollCapture",
                 "ScrollSnapAlign",
                 "ScrollSnapAxis",
                 "ScrollSnapStop",
@@ -1180,8 +1181,11 @@ class PropertiesData(object):
             groups[v["type"]] = [v]
 
         for name, args in shorthands_toml.items():
+            # As for longhands: `lynx_*` keys replace their declaration key in
+            # the Lynx build only; `lynx_only` is handled by
+            # declare_shorthand().
             for key in list(args):
-                if not key.startswith("lynx_"):
+                if not key.startswith("lynx_") or key == "lynx_only":
                     continue
                 value = args.pop(key)
                 if self.lynx:
@@ -1324,6 +1328,11 @@ class PropertiesData(object):
         **kwargs,
     ):
         if engine and self.engine != engine:
+            return
+        # A shorthand over `lynx_only` longhands is itself `lynx_only`: its
+        # sub-properties are not declared outside the `lynx` feature.
+        lynx_only = kwargs.pop("lynx_only", False)
+        if lynx_only and not self.lynx:
             return
         if self.engine == "gecko":
             if extra_gecko_sub_properties:

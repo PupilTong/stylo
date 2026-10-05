@@ -44,6 +44,8 @@ pub use self::border::{
     BorderImageWidth, BorderRadius, BorderSideOffset, BorderSideWidth, BorderSpacing, BorderStyle,
     BoxDecorationBreak, FloatEdge, LineWidth,
 };
+#[cfg(feature = "lynx")]
+pub use self::box_::ScrollCapture;
 pub use self::box_::{
     AlignmentBaseline, Appearance, BackfaceVisibility, BaselineShift, BaselineSource, BoxAlign,
     BoxCollapse, BoxDirection, BoxOrient, BoxPack, BreakBetween, BreakWithin, Clear, Contain,

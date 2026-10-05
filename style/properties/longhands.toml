@@ -1886,18 +1886,42 @@ animation_type = "discrete"
 affects = "paint"
 
 # lynx-vello's own nested-scroll ordering switch, with no W3C or Lynx
-# counterpart, so it exists only under the `lynx` feature: `nearest` hands a
-# gesture on this scroll container to the nearest ancestor scroll container
-# first and scrolls this one only once that ancestor cannot move; `auto` is the
-# ordinary inner-first chain. Paint-affecting only: the engine reads it into
-# the committed frame's scroll-slot table, never into layout.
-[scroll-capture]
+# counterpart, so it exists only under the `lynx` feature. It is per physical
+# axis, the shape of `overscroll-behavior-x`/`-y` (this engine has no writing
+# modes, so there is no logical pair), and the `scroll-capture` shorthand sets
+# both. On an axis, `nearest` hands a gesture on this scroll container to the
+# nearest ancestor scroll container first and scrolls this one only once that
+# ancestor cannot move; `auto` is the ordinary inner-first chain.
+# Paint-affecting only: the engine reads it into the committed frame's
+# scroll-slot table, never into layout.
+#
+# Grammar per axis: `auto | nearest [ forward | backward ]?`. The optional
+# direction limits `nearest` to one sign of that axis's delta: `forward` is
+# the delta that increases the scroll offset on that axis, `backward` the
+# delta that decreases it; plain `nearest` covers both. A direction or axis
+# the value does not cover walks the ordinary inner-first chain, so
+# `scroll-capture-y: nearest forward` on an inner list under a folding header
+# folds the header first when scrolling down and scrolls the list first when
+# scrolling back up, while its horizontal gestures chain as usual (the clay
+# engine's `CaptureScroll` phase, nested_scrollable.h, spelled from the inner
+# side).
+[scroll-capture-x]
 lynx_only = true
+type = "ScrollCapture"
+initial = "computed::ScrollCapture::Auto"
 struct = "box"
 spec = "Nonstandard lynx-vello scroll chaining property"
 animation_type = "discrete"
 affects = "paint"
-keyword = { values = ["auto", "nearest"] }
+
+[scroll-capture-y]
+lynx_only = true
+type = "ScrollCapture"
+initial = "computed::ScrollCapture::Auto"
+struct = "box"
+spec = "Nonstandard lynx-vello scroll chaining property"
+animation_type = "discrete"
+affects = "paint"
 
 # css-scroll-snap-2's `scroll-initial-target` (`none | nearest`): the element
 # sets its nearest scroll container's initial scroll position. Gecko has no
