@@ -21,7 +21,7 @@ use crate::{
     parser::{Parse, ParserContext},
     values::{
         computed::Color as ComputedColor,
-        generics::{Optional, calc::CalcType},
+        generics::calc::CalcType,
         specified::{
             angle::NoCalcAngle,
             calc::{Leaf, PercentageContext},

@@ -1327,7 +1327,8 @@ spec = "Nonstandard Lynx linear layout property"
 animation_type = "none"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
-keyword = { values = ["column", "row", "column-reverse", "row-reverse"] }
+type = "lynx_layout::LinearDirection"
+initial = "computed::lynx_layout::LinearDirection::Column"
 
 [linear-weight]
 lynx_only = true
@@ -1490,7 +1491,8 @@ spec = "Nonstandard Lynx relative layout property"
 animation_type = "none"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
-keyword = { values = ["none", "vertical", "horizontal", "both"] }
+type = "lynx_layout::RelativeCenter"
+initial = "computed::lynx_layout::RelativeCenter::None"
 
 [relative-layout-once]
 lynx_only = true
@@ -1499,7 +1501,8 @@ spec = "Nonstandard Lynx relative layout property"
 animation_type = "none"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
-keyword = { values = ["true", "false"] }
+type = "lynx_layout::RelativeLayoutOnce"
+initial = "computed::lynx_layout::RelativeLayoutOnce::True"
 
 [link-parameters]
 type = "LinkParameters"
@@ -1933,7 +1936,8 @@ struct = "box"
 spec = "https://drafts.csswg.org/css-scroll-snap-2/#scroll-initial-target"
 animation_type = "discrete"
 affects = "paint"
-keyword = { values = ["none", "nearest"] }
+type = "ScrollInitialTarget"
+initial = "computed::ScrollInitialTarget::None"
 
 [page]
 type = "PageName"

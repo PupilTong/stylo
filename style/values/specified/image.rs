@@ -7,6 +7,7 @@
 //!
 //! [image]: https://drafts.csswg.org/css-images/#image-values
 
+#[cfg(any(feature = "gecko", not(feature = "lynx")))]
 use crate::Atom;
 use crate::color::mix::ColorInterpolationMethod;
 use crate::derives::*;
@@ -37,8 +38,6 @@ use crate::values::specified::{
     NonNegativeLengthPercentage, Resolution,
 };
 use crate::values::specified::{Number, Percentage};
-#[cfg(any(feature = "gecko", not(feature = "lynx")))]
-use crate::Atom;
 use cssparser::{Delimiter, Parser, Token, match_ignore_ascii_case};
 use selectors::parser::SelectorParseErrorKind;
 #[cfg(not(feature = "lynx"))]

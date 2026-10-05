@@ -155,3 +155,90 @@ impl ToTyped for RelativeReference {
 }
 
 impl SpecifiedValueInfo for RelativeReference {}
+
+/// The `linear-direction` property: the main axis of a `display: linear`
+/// container.
+#[allow(missing_docs)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    FromPrimitive,
+    Hash,
+    MallocSizeOf,
+    Parse,
+    PartialEq,
+    Serialize,
+    SpecifiedValueInfo,
+    ToComputedValue,
+    ToCss,
+    ToResolvedValue,
+    ToShmem,
+    ToTyped,
+)]
+#[repr(u8)]
+pub enum LinearDirection {
+    Column,
+    Row,
+    ColumnReverse,
+    RowReverse,
+}
+
+/// The `relative-center` property: the axes on which a `display: relative`
+/// child is centered in its container.
+#[allow(missing_docs)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    FromPrimitive,
+    Hash,
+    MallocSizeOf,
+    Parse,
+    PartialEq,
+    Serialize,
+    SpecifiedValueInfo,
+    ToComputedValue,
+    ToCss,
+    ToResolvedValue,
+    ToShmem,
+    ToTyped,
+)]
+#[repr(u8)]
+pub enum RelativeCenter {
+    None,
+    Vertical,
+    Horizontal,
+    Both,
+}
+
+/// The `relative-layout-once` property.
+#[allow(missing_docs)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    FromPrimitive,
+    Hash,
+    MallocSizeOf,
+    Parse,
+    PartialEq,
+    Serialize,
+    SpecifiedValueInfo,
+    ToComputedValue,
+    ToCss,
+    ToResolvedValue,
+    ToShmem,
+    ToTyped,
+)]
+#[repr(u8)]
+pub enum RelativeLayoutOnce {
+    True,
+    False,
+}

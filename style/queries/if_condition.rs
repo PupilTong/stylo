@@ -184,7 +184,7 @@ impl IfExpression {
                 },
             ),
             Self::Supports(condition) => {
-                let context = ParserContext::new(
+                let mut context = ParserContext::new(
                     Origin::Author,
                     url_data,
                     Some(CssRuleType::Style),
@@ -195,7 +195,7 @@ impl IfExpression {
                     /* use_counters = */ None,
                     /* attr_taint = */ Default::default(),
                 );
-                KleeneValue::from(condition.eval(&context))
+                KleeneValue::from(condition.eval(&mut context))
             },
             Self::GeneralEnclosed => KleeneValue::Unknown,
         }

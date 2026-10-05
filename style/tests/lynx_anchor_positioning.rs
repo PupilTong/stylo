@@ -210,12 +210,12 @@ fn anchor_scope_parses_and_computes() {
 #[test]
 fn anchor_scope_names_are_exposed() {
     let style = style_for("", "anchor-scope: --a, --b");
-    let scope = style.clone_anchor_scope();
+    let scope = style.slow_clone_anchor_scope();
     assert!(!scope.is_none());
     assert!(!scope.value.is_all());
     let names: Vec<_> = scope.value.iter().map(|a| a.to_string()).collect();
     assert_eq!(names, ["--a", "--b"]);
-    let all = style_for("", "anchor-scope: all").clone_anchor_scope();
+    let all = style_for("", "anchor-scope: all").slow_clone_anchor_scope();
     assert!(all.value.is_all());
     assert_eq!(all.value.iter().count(), 0);
 }
@@ -246,16 +246,16 @@ fn position_anchor_parses_and_computes() {
     // Initial: normal.
     assert_eq!(computed("", "", "position-anchor"), "normal");
     assert!(matches!(
-        style_for("", "").clone_position_anchor().value,
+        style_for("", "").slow_clone_position_anchor().value,
         PositionAnchorKeyword::Normal
     ));
     let match_parent: PositionAnchor =
-        style_for("", "position-anchor: match-parent").clone_position_anchor();
+        style_for("", "position-anchor: match-parent").slow_clone_position_anchor();
     assert!(matches!(
         match_parent.value,
         PositionAnchorKeyword::MatchParent
     ));
-    let named = style_for("", "position-anchor: --foo").clone_position_anchor();
+    let named = style_for("", "position-anchor: --foo").slow_clone_position_anchor();
     let PositionAnchorKeyword::Ident(ref name) = named.value else {
         panic!("a named default anchor")
     };
@@ -613,7 +613,7 @@ fn position_area_exposes_its_physical_and_alignment_helpers() {
     use style::logical_geometry::{LogicalAxis, WritingMode};
     use style::values::specified::align::AlignFlags;
     let area: PositionArea =
-        style_for("", "position-area: block-end span-inline-end").clone_position_area();
+        style_for("", "position-area: block-end span-inline-end").slow_clone_position_area();
     let wm = WritingMode::horizontal_tb();
     let physical = area.to_physical(wm, wm);
     assert_eq!(physical.to_css_string(), "span-right bottom");
@@ -629,7 +629,7 @@ fn position_area_exposes_its_physical_and_alignment_helpers() {
         Some(AlignFlags::START)
     );
     let top_left = style_for("", "position-area: top left")
-        .clone_position_area()
+        .slow_clone_position_area()
         .to_physical(wm, wm);
     assert_eq!(top_left.to_css_string(), "left top");
     assert_eq!(
@@ -641,7 +641,7 @@ fn position_area_exposes_its_physical_and_alignment_helpers() {
         Some(AlignFlags::END)
     );
     let centered = style_for("", "position-area: center span-all")
-        .clone_position_area()
+        .slow_clone_position_area()
         .to_physical(wm, wm);
     assert_eq!(
         centered.first.to_self_alignment(LogicalAxis::Inline, &wm),
@@ -654,7 +654,7 @@ fn position_area_exposes_its_physical_and_alignment_helpers() {
     // rtl: the inline axis is reversed.
     let rtl = WritingMode::horizontal_tb() | WritingMode::RTL | WritingMode::INLINE_REVERSED;
     let start = style_for("", "position-area: inline-start")
-        .clone_position_area()
+        .slow_clone_position_area()
         .to_physical(rtl, rtl);
     // The physical form keeps both keywords explicit (the layout engine's
     // input, not a serialization).
@@ -866,7 +866,7 @@ fn anchor_function_accessors_serve_the_layout_engine() {
     use style::values::generics::position::{AnchorSideKeyword, GenericAnchorSide};
     use style::values::specified::box_::PositionProperty;
     let style = style_for("", "position: absolute; top: anchor(--a bottom, 4px)");
-    let top = style.get_position().clone_top();
+    let top = style.get_position().slow_clone_top();
     let Inset::AnchorFunction(ref anchor) = top else {
         panic!("an anchor() inset, got {top:?}")
     };
@@ -1388,7 +1388,7 @@ fn position_try_fallbacks_computes_per_wpt() {
         );
     }
     let fallbacks: PositionTryFallbacks =
-        style_for("", "position-try-fallbacks: --a, flip-y").clone_position_try_fallbacks();
+        style_for("", "position-try-fallbacks: --a, flip-y").slow_clone_position_try_fallbacks();
     assert_eq!(fallbacks.value.0.len(), 2);
     assert_eq!(fallbacks.scope, CascadeLevel::same_tree_author_normal());
 }
@@ -1608,17 +1608,17 @@ fn position_visibility_initial_is_anchor_visible() {
         computed("", "position-visibility: initial", "position-visibility"),
         "anchor-visible"
     );
-    let initial = style_for("", "").clone_position_visibility();
+    let initial = style_for("", "").slow_clone_position_visibility();
     assert_eq!(initial, PositionVisibility::ANCHOR_VISIBLE);
     assert_eq!(PositionVisibility::default(), initial);
     assert_eq!(PositionVisibility::always(), PositionVisibility::ALWAYS);
     let flags =
-        style_for("", "position-visibility: no-overflow anchor-valid").clone_position_visibility();
+        style_for("", "position-visibility: no-overflow anchor-valid").slow_clone_position_visibility();
     assert!(flags.contains(PositionVisibility::ANCHOR_VALID));
     assert!(flags.contains(PositionVisibility::NO_OVERFLOW));
     assert!(!flags.contains(PositionVisibility::ANCHOR_VISIBLE));
     assert!(style_for("", "position-visibility: always")
-        .clone_position_visibility()
+        .slow_clone_position_visibility()
         .is_empty());
 }
 
@@ -2547,7 +2547,7 @@ impl Env {
             panic!("position-try-fallbacks: {item}")
         };
         let item: &PositionTryFallbacksItem = &fallbacks.value.0[0];
-        let scope = base.clone_position_try_fallbacks().scope;
+        let scope = base.slow_clone_position_try_fallbacks().scope;
         let guard = self.lock.read();
         self.stylist.resolve_position_try(
             base,

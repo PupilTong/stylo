@@ -45,7 +45,7 @@ pub use self::border::{
     BoxDecorationBreak, FloatEdge, LineWidth,
 };
 #[cfg(feature = "lynx")]
-pub use self::box_::ScrollCapture;
+pub use self::box_::{ScrollCapture, ScrollInitialTarget};
 pub use self::box_::{
     AlignmentBaseline, Appearance, BackfaceVisibility, BaselineShift, BaselineSource, BoxAlign,
     BoxCollapse, BoxDirection, BoxOrient, BoxPack, BreakBetween, BreakWithin, Clear, Contain,

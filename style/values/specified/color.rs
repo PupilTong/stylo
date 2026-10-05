@@ -1024,7 +1024,7 @@ impl ToComputedValue for ColorPropertyValue {
                 let current_color = context
                     .builder
                     .get_parent_inherited_text()
-                    .clone_color()
+                    .get_color()
                     .solid_color();
                 Computed::Color(
                     color

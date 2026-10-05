@@ -283,12 +283,12 @@ fn container_type_is_a_size_container_type() {
 fn container_computed_accessors_round_trip() {
     let initial =
         ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
-    assert_eq!(initial.clone_container_type(), ContainerType::NORMAL);
-    assert!(initial.clone_container_name().is_none());
+    assert_eq!(initial.slow_clone_container_type(), ContainerType::NORMAL);
+    assert!(initial.slow_clone_container_name().is_none());
 
     let mut values: ComputedValues = (*initial).clone();
     values.mutate_box().set_container_type(ContainerType::SIZE);
-    assert_eq!(values.clone_container_type(), ContainerType::SIZE);
+    assert_eq!(values.slow_clone_container_type(), ContainerType::SIZE);
 }
 
 // ------------------------------------------------------------------------
@@ -394,17 +394,17 @@ fn computed_accessors_round_trip() {
         ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
 
     // Initial values match the CSS-initial defaults.
-    assert_eq!(initial.clone_contain(), Contain::empty());
+    assert_eq!(initial.slow_clone_contain(), Contain::empty());
     assert_eq!(
-        initial.clone_content_visibility(),
+        initial.slow_clone_content_visibility(),
         ContentVisibility::Visible
     );
     assert!(matches!(
-        initial.clone_contain_intrinsic_width(),
+        initial.slow_clone_contain_intrinsic_width(),
         ComputedContainIntrinsicSize::None
     ));
     assert!(matches!(
-        initial.clone_contain_intrinsic_height(),
+        initial.slow_clone_contain_intrinsic_height(),
         ComputedContainIntrinsicSize::None
     ));
 
@@ -420,14 +420,14 @@ fn computed_accessors_round_trip() {
         .mutate_position()
         .set_contain_intrinsic_height(ComputedContainIntrinsicSize::AutoNone);
 
-    assert_eq!(values.clone_contain(), Contain::STRICT);
-    assert_eq!(values.clone_content_visibility(), ContentVisibility::Hidden);
+    assert_eq!(values.slow_clone_contain(), Contain::STRICT);
+    assert_eq!(values.slow_clone_content_visibility(), ContentVisibility::Hidden);
     assert!(matches!(
-        values.clone_contain_intrinsic_width(),
+        values.slow_clone_contain_intrinsic_width(),
         ComputedContainIntrinsicSize::AutoNone
     ));
     assert!(matches!(
-        values.clone_contain_intrinsic_height(),
+        values.slow_clone_contain_intrinsic_height(),
         ComputedContainIntrinsicSize::AutoNone
     ));
 }
@@ -447,7 +447,7 @@ fn contain_change_produces_relayout_damage() {
 
     let mut new: ComputedValues = (*old).clone();
     new.mutate_box().set_contain(Contain::STRICT);
-    assert_ne!(old.clone_contain(), new.clone_contain());
+    assert_ne!(old.slow_clone_contain(), new.slow_clone_contain());
 
     let damage = ServoRestyleDamage::compute_base_damage(&old, &new);
     assert!(

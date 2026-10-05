@@ -6,6 +6,10 @@
 
 use crate::values::CSSInteger;
 
+pub use crate::values::specified::lynx_layout::{
+    LinearDirection, RelativeCenter, RelativeLayoutOnce,
+};
+
 /// Computed `relative-align-*` value.
 ///
 /// `-1` is Lynx's no-reference sentinel, `0` is `parent`, and positive values

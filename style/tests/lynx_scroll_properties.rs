@@ -309,22 +309,22 @@ fn scroll_capture_longhands_are_initially_auto_and_not_inherited() {
 fn scroll_capture_computed_values_read_per_axis() {
     let initial =
         ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
-    assert_eq!(initial.clone_scroll_capture_x(), ScrollCapture::Auto);
-    assert_eq!(initial.clone_scroll_capture_y(), ScrollCapture::Auto);
+    assert_eq!(initial.slow_clone_scroll_capture_x(), ScrollCapture::Auto);
+    assert_eq!(initial.slow_clone_scroll_capture_y(), ScrollCapture::Auto);
 
     // The computed value is the specified value.
     let (x, y) = scroll_capture_axes("auto nearest forward");
     let mut values: ComputedValues = (*initial).clone();
     values.mutate_box().set_scroll_capture_x(x);
     values.mutate_box().set_scroll_capture_y(y);
-    assert_eq!(values.clone_scroll_capture_x(), ScrollCapture::Auto);
+    assert_eq!(values.slow_clone_scroll_capture_x(), ScrollCapture::Auto);
     assert_eq!(
-        values.clone_scroll_capture_y(),
+        values.slow_clone_scroll_capture_y(),
         ScrollCapture::NearestForward
     );
-    assert!(!values.clone_scroll_capture_x().covers_delta(10.));
-    assert!(values.clone_scroll_capture_y().covers_delta(10.));
-    assert!(!values.clone_scroll_capture_y().covers_delta(-10.));
+    assert!(!values.slow_clone_scroll_capture_x().covers_delta(10.));
+    assert!(values.slow_clone_scroll_capture_y().covers_delta(10.));
+    assert!(!values.slow_clone_scroll_capture_y().covers_delta(-10.));
 }
 
 #[test]

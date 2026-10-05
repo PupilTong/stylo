@@ -127,6 +127,7 @@ impl Parse for ScrollbarInset {
 }
 
 #[inline]
+#[cfg(not(feature = "lynx"))]
 fn is_display_grid_lanes_enabled() -> bool {
     static_prefs::pref!("layout.css.display-grid-lanes.enabled")
 }
@@ -2903,6 +2904,34 @@ impl Parse for PositionProperty {
             "sticky" => Self::Sticky,
         })
     }
+}
+
+/// https://drafts.csswg.org/css-scroll-snap-2/#scroll-initial-target
+#[cfg(feature = "lynx")]
+#[allow(missing_docs)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    FromPrimitive,
+    Hash,
+    MallocSizeOf,
+    Parse,
+    PartialEq,
+    Serialize,
+    SpecifiedValueInfo,
+    ToComputedValue,
+    ToCss,
+    ToResolvedValue,
+    ToShmem,
+    ToTyped,
+)]
+#[repr(u8)]
+pub enum ScrollInitialTarget {
+    None,
+    Nearest,
 }
 
 /// A `scroll-capture-x` / `scroll-capture-y` value:

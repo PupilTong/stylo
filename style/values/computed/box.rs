@@ -28,7 +28,7 @@ pub use crate::values::specified::box_::{
 };
 
 #[cfg(feature = "lynx")]
-pub use crate::values::specified::box_::ScrollCapture;
+pub use crate::values::specified::box_::{ScrollCapture, ScrollInitialTarget};
 
 /// A computed value for the `baseline-shift` property.
 pub type BaselineShift = GenericBaselineShift<LengthPercentage>;

@@ -41,7 +41,7 @@ fn display_initial_value_is_flex() {
 
     let values =
         ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
-    assert_eq!(values.clone_display(), Display::Flex);
+    assert_eq!(values.slow_clone_display(), Display::Flex);
     assert_eq!(values.get_box().original_display, Display::Flex);
 }
 

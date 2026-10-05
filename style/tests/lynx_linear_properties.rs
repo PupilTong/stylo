@@ -75,11 +75,11 @@ fn generated_initial_values_match_lynx_defaults() {
     );
 
     assert_eq!(
-        values.clone_linear_direction(),
+        values.slow_clone_linear_direction(),
         longhands::linear_direction::computed_value::T::Column
     );
-    assert_eq!(values.clone_linear_weight().0, 0.0);
-    assert_eq!(values.clone_linear_weight_sum().0, 0.0);
+    assert_eq!(values.slow_clone_linear_weight().0, 0.0);
+    assert_eq!(values.slow_clone_linear_weight_sum().0, 0.0);
 }
 
 #[test]

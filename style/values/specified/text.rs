@@ -4,6 +4,7 @@
 
 //! Specified types for text properties.
 
+#[cfg(not(feature = "lynx"))]
 use crate::Zero;
 use crate::derives::*;
 use crate::parser::{Parse, ParserContext};
@@ -18,8 +19,6 @@ use crate::values::generics::text::{
 };
 use crate::values::specified::length::{Length, LengthPercentage};
 use crate::values::specified::{AllowQuirks, Integer, Number};
-#[cfg(not(feature = "lynx"))]
-use crate::Zero;
 use cssparser::Parser;
 use icu_segmenter::GraphemeClusterSegmenter;
 use std::fmt::{self, Write};

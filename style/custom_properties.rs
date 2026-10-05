@@ -858,6 +858,7 @@ impl SubstitutionChunk {
         &'a self,
         css: &'a str,
         url_data: &UrlExtraData,
+        property_id: Option<PropertyIdRef>,
         substitution_functions: &'a ComputedSubstitutionFunctions,
         stylist: &Stylist,
         computed_context: &computed::Context,
@@ -871,6 +872,7 @@ impl SubstitutionChunk {
             self.first_token_type,
             self.last_token_type,
             url_data,
+            property_id,
             substitution_functions,
             stylist,
             computed_context,
@@ -916,6 +918,7 @@ impl IfBranch {
         &'a self,
         css: &'a str,
         url_data: &UrlExtraData,
+        property_id: Option<PropertyIdRef>,
         substitution_functions: &'a ComputedSubstitutionFunctions,
         stylist: &Stylist,
         computed_context: &computed::Context,
@@ -925,6 +928,7 @@ impl IfBranch {
         let substituted = self.condition.substitute(
             css,
             url_data,
+            property_id,
             substitution_functions,
             stylist,
             computed_context,
@@ -2376,6 +2380,7 @@ fn substitute_one_reference<'a>(
             return substitute_if(
                 css,
                 url_data,
+                property_id,
                 substitution_functions,
                 reference,
                 stylist,
@@ -2562,6 +2567,7 @@ fn substitute_one_reference<'a>(
 fn substitute_if<'a>(
     css: &'a str,
     url_data: &UrlExtraData,
+    property_id: Option<PropertyIdRef>,
     substitution_functions: &'a ComputedSubstitutionFunctions,
     reference: &'a SubstitutionFunctionReference,
     stylist: &Stylist,
@@ -2578,6 +2584,7 @@ fn substitute_if<'a>(
         let (condition, condition_attr_tainted) = branch.condition(
             css,
             url_data,
+            property_id,
             substitution_functions,
             stylist,
             computed_context,
@@ -2604,6 +2611,7 @@ fn substitute_if<'a>(
         let mut value = branch.value.substitute(
             css,
             url_data,
+            property_id,
             substitution_functions,
             stylist,
             computed_context,
@@ -2657,6 +2665,7 @@ fn resolve_queried_properties<'a>(
         seen.push(key);
         let resolved = substitute_internal(
             unresolved,
+            /* property_id */ None,
             substitution_functions,
             stylist,
             computed_context,
@@ -2665,7 +2674,12 @@ fn resolve_queried_properties<'a>(
             /* attr_taint */ None,
         )
         .and_then(|substitution| {
-            substitution.into_value(&unresolved.url_data, registration, computed_context)
+            substitution.into_value(
+                &unresolved.url_data,
+                registration,
+                computed_context,
+                /* property_id */ None,
+            )
         });
         seen.pop();
         subject.resolved.push((name, resolved.ok()));

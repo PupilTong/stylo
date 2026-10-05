@@ -2497,6 +2497,7 @@ fn substitute_all(
                 branch.condition(
                     css,
                     url_data,
+                    /* property_id */ None,
                     &computed_context.builder.substitution_functions,
                     context.stylist,
                     computed_context,

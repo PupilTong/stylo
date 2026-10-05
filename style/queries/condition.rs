@@ -356,6 +356,7 @@ impl StyleQuery {
     }
 
     /// Parses a `<style-query>`: the contents of a `style()` function.
+    #[cfg(feature = "lynx")]
     pub(crate) fn parse_query(
         context: &ParserContext,
         input: &mut Parser,

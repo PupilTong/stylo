@@ -124,25 +124,25 @@ fn generated_initial_values_match_lynx_defaults() {
         style::properties::style_structs::Font::initial_values(),
     );
 
-    assert_eq!(values.clone_relative_id(), -1);
-    assert_eq!(values.clone_relative_align_top(), -1);
-    assert_eq!(values.clone_relative_align_right(), -1);
-    assert_eq!(values.clone_relative_align_bottom(), -1);
-    assert_eq!(values.clone_relative_align_left(), -1);
-    assert_eq!(values.clone_relative_top_of(), -1);
-    assert_eq!(values.clone_relative_right_of(), -1);
-    assert_eq!(values.clone_relative_bottom_of(), -1);
-    assert_eq!(values.clone_relative_left_of(), -1);
-    assert_eq!(values.clone_relative_align_inline_start(), -1);
-    assert_eq!(values.clone_relative_align_inline_end(), -1);
-    assert_eq!(values.clone_relative_inline_start_of(), -1);
-    assert_eq!(values.clone_relative_inline_end_of(), -1);
+    assert_eq!(values.slow_clone_relative_id(), -1);
+    assert_eq!(values.slow_clone_relative_align_top(), -1);
+    assert_eq!(values.slow_clone_relative_align_right(), -1);
+    assert_eq!(values.slow_clone_relative_align_bottom(), -1);
+    assert_eq!(values.slow_clone_relative_align_left(), -1);
+    assert_eq!(values.slow_clone_relative_top_of(), -1);
+    assert_eq!(values.slow_clone_relative_right_of(), -1);
+    assert_eq!(values.slow_clone_relative_bottom_of(), -1);
+    assert_eq!(values.slow_clone_relative_left_of(), -1);
+    assert_eq!(values.slow_clone_relative_align_inline_start(), -1);
+    assert_eq!(values.slow_clone_relative_align_inline_end(), -1);
+    assert_eq!(values.slow_clone_relative_inline_start_of(), -1);
+    assert_eq!(values.slow_clone_relative_inline_end_of(), -1);
     assert_eq!(
-        values.clone_relative_center(),
+        values.slow_clone_relative_center(),
         longhands::relative_center::computed_value::T::None
     );
     assert_eq!(
-        values.clone_relative_layout_once(),
+        values.slow_clone_relative_layout_once(),
         longhands::relative_layout_once::computed_value::T::True
     );
 }
