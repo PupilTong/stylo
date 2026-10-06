@@ -6,7 +6,8 @@
 //! The outer engine's UA sheet puts `dialog:modal` and its `::backdrop` in
 //! the top layer with `-servo-top-layer: auto`; `StyleAdjuster` then computes
 //! `position` to `absolute` (unless already `absolute`/`fixed`) and
-//! blockifies `display: contents` (css-position-4's top-layer rules). The
+//! blockifies `display: contents` to `flex` (css-position-4's top-layer
+//! rules, with Lynx's initial `display` as the block-level container). The
 //! longhand is `enabled_in = "ua"`, so author and user sheets still cannot
 //! spell it.
 #![cfg(feature = "lynx")]
@@ -257,7 +258,9 @@ fn the_ua_top_layer_blockifies_display_contents() {
         "-servo-top-layer: auto; display: contents",
     );
     assert!(in_top_layer(&top));
-    assert_eq!(value_of(&top, "display"), "block");
+    // css-position-4 says `block`; Lynx has no flow layout, so the
+    // block-level container is the grammar's initial `flex`.
+    assert_eq!(value_of(&top, "display"), "flex");
 
     // A Lynx display value is already a box; the top layer keeps it.
     let linear = style(
