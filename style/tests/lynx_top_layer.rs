@@ -10,6 +10,10 @@
 //! rules, with Lynx's initial `display` as the block-level container). The
 //! longhand is `enabled_in = "ua"`, so author and user sheets still cannot
 //! spell it.
+//!
+//! The root element's `display: contents` fixup (css-display-3 §2.7) is the
+//! other `contents` blockification, and computes to `flex` for the same
+//! reason; its tests live here beside the top-layer one.
 #![cfg(feature = "lynx")]
 
 #[path = "support/test_element.rs"]
@@ -23,7 +27,8 @@ use style::device::Device;
 use style::font_metrics::FontMetrics;
 use style::media_queries::{MediaList, MediaType};
 use style::properties::{
-    style_structs, ComputedValues, FirstLineReparenting, PropertyDeclarationBlock, PropertyId,
+    style_structs, ComputedValues, FirstLineReparenting, LonghandIdSet, PropertyDeclarationBlock,
+    PropertyId, StyleBuilder,
 };
 use style::queries::values::PrefersColorScheme;
 use style::rule_cache::RuleCacheConditions;
@@ -34,9 +39,11 @@ use style::stylesheets::layer_rule::LayerOrder;
 use style::stylesheets::{
     AllowImportRules, CssRule, Origin, Stylesheet, StylesheetInDocument, UrlExtraData,
 };
+use style::style_adjuster::StyleAdjuster;
 use style::stylist::Stylist;
 use style::values::computed::font::GenericFontFamily;
-use style::values::computed::{CSSPixelLength, TopLayer};
+use style::values::computed::position::PositionTryFallbacksTryTactic;
+use style::values::computed::{CSSPixelLength, Display, TopLayer};
 use style::values::specified::font::QueryFontMetricsFlags;
 use style_traits::{CSSPixel, DevicePixel};
 use test_element::TestElement;
@@ -269,6 +276,56 @@ fn the_ua_top_layer_blockifies_display_contents() {
         "-servo-top-layer: auto; display: linear",
     );
     assert_eq!(value_of(&linear, "display"), "linear");
+}
+
+// ---------------------------------------------------------------------------
+// Root blockification
+
+/// `display` after the style adjuster runs on a style whose cascaded
+/// `display` is `specified`, for the root element or a child of an initial
+/// (`flex`) parent. `TestElement` is never a root, so this drives the
+/// adjuster through a `StyleBuilder` that is.
+fn adjusted_display(specified: Display, is_root_element: bool) -> Display {
+    let device = device(PrefersColorScheme::Light);
+    let parent = device.default_computed_values();
+    let mut builder = StyleBuilder::new(&device, None, None, None, None, is_root_element);
+    builder.mutate_box().set_display(specified);
+    StyleAdjuster::new(&mut builder).adjust(
+        parent,
+        None::<TestElement>,
+        &PositionTryFallbacksTryTactic::default(),
+        &LonghandIdSet::default(),
+    );
+    *builder.get_box().get_display()
+}
+
+#[test]
+fn a_root_display_contents_blockifies_to_flex() {
+    // css-display-3 says `block`; Lynx has no flow layout, so the
+    // block-level container is the grammar's initial `flex`.
+    assert_eq!(adjusted_display(Display::Contents, true), Display::Flex);
+}
+
+#[test]
+fn a_non_root_display_contents_stays_contents() {
+    // The initial parent is a `flex` item container, so the child goes
+    // through item blockification, which leaves `contents` alone.
+    assert_eq!(adjusted_display(Display::Contents, false), Display::Contents);
+}
+
+#[test]
+fn a_root_keeps_its_lynx_display_value() {
+    for display in [
+        Display::None,
+        Display::Flex,
+        Display::Linear,
+        Display::Grid,
+        Display::GridLanes,
+        Display::LynxRelative,
+        Display::LynxText,
+    ] {
+        assert_eq!(adjusted_display(display, true), display, "{display:?}");
+    }
 }
 
 // ---------------------------------------------------------------------------

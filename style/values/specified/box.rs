@@ -519,8 +519,12 @@ impl Display {
     pub fn equivalent_block_display(&self, is_root_element: bool) -> Self {
         // Special handling for `contents` on the root element.
         if is_root_element && self.is_contents() {
+            // css-display-3 §2.7 computes a root `contents` to `block`. Lynx's
+            // grammar has no flow layout, so its block-level container is the
+            // initial `display`, `flex`; the internal block/flow display has
+            // no layout in a Lynx engine.
             #[cfg(feature = "lynx")]
-            return Self::internal_block();
+            return Display::Flex;
 
             #[cfg(not(feature = "lynx"))]
             return Display::Block;
@@ -534,6 +538,9 @@ impl Display {
 
         match self.outside() {
             DisplayOutside::Inline => {
+                // Unreachable under `lynx`: the grammar has no inline-outside
+                // value (every Lynx keyword is block-outside or `none`/
+                // `contents`), so no `lynx` computed display takes this arm.
                 #[cfg(feature = "lynx")]
                 return Self::internal_block();
 
