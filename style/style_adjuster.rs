@@ -10,7 +10,6 @@ use crate::dom::TElement;
 use crate::logical_geometry::PhysicalSide;
 #[cfg(feature = "gecko")]
 use crate::properties::LonghandId;
-#[cfg(any(not(feature = "lynx"), feature = "gecko"))]
 use crate::properties::longhands::display::computed_value::T as Display;
 use crate::properties::longhands::float::computed_value::T as Float;
 use crate::properties::longhands::position::computed_value::T as Position;
@@ -153,8 +152,12 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         }
         let display = *self.style.get_box().get_display();
         if display.is_contents() {
+            // css-position-4 §3.1 computes a top-layer `contents` to
+            // `block`. Lynx's grammar has no flow layout, so its block-level
+            // container is the initial `display`, `flex`; the internal
+            // block/flow display has no layout in a Lynx engine.
             #[cfg(feature = "lynx")]
-            let block_display = display.equivalent_block_display(true);
+            let block_display = Display::Flex;
             #[cfg(not(feature = "lynx"))]
             let block_display = Display::Block;
             self.style.mutate_box().set_display(block_display);
