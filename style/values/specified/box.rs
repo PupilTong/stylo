@@ -1344,6 +1344,14 @@ pub enum OverscrollBehavior {
     /// No W3C counterpart, so it exists only under the `lynx` feature.
     #[cfg(feature = "lynx")]
     ContainBounce,
+    /// lynx-vello's own value: the axis has no boundary at all. The scrolling
+    /// area repeats, so scrolling past its end continues from its start, and
+    /// it fences the chain the way `contain` does: nothing above it ever
+    /// receives that axis's delta. The wrap itself is the embedder's
+    /// compositor's; the computed value only names the policy. No W3C
+    /// counterpart, so it exists only under the `lynx` feature.
+    #[cfg(feature = "lynx")]
+    Circular,
 }
 
 #[allow(missing_docs)]

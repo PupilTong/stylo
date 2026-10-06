@@ -57,8 +57,8 @@ fn assert_rejects(name: &str, value: &str) {
 }
 
 #[test]
-fn overscroll_behavior_longhands_parse_the_standard_keywords_and_contain_bounce() {
-    for value in ["auto", "contain", "none", "contain-bounce"] {
+fn overscroll_behavior_longhands_parse_the_standard_keywords_contain_bounce_and_circular() {
+    for value in ["auto", "contain", "none", "contain-bounce", "circular"] {
         assert_eq!(
             longhand_ids("overscroll-behavior-x", value),
             [LonghandId::OverscrollBehaviorX]
@@ -71,6 +71,8 @@ fn overscroll_behavior_longhands_parse_the_standard_keywords_and_contain_bounce(
     assert_rejects("overscroll-behavior-x", "scroll");
     assert_rejects("overscroll-behavior-y", "nearest");
     assert_rejects("overscroll-behavior-y", "bounce");
+    assert_rejects("overscroll-behavior-x", "circle");
+    assert_rejects("overscroll-behavior-y", "loop");
 }
 
 #[test]
@@ -82,6 +84,21 @@ fn overscroll_behavior_shorthand_takes_contain_bounce_per_axis() {
 
     let ids = longhand_ids("overscroll-behavior", "auto contain-bounce");
     assert_eq!(ids.len(), 2);
+}
+
+#[test]
+fn overscroll_behavior_shorthand_takes_circular_per_axis() {
+    let ids = longhand_ids("overscroll-behavior", "circular");
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&LonghandId::OverscrollBehaviorX));
+    assert!(ids.contains(&LonghandId::OverscrollBehaviorY));
+
+    let ids = longhand_ids("overscroll-behavior", "contain-bounce circular");
+    assert_eq!(ids.len(), 2);
+    let ids = longhand_ids("overscroll-behavior", "auto circular");
+    assert_eq!(ids.len(), 2);
+    assert_rejects("overscroll-behavior", "circle");
+    assert_rejects("overscroll-behavior", "loop");
 }
 
 #[test]
