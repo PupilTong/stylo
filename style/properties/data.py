@@ -911,7 +911,6 @@ LYNX_SEED_PROPERTIES = _load_lynx_properties()
 LYNX_INTERNAL_LONGHANDS = frozenset(
     {
         "-moz-default-appearance",
-        "-servo-top-layer",
         "animation-composition",
         "appearance",
         "color-scheme",
@@ -931,6 +930,22 @@ LYNX_INTERNAL_LONGHANDS = frozenset(
         "translate",
         "writing-mode",
         "zoom",
+    }
+)
+
+
+# Internal longhands the Lynx UA stylesheet declares. They are compiled and
+# emitted into the Lynx property-name table so a UA-origin declaration parses,
+# but each one is `enabled_in = "ua"` in longhands.toml, so
+# `PropertyId::allowed_in` still rejects it in every author/user origin and
+# `PropertyId::parse_enabled_for_all_content` never returns it. Keep this list
+# disjoint from the authored closure and from LYNX_INTERNAL_LONGHANDS.
+#
+#   -servo-top-layer: the top-layer flag `StyleAdjuster::adjust_for_top_layer`
+#   reads (`dialog:modal`, `::backdrop` in the outer engine's UA sheet).
+LYNX_UA_LONGHANDS = frozenset(
+    {
+        "-servo-top-layer",
     }
 )
 
@@ -1069,8 +1084,17 @@ class PropertiesData(object):
                 f"shorthand/longhand closure: {sorted(internal_exposed)}"
             )
 
+            ua_exposed = exposed.intersection(LYNX_UA_LONGHANDS)
+            assert not ua_exposed, (
+                "LYNX_UA_LONGHANDS must be disjoint from the authored "
+                f"shorthand/longhand closure: {sorted(ua_exposed)}"
+            )
+            assert not LYNX_UA_LONGHANDS.intersection(LYNX_INTERNAL_LONGHANDS)
+
             compiled = set(compiled_longhands)
             compiled.update(LYNX_INTERNAL_LONGHANDS)
+            compiled.update(LYNX_UA_LONGHANDS)
+            exposed.update(LYNX_UA_LONGHANDS)
 
             logical_groups = {}
             for name, args in longhands_toml.items():
@@ -1301,6 +1325,12 @@ class PropertiesData(object):
         self.add_prefixed_aliases(longhand)
         longhand.lynx_enabled = not self.lynx or name in self.lynx_compiled_longhands
         longhand.lynx_exposed = not self.lynx or name in self.lynx_exposed_properties
+        if self.lynx and name in LYNX_UA_LONGHANDS:
+            # The name-table entry is only safe because the origin gate keeps
+            # authors out; a UA-only longhand must never be content-enabled.
+            assert longhand.enabled_in == "ua", (
+                "LYNX_UA_LONGHANDS member %r must be enabled_in = \"ua\"" % name
+            )
         if self.lynx:
             longhand.aliases = [
                 alias

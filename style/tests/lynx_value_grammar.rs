@@ -253,6 +253,10 @@ fn colors_images_and_gradients() {
             "#1234",
             "rgb(1, 2, 3)",
             "hsl(120 100% 50%)",
+            // css-color-4 system colors (the HTML `<dialog>` defaults).
+            "Canvas",
+            "canvastext",
+            "LinkText",
             "linear-gradient(red, blue)",
             "radial-gradient(red 0%, blue 100%)",
             "conic-gradient(red 0, blue 1)",

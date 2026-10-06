@@ -576,7 +576,11 @@ impl Color {
                 Ok(color)
             },
             Err(e) => {
-                #[cfg(not(feature = "lynx"))]
+                // css-color-4 system colors (#css-system-colors) stay in the
+                // `lynx` grammar: the outer engine's UA sheet spells the HTML
+                // defaults (`dialog { background-color: Canvas; color:
+                // CanvasText }`) with them, and they resolve through
+                // `Device::system_color`.
                 {
                     #[cfg(feature = "gecko")]
                     if let Ok(system) = input.try_parse(|i| SystemColor::parse(context, i)) {
