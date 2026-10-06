@@ -90,6 +90,7 @@ fn lynx_only_names_and_values_do_not_exist() {
         ("flow-tolerance", "0"),
         ("width", "1rpx"),
         ("overscroll-behavior-x", "contain-bounce"),
+        ("overscroll-behavior-x", "circular"),
         ("scroll-capture", "nearest"),
         ("scroll-capture", "nearest forward auto"),
         ("scroll-capture-x", "nearest"),
