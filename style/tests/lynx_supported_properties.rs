@@ -124,7 +124,9 @@ fn shorthand_longhand_closure_is_authorable() {
 fn internal_storage_longhands_are_not_authorable() {
     // Internal storage exists only to satisfy Stylo invariants. Anything
     // reached through the supported shorthand/longhand closure belongs in
-    // `shorthand_longhand_closure_is_authorable` instead.
+    // `shorthand_longhand_closure_is_authorable` instead. `-servo-top-layer`
+    // is in the name table for UA sheets but is never content-enabled; see
+    // lynx_top_layer.
     for name in [
         "-moz-default-appearance",
         "-servo-top-layer",
@@ -133,7 +135,7 @@ fn internal_storage_longhands_are_not_authorable() {
     ] {
         assert!(
             !is_content_enabled(name),
-            "internal storage property `{name}` must stay out of the Lynx name table"
+            "internal storage property `{name}` must not be content-enabled"
         );
     }
 }
