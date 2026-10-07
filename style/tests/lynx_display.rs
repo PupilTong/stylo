@@ -101,10 +101,13 @@ fn contents_keeps_upstream_box_generation_and_root_fixup_semantics() {
     assert!(contents.is_contents());
     assert_eq!(contents.equivalent_block_display(false), Display::Contents);
 
+    // css-display-3 computes a root `contents` to `block`; Lynx has no flow
+    // layout, so the block-level container is the grammar's initial `flex`.
     let root_display = contents.equivalent_block_display(true);
+    assert_eq!(root_display, Display::Flex);
     assert_eq!(root_display.outside(), DisplayOutside::Block);
-    assert_eq!(root_display.inside(), DisplayInside::Flow);
-    assert_eq!(root_display.to_css_string(), "block");
+    assert_eq!(root_display.inside(), DisplayInside::Flex);
+    assert_eq!(root_display.to_css_string(), "flex");
 }
 
 #[test]
