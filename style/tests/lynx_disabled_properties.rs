@@ -1,0 +1,121 @@
+// Verifies that properties omitted from the Lynx grammar are absent from the
+// generated author name table. Every name below is a real upstream property.
+#![cfg(feature = "lynx")]
+
+use style::properties::PropertyId;
+
+/// Whether `name` parses as a content-enabled property.
+fn is_content_enabled(name: &str) -> bool {
+    PropertyId::parse_enabled_for_all_content(name).is_ok()
+}
+
+/// Properties that exist in stylo but that Lynx does not expose, grouped by the
+/// reason Lynx omits them. All must be disabled under the `lynx` feature.
+const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
+    // Floats / CSS tables (Lynx has neither).
+    "float",
+    "clear",
+    "table-layout",
+    "border-collapse",
+    "border-spacing",
+    "caption-side",
+    "empty-cells",
+    // List markers.
+    "list-style",
+    "list-style-type",
+    "list-style-position",
+    // Counters / quotes; content is exposed for Bobcat generated text.
+    "quotes",
+    "counter-increment",
+    "counter-reset",
+    // Multicol.
+    "columns",
+    "column-count",
+    "column-width",
+    // Writing modes / bidi (Lynx is horizontal-only, uses `direction`).
+    "writing-mode",
+    "unicode-bidi",
+    "text-orientation",
+    // Block-logical box properties (Lynx exposes only the inline-logical ones).
+    "inset-block-start",
+    "margin-block-start",
+    "padding-block-end",
+    "border-block-start-color",
+    "block-size",
+    "inline-size",
+    // Logical contain-intrinsic longhands: un-gecko'd for the servo build so the
+    // `contain-intrinsic-size` logical group stays balanced, but deliberately
+    // kept OUT of the lynx_properties.txt seed (only the physical
+    // contain-intrinsic-width/-height are exposed, via the shorthand closure).
+    "contain-intrinsic-block-size",
+    "contain-intrinsic-inline-size",
+    // Likewise only the physical overscroll-behavior-x/-y are exposed, via
+    // the seeded `overscroll-behavior` shorthand; the logical pair is compiled
+    // for group balance only.
+    "overscroll-behavior-block",
+    "overscroll-behavior-inline",
+    // css-scroll-snap-1's logical scroll-margin/-padding sides and their
+    // logical shorthands: compiled for group balance, never author-facing.
+    "scroll-margin-block-start",
+    "scroll-margin-inline-end",
+    "scroll-padding-block-end",
+    "scroll-padding-inline-start",
+    "scroll-margin-block",
+    "scroll-padding-inline",
+    // Logical properties outside both the project seed and its shorthand
+    // closure.
+    "padding-block",
+    // Effects / misc not in the Lynx property set. `backdrop-filter` is NOT
+    // here: lynx-vello exposes it as a W3C filter-effects-2 value-add over
+    // Lynx's own surface (see lynx_supported_properties).
+    "mix-blend-mode",
+    "backface-visibility",
+    "perspective-origin",
+    "transform-style",
+    "isolation",
+    "appearance",
+    "user-select",
+    "zoom",
+    "tab-size",
+    "scrollbar-width",
+    // Individual transform properties (Lynx only has the `transform` shorthand).
+    "rotate",
+    "scale",
+    "translate",
+    // Text bits Lynx does not expose.
+    "text-transform",
+    "text-justify",
+    "word-spacing",
+    "overflow-wrap",
+    "caret-color",
+    // Background pieces outside the supported subset.
+    "background-blend-mode",
+    // SVG paint properties are now content-enabled upstream for Servo, but
+    // remain outside Lynx's author property surface.
+    "fill",
+    "fill-opacity",
+    "fill-rule",
+    "stroke",
+    "stroke-width",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "stroke-dasharray",
+    "stroke-dashoffset",
+    "stroke-miterlimit",
+    "stroke-opacity",
+];
+
+#[test]
+fn unsupported_properties_are_disabled() {
+    let mut still_enabled = Vec::new();
+    for &name in NON_LYNX_UPSTREAM_PROPERTIES {
+        if is_content_enabled(name) {
+            still_enabled.push(name);
+        }
+    }
+    assert!(
+        still_enabled.is_empty(),
+        "these properties are not part of Lynx and must be disabled under the `lynx` feature, \
+         but still parse: {still_enabled:?}",
+    );
+}

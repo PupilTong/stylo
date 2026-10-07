@@ -44,12 +44,22 @@ fn generate_properties(engine: &str) {
     for entry in WalkDir::new("properties") {
         let entry = entry.unwrap();
         match entry.path().extension().and_then(|e| e.to_str()) {
-            Some("mako") | Some("rs") | Some("py") | Some("zip") | Some("toml") => {
+            // `txt` covers lynx_properties.txt — the lynx property seed
+            // list feeds codegen through data.py, so editing it must
+            // regenerate.
+            Some("mako") | Some("rs") | Some("py") | Some("zip") | Some("toml") | Some("txt") => {
                 println!("cargo:rerun-if-changed={}", entry.path().display());
             },
             _ => {},
         }
     }
+
+    // The property generator trims its output to the Lynx-supported set when the
+    // `lynx` feature is on (see properties/data.py). Cargo sets CARGO_FEATURE_LYNX
+    // for the build script; forward it to build.py as STYLO_LYNX, and re-run
+    // codegen whenever the feature is toggled.
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_LYNX");
+    let lynx = env::var_os("CARGO_FEATURE_LYNX").is_some();
 
     let script = Path::new(&env::var_os("CARGO_MANIFEST_DIR").unwrap())
         .join("properties")
@@ -62,6 +72,7 @@ fn generate_properties(engine: &str) {
         // TODO(mrobinson): Is this happening because of how we run this script? It
         // would be better to ensure are just placed in the output directory.
         .env("PYTHONDONTWRITEBYTECODE", "1")
+        .env("STYLO_LYNX", if lynx { "1" } else { "0" })
         .arg(&script)
         .arg(engine)
         .arg("style-crate")

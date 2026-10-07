@@ -1020,6 +1020,7 @@ impl NonNegativeLengthPercentage {
 }
 
 impl TryTacticAdjustment for LengthPercentage {
+    #[cfg(not(feature = "lynx"))]
     fn try_tactic_adjustment(&mut self, old_side: PhysicalSide, new_side: PhysicalSide) {
         match self.unpack_mut() {
             UnpackedMut::Calc(calc) => calc.node.try_tactic_adjustment(old_side, new_side),
@@ -1030,11 +1031,51 @@ impl TryTacticAdjustment for LengthPercentage {
             UnpackedMut::Length(..) => {},
         }
     }
+
+    /// css-anchor-position-1 §6.5.2 rewrites the anchor functions in a
+    /// swapped value, not the value itself: `top: 20%` swaps to
+    /// `bottom: 20%` (the mirror image), and only an `anchor()`'s
+    /// `<percentage>` side becomes `100% - p` between opposing directions.
+    #[cfg(feature = "lynx")]
+    fn try_tactic_adjustment(&mut self, old_side: PhysicalSide, new_side: PhysicalSide) {
+        if let UnpackedMut::Calc(calc) = self.unpack_mut() {
+            calc.node
+                .try_tactic_adjust_anchor_functions(old_side, new_side);
+        }
+    }
 }
 
 impl TryTacticAdjustment for GenericAnchorFunctionFallback<ComputedLeaf> {
+    #[cfg(not(feature = "lynx"))]
     fn try_tactic_adjustment(&mut self, old_side: PhysicalSide, new_side: PhysicalSide) {
         self.node.try_tactic_adjustment(old_side, new_side)
+    }
+
+    /// A fallback is a value like the property's own: its anchor functions
+    /// are rewritten, its percentages kept (see `LengthPercentage`).
+    #[cfg(feature = "lynx")]
+    fn try_tactic_adjustment(&mut self, old_side: PhysicalSide, new_side: PhysicalSide) {
+        self.node
+            .try_tactic_adjust_anchor_functions(old_side, new_side)
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl CalcNode {
+    /// Rewrites the `anchor()` / `anchor-size()` nodes of a swapped math
+    /// function for a try tactic, leaving its other leaves alone. (The
+    /// `TryTacticAdjustment` impl below also flips percentage leaves; it is
+    /// what an `anchor()` side given as a math function goes through.)
+    fn try_tactic_adjust_anchor_functions(
+        &mut self,
+        old_side: PhysicalSide,
+        new_side: PhysicalSide,
+    ) {
+        self.visit_depth_first(|node| match node {
+            Self::Anchor(a) => a.try_tactic_adjustment(old_side, new_side),
+            Self::AnchorSize(a) => a.try_tactic_adjustment(old_side, new_side),
+            _ => {},
+        });
     }
 }
 

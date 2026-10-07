@@ -423,7 +423,9 @@ pub mod ${property.ident} {
         context: &ParserContext,
         input: &mut Parser,
     ) -> Result<SpecifiedValue, ParseError> {
+        % if not property.vector.single_item:
         use style_traits::Separator;
+        % endif
 
         % if allow_empty or property.vector.none_value:
         if input.try_parse(|input| input.expect_ident_matching("none")).is_ok() {
@@ -435,10 +437,15 @@ pub mod ${property.ident} {
         }
         % endif
 
+        % if property.vector.single_item:
+        let value = single_value::parse(context, input)?;
+        Ok(SpecifiedValue(crate::OwnedSlice::from(vec![value])))
+        % else:
         let v = style_traits::${property.vector.separator}::parse(input, |parser| {
             single_value::parse(context, parser)
         })?;
         Ok(SpecifiedValue(v.into()))
+        % endif
     }
 
     pub use self::single_value::SpecifiedValue as SingleSpecifiedValue;

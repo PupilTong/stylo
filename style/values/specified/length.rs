@@ -19,8 +19,8 @@ use crate::values::computed::{self, CSSPixelLength, Context, FontSize};
 use crate::values::generics::NonNegative;
 use crate::values::generics::length as generics;
 use crate::values::generics::length::{
-    GenericAnchorSizeFunction, GenericLengthOrNumber, GenericLengthPercentageOrNormal,
-    GenericMargin, GenericMaxSize, GenericSize,
+    anchor_positioning_enabled, GenericAnchorSizeFunction, GenericLengthOrNumber,
+    GenericLengthPercentageOrNormal, GenericMargin, GenericMaxSize, GenericSize,
 };
 use crate::values::specified::NonNegativeNumber;
 use crate::values::specified::calc::{
@@ -75,6 +75,9 @@ pub enum LengthUnit {
     Q,
     Pt,
     Pc,
+    // Lynx-specific viewport-relative length (1rpx = viewport width / 750).
+    #[cfg(feature = "lynx")]
+    Rpx,
     // Font-relative lengths.
     Em,
     Ex,
@@ -142,57 +145,120 @@ impl LengthUnit {
 
         Ok(match_ignore_ascii_case! { unit,
             "px" => Self::Px,
+            #[cfg(not(feature = "lynx"))]
             "in" => Self::In,
+            #[cfg(not(feature = "lynx"))]
             "cm" => Self::Cm,
+            #[cfg(not(feature = "lynx"))]
             "mm" => Self::Mm,
+            #[cfg(not(feature = "lynx"))]
             "q" => Self::Q,
+            #[cfg(not(feature = "lynx"))]
             "pt" => Self::Pt,
+            #[cfg(not(feature = "lynx"))]
             "pc" => Self::Pc,
+            // The Lynx rpx unit is viewport-relative (1rpx = viewport
+            // width / 750), so like vw/vh below it is only valid in contexts
+            // permitting computational dependence (not @font-face descriptors).
+            #[cfg(feature = "lynx")]
+            "rpx" if allows_computational_dependence => Self::Rpx,
             // font-relative
             "em" if allows_computational_dependence => Self::Em,
+            #[cfg(not(feature = "lynx"))]
             "ex" if allows_computational_dependence => Self::Ex,
+            #[cfg(not(feature = "lynx"))]
             "rex" if allows_computational_dependence => Self::Rex,
+            #[cfg(not(feature = "lynx"))]
             "ch" if allows_computational_dependence => Self::Ch,
+            #[cfg(not(feature = "lynx"))]
             "rch" if allows_computational_dependence => Self::Rch,
+            #[cfg(not(feature = "lynx"))]
             "cap" if allows_computational_dependence => Self::Cap,
+            #[cfg(not(feature = "lynx"))]
             "rcap" if allows_computational_dependence => Self::Rcap,
+            #[cfg(not(feature = "lynx"))]
             "ic" if allows_computational_dependence => Self::Ic,
+            #[cfg(not(feature = "lynx"))]
             "ric" if allows_computational_dependence => Self::Ric,
             "rem" if allows_computational_dependence => Self::Rem,
+            #[cfg(not(feature = "lynx"))]
             "lh" if allows_computational_dependence => Self::Lh,
+            #[cfg(not(feature = "lynx"))]
             "rlh" if allows_computational_dependence => Self::Rlh,
             // viewport percentages
             "vw" if !in_page_rule => Self::Vw,
+            #[cfg(not(feature = "lynx"))]
             "svw" if !in_page_rule => Self::Svw,
+            #[cfg(not(feature = "lynx"))]
             "lvw" if !in_page_rule => Self::Lvw,
+            #[cfg(not(feature = "lynx"))]
             "dvw" if !in_page_rule => Self::Dvw,
             "vh" if !in_page_rule => Self::Vh,
+            #[cfg(not(feature = "lynx"))]
             "svh" if !in_page_rule => Self::Svh,
+            #[cfg(not(feature = "lynx"))]
             "lvh" if !in_page_rule => Self::Lvh,
+            #[cfg(not(feature = "lynx"))]
             "dvh" if !in_page_rule => Self::Dvh,
+            #[cfg(not(feature = "lynx"))]
             "vmin" if !in_page_rule => Self::Vmin,
+            #[cfg(not(feature = "lynx"))]
             "svmin" if !in_page_rule => Self::Svmin,
+            #[cfg(not(feature = "lynx"))]
             "lvmin" if !in_page_rule => Self::Lvmin,
+            #[cfg(not(feature = "lynx"))]
             "dvmin" if !in_page_rule => Self::Dvmin,
+            #[cfg(not(feature = "lynx"))]
             "vmax" if !in_page_rule => Self::Vmax,
+            #[cfg(not(feature = "lynx"))]
             "svmax" if !in_page_rule => Self::Svmax,
+            #[cfg(not(feature = "lynx"))]
             "lvmax" if !in_page_rule => Self::Lvmax,
+            #[cfg(not(feature = "lynx"))]
             "dvmax" if !in_page_rule => Self::Dvmax,
+            #[cfg(not(feature = "lynx"))]
             "vb" if !in_page_rule => Self::Vb,
+            #[cfg(not(feature = "lynx"))]
             "svb" if !in_page_rule => Self::Svb,
+            #[cfg(not(feature = "lynx"))]
             "lvb" if !in_page_rule => Self::Lvb,
+            #[cfg(not(feature = "lynx"))]
             "dvb" if !in_page_rule => Self::Dvb,
+            #[cfg(not(feature = "lynx"))]
             "vi" if !in_page_rule => Self::Vi,
+            #[cfg(not(feature = "lynx"))]
             "svi" if !in_page_rule => Self::Svi,
+            #[cfg(not(feature = "lynx"))]
             "lvi" if !in_page_rule => Self::Lvi,
+            #[cfg(not(feature = "lynx"))]
             "dvi" if !in_page_rule => Self::Dvi,
             // Container query lengths. Inherit the limitation from viewport units since
             // we may fall back to them.
-            "cqw" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqw,
-            "cqh" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqh,
+            //
+            // Lynx admits the two physical container units (`cqw`/`cqh`).
+            // They are plain W3C units that authors get from the browser on
+            // the web target, so content written there uses them; Lynx's own
+            // native engine has no such token. They are a standard
+            // css-contain-3 implementation: `cqw`/`cqh` are the nearest size
+            // query container's content-box width/height divided by 100, and
+            // `container-type` is content-enabled under `lynx`, so an element
+            // really can be that container. When no ancestor is a size query
+            // container, css-contain-3's fallback applies and both resolve
+            // against the small viewport (the same lengths as `vw`/`vh`). The
+            // logical units (`cqi`/`cqb`/`cqmin`/`cqmax`) stay out.
+            "cqw" if !in_page_rule && (cfg!(feature = "gecko") || cfg!(feature = "lynx")) => {
+                Self::Cqw
+            },
+            "cqh" if !in_page_rule && (cfg!(feature = "gecko") || cfg!(feature = "lynx")) => {
+                Self::Cqh
+            },
+            #[cfg(not(feature = "lynx"))]
             "cqi" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqi,
+            #[cfg(not(feature = "lynx"))]
             "cqb" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqb,
+            #[cfg(not(feature = "lynx"))]
             "cqmin" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqmin,
+            #[cfg(not(feature = "lynx"))]
             "cqmax" if !in_page_rule && cfg!(feature = "gecko") => Self::Cqmax,
             _ => return Err(()),
         })
@@ -209,6 +275,8 @@ impl LengthUnit {
             Self::Q => "q",
             Self::Pt => "pt",
             Self::Pc => "pc",
+            #[cfg(feature = "lynx")]
+            Self::Rpx => "rpx",
             Self::Em => NoCalcLength::EM,
             Self::Ex => NoCalcLength::EX,
             Self::Rex => NoCalcLength::REX,
@@ -284,6 +352,13 @@ impl LengthUnit {
         )
     }
 
+    /// Whether this is the Lynx-specific `rpx` viewport-relative unit.
+    #[cfg(feature = "lynx")]
+    #[inline]
+    pub fn is_rpx(self) -> bool {
+        matches!(self, Self::Rpx)
+    }
+
     /// Whether this is a viewport-percentage unit.
     #[inline]
     pub fn is_viewport_percentage(self) -> bool {
@@ -333,6 +408,8 @@ impl LengthUnit {
             Self::Px | Self::In | Self::Cm | Self::Mm | Self::Q | Self::Pt | Self::Pc => {
                 SortKey::Px
             },
+            #[cfg(feature = "lynx")]
+            Self::Rpx => SortKey::Rpx,
             Self::Em => SortKey::Em,
             Self::Ex => SortKey::Ex,
             Self::Rex => SortKey::Rex,
@@ -984,6 +1061,23 @@ impl NoCalcLength {
         CSSPixelLength::new((container_length.to_f64_px() * factor as f64 / 100.0) as f32).finite()
     }
 
+    /// Compute the Lynx `rpx` length: `1rpx = viewport width / 750`.
+    ///
+    /// This is exactly [`Self::viewport_percentage_to_computed_value`]'s `vw`
+    /// pipeline with a denominator of 750 instead of 100 (`N rpx` ==
+    /// `N/7.5 vw`): the viewport width comes from the device (flagging the
+    /// style with `USES_VIEWPORT_UNITS`), zoom applies to the base, and the
+    /// scaled result truncates on the `Au` grid.
+    #[cfg(feature = "lynx")]
+    fn rpx_to_computed_value(&self, context: &Context) -> CSSPixelLength {
+        debug_assert_eq!(self.unit, LengthUnit::Rpx);
+        let size = context.viewport_size_for_viewport_unit_resolution(ViewportVariant::UADefault);
+        let length = context.builder.effective_zoom.zoom(size.width.0 as f32);
+        let trunc_scaled =
+            ((length as f64 * self.value as f64 / 750.).trunc() / AU_PER_PX as f64) as f32;
+        CSSPixelLength::new(crate::values::normalize(trunc_scaled))
+    }
+
     /// Computes a ServoCharacterWidth length against a reference font size.
     fn servo_character_width_to_computed_value(
         &self,
@@ -1019,6 +1113,10 @@ impl NoCalcLength {
         }
         if unit.is_container_relative() {
             return self.container_relative_to_computed_value(context);
+        }
+        #[cfg(feature = "lynx")]
+        if unit.is_rpx() {
+            return self.rpx_to_computed_value(context);
         }
         debug_assert_eq!(unit, LengthUnit::ServoCharacterWidth);
         self.servo_character_width_to_computed_value(
@@ -1490,7 +1588,7 @@ impl LengthPercentage {
     /// Parses allowing the unitless length quirk, as well as allowing
     /// anchor-positioning related function, `anchor-size()`.
     #[inline]
-    fn parse_quirky_with_anchor_size_function(
+    pub(crate) fn parse_quirky_with_anchor_size_function(
         context: &ParserContext,
         input: &mut Parser,
         allow_quirks: AllowQuirks,
@@ -1825,6 +1923,50 @@ enum ParseAnchorFunctions {
     No,
 }
 
+/// Parses a plain (not math-function) `anchor-size()` in a property whose
+/// value type is `T`.
+///
+/// Under the `lynx` feature the fallback is css-anchor-position-1 §5.1's
+/// `<length-percentage>`, which in these properties may itself use the
+/// anchor-size function: a plain length-percentage (`plain`), a math function
+/// containing `anchor-size()` (`calc`), or a nested plain `anchor-size()`
+/// (parsed by this function again and turned into a `T` by `wrap`). The
+/// property's other keywords (`auto`, `none`, `min-content`, ...) and
+/// `anchor()` are not fallbacks. Other builds keep upstream's fallback, a
+/// full `T`, and ignore the three callbacks.
+pub(crate) fn parse_anchor_size_function<T, P, C, W>(
+    context: &ParserContext,
+    input: &mut Parser,
+    plain: P,
+    calc: C,
+    wrap: W,
+) -> Result<GenericAnchorSizeFunction<T>, ParseError>
+where
+    T: Parse,
+    P: Fn(&mut Parser) -> Result<T, ParseError> + Copy,
+    C: Fn(&mut Parser) -> Result<T, ParseError> + Copy,
+    W: Fn(GenericAnchorSizeFunction<T>) -> T + Copy,
+{
+    #[cfg(feature = "lynx")]
+    {
+        input.expect_function_matching("anchor-size")?;
+        GenericAnchorSizeFunction::parse_inner(context, input, |i| {
+            if let Ok(value) = i.try_parse(plain) {
+                return Ok(value);
+            }
+            if let Ok(value) = i.try_parse(calc) {
+                return Ok(value);
+            }
+            parse_anchor_size_function(context, i, plain, calc, wrap).map(wrap)
+        })
+    }
+    #[cfg(not(feature = "lynx"))]
+    {
+        let _ = (plain, calc, wrap);
+        GenericAnchorSizeFunction::parse(context, input)
+    }
+}
+
 impl Size {
     /// Parses, with quirks.
     pub fn parse_quirky(
@@ -1871,8 +2013,8 @@ impl Size {
                                "auto" => Auto);
         parse_fit_content_function!(Size, input, context, allow_quirks);
 
-        let allow_anchor = allow_anchor_functions == ParseAnchorFunctions::Yes
-            && crate::pref!("layout.css.anchor-positioning.enabled", gecko = true);
+        let allow_anchor =
+            allow_anchor_functions == ParseAnchorFunctions::Yes && anchor_positioning_enabled();
         match input
             .try_parse(|i| NonNegativeLengthPercentage::parse_quirky(context, i, allow_quirks))
         {
@@ -1890,7 +2032,20 @@ impl Size {
             return Ok(GenericSize::AnchorContainingCalcFunction(length));
         }
         Ok(Self::AnchorSizeFunction(Box::new(
-            GenericAnchorSizeFunction::parse(context, input)?,
+            parse_anchor_size_function(
+                context,
+                input,
+                |i| NonNegativeLengthPercentage::parse(context, i).map(Self::LengthPercentage),
+                |i| {
+                    NonNegativeLengthPercentage::parse_non_negative_with_anchor_size(
+                        context,
+                        i,
+                        AllowQuirks::No,
+                    )
+                    .map(Self::AnchorContainingCalcFunction)
+                },
+                |f| Self::AnchorSizeFunction(Box::new(f)),
+            )?,
         )))
     }
 
@@ -1950,6 +2105,45 @@ impl Parse for MaxSize {
 }
 
 impl MaxSize {
+    /// Lynx max-size grammar: a non-negative length or percentage, plus
+    /// css-anchor-position-1's `anchor-size()` on its own or inside a math
+    /// function (css-anchor-position-1 §5.1). The unbounded
+    /// `None` variant remains the internal initial value only.
+    #[cfg(feature = "lynx")]
+    pub fn parse_lynx_max_size(
+        context: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
+        if let Ok(length) = input.try_parse(|i| NonNegativeLengthPercentage::parse(context, i)) {
+            return Ok(Self::LengthPercentage(length));
+        }
+        if let Ok(length) = input.try_parse(|i| {
+            NonNegativeLengthPercentage::parse_non_negative_with_anchor_size(
+                context,
+                i,
+                AllowQuirks::No,
+            )
+        }) {
+            return Ok(GenericMaxSize::AnchorContainingCalcFunction(length));
+        }
+        Ok(Self::AnchorSizeFunction(Box::new(
+            parse_anchor_size_function(
+                context,
+                input,
+                |i| NonNegativeLengthPercentage::parse(context, i).map(Self::LengthPercentage),
+                |i| {
+                    NonNegativeLengthPercentage::parse_non_negative_with_anchor_size(
+                        context,
+                        i,
+                        AllowQuirks::No,
+                    )
+                    .map(Self::AnchorContainingCalcFunction)
+                },
+                |f| Self::AnchorSizeFunction(Box::new(f)),
+            )?,
+        )))
+    }
+
     /// Parses, with quirks.
     pub fn parse_quirky(
         context: &ParserContext,
@@ -1965,9 +2159,7 @@ impl MaxSize {
             .try_parse(|i| NonNegativeLengthPercentage::parse_quirky(context, i, allow_quirks))
         {
             Ok(length) => return Ok(GenericMaxSize::LengthPercentage(length)),
-            Err(e) if !crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) => {
-                return Err(e.into())
-            },
+            Err(e) if !anchor_positioning_enabled() => return Err(e.into()),
             Err(_) => (),
         };
         if let Ok(length) = input.try_parse(|i| {
@@ -1980,7 +2172,20 @@ impl MaxSize {
             return Ok(GenericMaxSize::AnchorContainingCalcFunction(length));
         }
         Ok(Self::AnchorSizeFunction(Box::new(
-            GenericAnchorSizeFunction::parse(context, input)?,
+            parse_anchor_size_function(
+                context,
+                input,
+                |i| NonNegativeLengthPercentage::parse(context, i).map(Self::LengthPercentage),
+                |i| {
+                    NonNegativeLengthPercentage::parse_non_negative_with_anchor_size(
+                        context,
+                        i,
+                        AllowQuirks::No,
+                    )
+                    .map(Self::AnchorContainingCalcFunction)
+                },
+                |f| Self::AnchorSizeFunction(Box::new(f)),
+            )?,
         )))
     }
 }
@@ -2006,9 +2211,7 @@ impl Margin {
         }
         match input.try_parse(|i| i.expect_ident_matching("auto")) {
             Ok(_) => return Ok(Self::Auto),
-            Err(e) if !crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) => {
-                return Err(e.into())
-            },
+            Err(e) if !anchor_positioning_enabled() => return Err(e.into()),
             Err(_) => (),
         };
         if let Ok(l) = input.try_parse(|i| {
@@ -2016,7 +2219,20 @@ impl Margin {
         }) {
             return Ok(Self::AnchorContainingCalcFunction(l));
         }
-        let inner = GenericAnchorSizeFunction::<Margin>::parse(context, input)?;
+        let inner = parse_anchor_size_function(
+            context,
+            input,
+            |i| LengthPercentage::parse(context, i).map(Self::LengthPercentage),
+            |i| {
+                LengthPercentage::parse_quirky_with_anchor_size_function(
+                    context,
+                    i,
+                    AllowQuirks::No,
+                )
+                .map(Self::AnchorContainingCalcFunction)
+            },
+            |f| Self::AnchorSizeFunction(Box::new(f)),
+        )?;
         Ok(Self::AnchorSizeFunction(Box::new(inner)))
     }
 }

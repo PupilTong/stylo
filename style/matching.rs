@@ -1083,7 +1083,13 @@ pub trait MatchMethods: TElement {
             let device = context.shared.stylist.device();
 
             // Needed for the "inherit from body" quirk.
+            #[cfg(not(feature = "lynx"))]
             let text_color = *new_primary_style.get_inherited_text().get_color();
+            #[cfg(feature = "lynx")]
+            let text_color = new_primary_style
+                .get_inherited_text()
+                .get_color()
+                .solid_color();
             device.set_body_text_color(text_color);
         }
 

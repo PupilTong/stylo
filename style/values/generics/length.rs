@@ -451,6 +451,19 @@ where
     }
 }
 
+/// Whether css-anchor-position-1's value-level syntax parses: `anchor()` (in
+/// the inset properties) and `anchor-size()` (in the sizing, inset and margin
+/// properties), plain or inside a math function; alignment's `anchor-center`
+/// keyword; and the `@position-try` rule.
+///
+/// Under the `lynx` feature this is on unconditionally: lynx-vello implements
+/// the module. Otherwise it is the anchor-positioning pref, which is off for
+/// servo, so none of it parses there.
+#[inline]
+pub fn anchor_positioning_enabled() -> bool {
+    cfg!(feature = "lynx") || crate::pref!("layout.css.anchor-positioning.enabled", gecko = true)
+}
+
 impl<Fallback> Parse for GenericAnchorSizeFunction<Fallback>
 where
     Fallback: Parse,
@@ -631,7 +644,7 @@ where
     fn collect_completion_keywords(f: style_traits::KeywordsCollectFn) {
         LP::collect_completion_keywords(f);
         f(&["auto"]);
-        if crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) {
+        if anchor_positioning_enabled() {
             f(&["anchor-size"]);
         }
     }
