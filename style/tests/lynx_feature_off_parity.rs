@@ -361,3 +361,27 @@ fn anchor_positioning_stays_pref_gated() {
     use style::stylesheets::StylesheetInDocument;
     assert_eq!(sheet.contents(&guard).rules(&guard).len(), 1);
 }
+
+#[test]
+fn at_scope_stays_pref_gated() {
+    // css-cascade-6 `@scope` parses under the `lynx` feature; a stock Servo
+    // build keeps it behind `layout.css.at-scope.enabled` (false), so it is
+    // an unknown at-rule there.
+    let lock = style::shared_lock::SharedRwLock::new();
+    let sheet = style::stylesheets::Stylesheet::from_str(
+        "@scope (.a) to (.b) { .c { color: red } } a { color: red }",
+        url_data(),
+        Origin::Author,
+        servo_arc::Arc::new(lock.wrap(style::media_queries::MediaList::empty())),
+        lock.clone(),
+        None,
+        None,
+        QuirksMode::NoQuirks,
+        style::stylesheets::AllowImportRules::Yes,
+    );
+    let guard = lock.read();
+    use style::stylesheets::StylesheetInDocument;
+    let rules = sheet.contents(&guard).rules(&guard);
+    assert_eq!(rules.len(), 1);
+    assert!(matches!(rules[0], style::stylesheets::CssRule::Style(_)));
+}
