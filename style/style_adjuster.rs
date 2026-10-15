@@ -139,17 +139,15 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
     }
 
     /// Lynx's text tags, `text`, `inline-text` and `inline-truncation`, are
-    /// either a `-lynx-text` scope or not rendered: any other `display`
-    /// computes to `none`.
+    /// either a `-lynx-text` scope or not rendered: any `display` other than
+    /// `none` computes to `-lynx-text`.
     ///
     /// Native Lynx fixes a text's layout structurally
     /// (`TextElement::ConvertToInlineElement`), so no `display` value can make
     /// a text a flex or grid box, while `display: none` still removes it. The
     /// outer engine's UA sheet gives these tags `display: -lynx-text` as a
-    /// plain declaration; an author `display: none` therefore wins, and an
-    /// author `display: flex` produces a box this adjuster hides, rather than
-    /// a flex container around text no layout mode outside `-lynx-text` lays
-    /// out.
+    /// plain declaration, so an author `display: none` wins, and an author
+    /// `display: flex` is computed back to `-lynx-text` here.
     #[cfg(feature = "lynx")]
     fn adjust_for_lynx_text<E>(&mut self, element: Option<E>)
     where
@@ -169,7 +167,7 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         }
         let display = *self.style.get_box().get_display();
         if display != Display::None && display != Display::LynxText {
-            self.style.mutate_box().set_display(Display::None);
+            self.style.mutate_box().set_display(Display::LynxText);
         }
     }
 

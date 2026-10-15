@@ -1,12 +1,11 @@
 //! Lynx's text tags under the `lynx` feature: `text`, `inline-text` and
-//! `inline-truncation` compute any `display` other than `none` and
-//! `-lynx-text` to `none`, in `StyleAdjuster`.
+//! `inline-truncation` compute any `display` other than `none` to
+//! `-lynx-text`, in `StyleAdjuster`.
 //!
 //! The outer engine's UA sheet gives these tags `display: -lynx-text` as a
 //! plain declaration, so an author `display: none` hides a text, and an
-//! author `display: flex` — which native Lynx would ignore and no layout mode
-//! outside `-lynx-text` could lay text out under — hides it as well, instead
-//! of producing a flex container around text that never renders.
+//! author `display: flex` — which native Lynx ignores, and under which no
+//! layout mode here could lay text out — leaves it a text.
 #![cfg(feature = "lynx")]
 
 #[path = "support/test_element.rs"]
@@ -105,12 +104,12 @@ fn a_text_tag_keeps_none_and_lynx_text() {
 }
 
 #[test]
-fn a_text_tag_computes_every_other_display_to_none() {
+fn a_text_tag_computes_every_other_display_to_lynx_text() {
     for tag in TEXT_TAGS {
         for display in OTHER_DISPLAYS {
             assert_eq!(
                 adjusted_display(TestElement::named(tag), display),
-                Display::None,
+                Display::LynxText,
                 "{tag}: {display:?}"
             );
         }
