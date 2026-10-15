@@ -2523,7 +2523,7 @@ impl Env {
             included_cascade_flags: RuleCascadeFlags::empty(),
         };
         self.stylist.cascade_style_and_visited(
-            Some(TestElement),
+            Some(TestElement::div()),
             None,
             &inputs,
             &guards,
@@ -2553,7 +2553,7 @@ impl Env {
             base,
             &StylesheetGuards::same(&guard),
             scope,
-            TestElement,
+            TestElement::div(),
             item,
         )
     }

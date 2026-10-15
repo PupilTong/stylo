@@ -7,6 +7,7 @@
 //! that cascade on an element's behalf without matching or traversing
 //! (`Stylist::cascade_style_and_visited`, `Stylist::resolve_position_try`).
 //!
+//! Its local name is `div` unless a test names it ([`TestElement::named`]).
 //! Every tree query answers "none", so the element is a root in the same
 //! tree as the author stylesheets; anything a cascade should never reach
 //! (style data, snapshots, traversal bookkeeping) panics.
@@ -40,9 +41,23 @@ static NAMESPACE: LazyLock<BorrowedNamespace> =
     LazyLock::new(|| BorrowedNamespace::from("http://www.w3.org/1999/xhtml"));
 static IDENTITY: u8 = 0;
 
-/// The element.
+/// The element, by its local name.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct TestElement;
+pub struct TestElement(&'static BorrowedLocalName);
+
+impl TestElement {
+    /// A `div`.
+    pub fn div() -> Self {
+        Self(&LOCAL_NAME)
+    }
+
+    /// An element named `name`. Each call leaks one atom, which a test can
+    /// afford.
+    #[allow(dead_code)]
+    pub fn named(name: &str) -> Self {
+        Self(Box::leak(Box::new(BorrowedLocalName::from(name))))
+    }
+}
 
 /// Its node.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -112,7 +127,7 @@ impl TNode for TestNode {
     }
 
     fn as_element(&self) -> Option<TestElement> {
-        Some(TestElement)
+        Some(TestElement::div())
     }
 
     fn as_document(&self) -> Option<TestDocument> {
@@ -203,7 +218,7 @@ impl selectors::Element for TestElement {
     }
 
     fn has_local_name(&self, local_name: &BorrowedLocalName) -> bool {
-        *local_name == *LOCAL_NAME
+        local_name == self.0
     }
 
     fn has_namespace(&self, ns: &BorrowedNamespace) -> bool {
@@ -458,7 +473,7 @@ impl TElement for TestElement {
     }
 
     fn local_name(&self) -> &BorrowedLocalName {
-        &LOCAL_NAME
+        self.0
     }
 
     fn namespace(&self) -> &BorrowedNamespace {
