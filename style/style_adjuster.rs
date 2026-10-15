@@ -138,6 +138,41 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         StyleAdjuster { style }
     }
 
+    /// Lynx's text tags, `text`, `inline-text` and `inline-truncation`, are
+    /// either a `-lynx-text` scope or not rendered: any other `display`
+    /// computes to `none`.
+    ///
+    /// Native Lynx fixes a text's layout structurally
+    /// (`TextElement::ConvertToInlineElement`), so no `display` value can make
+    /// a text a flex or grid box, while `display: none` still removes it. The
+    /// outer engine's UA sheet gives these tags `display: -lynx-text` as a
+    /// plain declaration; an author `display: none` therefore wins, and an
+    /// author `display: flex` produces a box this adjuster hides, rather than
+    /// a flex container around text no layout mode outside `-lynx-text` lays
+    /// out.
+    #[cfg(feature = "lynx")]
+    fn adjust_for_lynx_text<E>(&mut self, element: Option<E>)
+    where
+        E: TElement,
+    {
+        if self.style.pseudo.is_some() {
+            return;
+        }
+        let Some(element) = element else {
+            return;
+        };
+        if !matches!(
+            &**element.local_name(),
+            "text" | "inline-text" | "inline-truncation"
+        ) {
+            return;
+        }
+        let display = *self.style.get_box().get_display();
+        if display != Display::None && display != Display::LynxText {
+            self.style.mutate_box().set_display(Display::None);
+        }
+    }
+
     /// <https://fullscreen.spec.whatwg.org/#new-stacking-layer>
     ///
     ///    Any position value other than 'absolute' and 'fixed' are
@@ -1076,6 +1111,8 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
             self.adjust_for_fieldset_content();
             self.adjust_for_text_control_editing_root();
         }
+        #[cfg(feature = "lynx")]
+        self.adjust_for_lynx_text(element);
         self.adjust_for_top_layer();
         self.blockify_if_necessary(layout_parent_style, element);
         #[cfg(feature = "gecko")]

@@ -154,7 +154,7 @@ fn style(origin: Origin, scheme: PrefersColorScheme, declarations: &str) -> Arc<
         included_cascade_flags: RuleCascadeFlags::empty(),
     };
     stylist.cascade_style_and_visited(
-        Some(TestElement),
+        Some(TestElement::div()),
         None,
         &inputs,
         &guards,
