@@ -71,6 +71,13 @@ fn standard_property_and_value_grammar_is_unchanged() {
         ("transform", "rotate(1grad)"),
         ("color", "currentcolor"),
         ("display", "inherit"),
+        // <baseline-position>, whose parser the `lynx` feature shares.
+        ("align-content", "last baseline"),
+        ("align-items", "first baseline"),
+        ("align-self", "last baseline"),
+        ("justify-items", "last baseline"),
+        ("justify-self", "first baseline"),
+        ("place-items", "last baseline"),
     ] {
         assert!(parses(name, value), "upstream `{name}: {value}` must parse");
     }
