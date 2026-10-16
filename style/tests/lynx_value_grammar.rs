@@ -198,26 +198,23 @@ fn alignment_and_text_keyword_grammars() {
     rejects("align-self", &["normal", "self-start", "safe center"]);
     accepts(
         "justify-self",
-        &["auto", "stretch", "center", "start", "end"],
+        &["auto", "stretch", "center", "start", "end", "baseline"],
     );
-    rejects(
-        "justify-self",
-        &["normal", "flex-start", "baseline", "safe center"],
-    );
+    rejects("justify-self", &["normal", "flex-start", "safe center"]);
     accepts("align-items", &["stretch", "baseline", "flex-end"]);
     rejects(
         "align-items",
         &["auto", "normal", "self-start", "safe center"],
     );
-    accepts("justify-items", &["stretch", "center", "start", "end"]);
-    rejects(
+    accepts(
         "justify-items",
-        &["normal", "auto", "baseline", "flex-start"],
+        &["stretch", "center", "start", "end", "baseline"],
     );
-    accepts("place-self", &["center", "flex-start center"]);
-    rejects("place-self", &["flex-start", "baseline"]);
-    accepts("place-items", &["center", "baseline center"]);
-    rejects("place-items", &["baseline", "flex-start"]);
+    rejects("justify-items", &["normal", "auto", "flex-start"]);
+    accepts("place-self", &["center", "flex-start center", "baseline"]);
+    rejects("place-self", &["flex-start"]);
+    accepts("place-items", &["center", "baseline center", "baseline"]);
+    rejects("place-items", &["flex-start"]);
 
     accepts("text-align", &["start", "end", "left", "right", "center"]);
     rejects("text-align", &["justify", "match-parent", "-webkit-center"]);
@@ -249,9 +246,11 @@ fn alignment_and_text_keyword_grammars() {
 
 // ------------------------------------------------------------------------
 // `<baseline-position>` (css-align-3 §4.2) on the item and self alignment
-// properties. Native Lynx stops at `baseline` (`FlexAlignType` ends at
-// `kBaseline`); by the user's ruling of 2026-10-16 the `lynx` grammar also
-// takes `first baseline` and `last baseline`, as web-core's browser does.
+// properties, on both axes. Native Lynx stops at `baseline`, on the block
+// axis only (`FlexAlignType` ends at `kBaseline`; `JustifyType` has no
+// baseline); by the user's ruling of 2026-10-16 the `lynx` grammar takes the
+// whole `<baseline-position>` on `align-items`, `align-self`,
+// `justify-items` and `justify-self`, as web-core's browser does.
 // `first baseline` is the same value as `baseline` and serializes as
 // `baseline`.
 // ------------------------------------------------------------------------
@@ -346,15 +345,9 @@ fn assert_baseline_positions(name: &str) {
 }
 
 #[test]
-fn align_items_and_align_self_take_every_baseline_position() {
-    assert_baseline_positions("align-items");
-    assert_baseline_positions("align-self");
-}
-
-#[test]
-fn justify_items_and_justify_self_take_no_baseline_position() {
-    for name in ["justify-items", "justify-self"] {
-        rejects(name, &["baseline", "first baseline", "last baseline"]);
+fn the_item_and_self_alignment_properties_take_every_baseline_position() {
+    for name in ["align-items", "align-self", "justify-items", "justify-self"] {
+        assert_baseline_positions(name);
     }
 }
 
@@ -369,25 +362,77 @@ fn the_content_distribution_properties_take_no_baseline_position() {
 }
 
 #[test]
-fn place_items_and_place_self_carry_a_baseline_position_to_the_block_axis() {
+fn place_items_and_place_self_carry_a_baseline_position_on_either_axis() {
     for (shorthand, align, justify) in [
         ("place-items", "align-items", "justify-items"),
         ("place-self", "align-self", "justify-self"),
     ] {
-        let declarations = format!("{shorthand}: last baseline center");
-        assert_eq!(serialized_from(&declarations, align), "last baseline");
-        assert_eq!(serialized_from(&declarations, justify), "center");
-        assert_eq!(
-            serialized(shorthand, "last baseline center"),
-            "last baseline center"
+        // `(value, align longhand, justify longhand, shorthand)`
+        // serializations. One value is copied to both axes.
+        for (value, align_value, justify_value, serialization) in [
+            ("baseline", "baseline", "baseline", "baseline"),
+            ("first baseline", "baseline", "baseline", "baseline"),
+            (
+                "last baseline",
+                "last baseline",
+                "last baseline",
+                "last baseline",
+            ),
+            (
+                "last baseline center",
+                "last baseline",
+                "center",
+                "last baseline center",
+            ),
+            (
+                "center last baseline",
+                "center",
+                "last baseline",
+                "center last baseline",
+            ),
+            (
+                "first baseline last baseline",
+                "baseline",
+                "last baseline",
+                "baseline last baseline",
+            ),
+            (
+                "last baseline baseline",
+                "last baseline",
+                "baseline",
+                "last baseline baseline",
+            ),
+        ] {
+            let declarations = format!("{shorthand}: {value}");
+            assert_eq!(
+                serialized_from(&declarations, align),
+                align_value,
+                "`{declarations}`"
+            );
+            assert_eq!(
+                serialized_from(&declarations, justify),
+                justify_value,
+                "`{declarations}`"
+            );
+            assert_eq!(
+                serialized(shorthand, value),
+                serialization,
+                "`{declarations}`"
+            );
+        }
+        rejects(
+            shorthand,
+            &[
+                "first",
+                "last",
+                "baseline first",
+                "baseline last",
+                "first last baseline",
+                "first-baseline",
+                "safe last baseline",
+                "last baseline baseline baseline",
+            ],
         );
-        assert_eq!(
-            serialized(shorthand, "first baseline center"),
-            "baseline center"
-        );
-        // One value is copied to both axes, and the inline axis takes no
-        // baseline position.
-        rejects(shorthand, &["baseline", "first baseline", "last baseline"]);
     }
 }
 

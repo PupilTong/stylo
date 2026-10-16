@@ -358,6 +358,8 @@ impl SelfAlignment {
                 | AlignFlags::CENTER
                 | AlignFlags::START
                 | AlignFlags::END
+                | AlignFlags::BASELINE
+                | AlignFlags::LAST_BASELINE
                 | AlignFlags::ANCHOR_CENTER
         );
 
@@ -386,11 +388,10 @@ impl SelfAlignment {
     fn parse(input: &mut Parser, axis: AxisDirection) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
-            // <baseline-position> (css-align-3 §4.2): `baseline`,
-            // `first baseline` (the same value) and `last baseline`.
-            if axis == AxisDirection::Block
-                && let Ok(value) = input.try_parse(parse_baseline)
-            {
+            // <baseline-position> (css-align-3 §4.2), on both axes:
+            // `baseline`, `first baseline` (the same value) and
+            // `last baseline`.
+            if let Ok(value) = input.try_parse(parse_baseline) {
                 return Ok(SelfAlignment(value));
             }
 
@@ -546,7 +547,12 @@ impl ItemPlacement {
     pub fn is_valid_on_both_axes(&self) -> bool {
         matches!(
             self.0.value(),
-            AlignFlags::STRETCH | AlignFlags::CENTER | AlignFlags::START | AlignFlags::END
+            AlignFlags::STRETCH
+                | AlignFlags::CENTER
+                | AlignFlags::START
+                | AlignFlags::END
+                | AlignFlags::BASELINE
+                | AlignFlags::LAST_BASELINE
         )
     }
 }
@@ -565,11 +571,10 @@ impl ItemPlacement {
     fn parse(input: &mut Parser, axis: AxisDirection) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
-            // <baseline-position> (css-align-3 §4.2): `baseline`,
-            // `first baseline` (the same value) and `last baseline`.
-            if axis == AxisDirection::Block
-                && let Ok(value) = input.try_parse(parse_baseline)
-            {
+            // <baseline-position> (css-align-3 §4.2), on both axes:
+            // `baseline`, `first baseline` (the same value) and
+            // `last baseline`.
+            if let Ok(value) = input.try_parse(parse_baseline) {
                 return Ok(Self(value));
             }
 
@@ -685,7 +690,10 @@ impl Parse for JustifyItems {
 impl SpecifiedValueInfo for JustifyItems {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
         #[cfg(feature = "lynx")]
-        f(&["stretch", "center", "start", "end"]);
+        {
+            list_baseline_keywords(f);
+            f(&["stretch", "center", "start", "end"]);
+        }
 
         #[cfg(not(feature = "lynx"))]
         {
