@@ -386,6 +386,14 @@ impl SelfAlignment {
     fn parse(input: &mut Parser, axis: AxisDirection) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
+            // <baseline-position> (css-align-3 §4.2): `baseline`,
+            // `first baseline` (the same value) and `last baseline`.
+            if axis == AxisDirection::Block
+                && let Ok(value) = input.try_parse(parse_baseline)
+            {
+                return Ok(SelfAlignment(value));
+            }
+
             let value = try_match_ident_ignore_ascii_case! { input,
                 "auto" => AlignFlags::AUTO,
                 "stretch" => AlignFlags::STRETCH,
@@ -394,7 +402,6 @@ impl SelfAlignment {
                 "end" => AlignFlags::END,
                 "flex-start" if axis == AxisDirection::Block => AlignFlags::FLEX_START,
                 "flex-end" if axis == AxisDirection::Block => AlignFlags::FLEX_END,
-                "baseline" if axis == AxisDirection::Block => AlignFlags::BASELINE,
                 // css-anchor-position-1 §4.2, on `justify-self` /
                 // `align-self` (and so `place-self`) only: the `*-items`
                 // properties have their own parser.
@@ -479,17 +486,19 @@ impl SelfAlignment {
 impl SpecifiedValueInfo for SelfAlignment {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
         #[cfg(feature = "lynx")]
-        f(&[
-            "auto",
-            "stretch",
-            "center",
-            "start",
-            "end",
-            "flex-start",
-            "flex-end",
-            "baseline",
-            "anchor-center",
-        ]);
+        {
+            list_baseline_keywords(f);
+            f(&[
+                "auto",
+                "stretch",
+                "center",
+                "start",
+                "end",
+                "flex-start",
+                "flex-end",
+                "anchor-center",
+            ]);
+        }
 
         #[cfg(not(feature = "lynx"))]
         {
@@ -556,6 +565,14 @@ impl ItemPlacement {
     fn parse(input: &mut Parser, axis: AxisDirection) -> Result<Self, ParseError> {
         #[cfg(feature = "lynx")]
         {
+            // <baseline-position> (css-align-3 §4.2): `baseline`,
+            // `first baseline` (the same value) and `last baseline`.
+            if axis == AxisDirection::Block
+                && let Ok(value) = input.try_parse(parse_baseline)
+            {
+                return Ok(Self(value));
+            }
+
             let value = try_match_ident_ignore_ascii_case! { input,
                 "stretch" => AlignFlags::STRETCH,
                 "center" => AlignFlags::CENTER,
@@ -563,7 +580,6 @@ impl ItemPlacement {
                 "end" => AlignFlags::END,
                 "flex-start" if axis == AxisDirection::Block => AlignFlags::FLEX_START,
                 "flex-end" if axis == AxisDirection::Block => AlignFlags::FLEX_END,
-                "baseline" if axis == AxisDirection::Block => AlignFlags::BASELINE,
             };
             return Ok(Self(value));
         }
@@ -603,15 +619,17 @@ impl ItemPlacement {
 impl SpecifiedValueInfo for ItemPlacement {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
         #[cfg(feature = "lynx")]
-        f(&[
-            "stretch",
-            "center",
-            "start",
-            "end",
-            "flex-start",
-            "flex-end",
-            "baseline",
-        ]);
+        {
+            list_baseline_keywords(f);
+            f(&[
+                "stretch",
+                "center",
+                "start",
+                "end",
+                "flex-start",
+                "flex-end",
+            ]);
+        }
 
         #[cfg(not(feature = "lynx"))]
         {
@@ -711,7 +729,6 @@ fn list_normal_stretch(f: KeywordsCollectFn) {
 }
 
 // <baseline-position>
-#[cfg(not(feature = "lynx"))]
 fn parse_baseline(input: &mut Parser) -> Result<AlignFlags, ParseError> {
     // NOTE Please also update the `list_baseline_keywords` function
     //      below when this function is updated.
@@ -728,7 +745,6 @@ fn parse_baseline(input: &mut Parser) -> Result<AlignFlags, ParseError> {
     }
 }
 
-#[cfg(not(feature = "lynx"))]
 fn list_baseline_keywords(f: KeywordsCollectFn) {
     f(&["baseline", "first baseline", "last baseline"]);
 }

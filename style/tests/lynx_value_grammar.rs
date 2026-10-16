@@ -5,21 +5,20 @@
 
 use style::color::AbsoluteColor;
 use style::context::QuirksMode;
-use style::properties::declaration_block::parse_one_declaration_into;
-use style::properties::{PropertyId, SourcePropertyDeclaration};
+use style::properties::declaration_block::{parse_one_declaration_into, parse_style_attribute};
+use style::properties::{PropertyDeclaration, PropertyId, SourcePropertyDeclaration};
 use style::stylesheets::{CssRuleType, Origin, UrlExtraData};
 use style::values::animated::{Animate, Procedure};
 use style::values::computed::ColorPropertyValue;
+use style::values::specified::align::AlignFlags;
 use style_traits::ParsingMode;
 
 fn url_data() -> UrlExtraData {
     UrlExtraData::from(::url::Url::parse("https://example.com/").unwrap())
 }
 
-fn parses(name: &str, value: &str) -> bool {
-    let Ok(id) = PropertyId::parse_enabled_for_all_content(name) else {
-        return false;
-    };
+fn parse_declaration(name: &str, value: &str) -> Result<SourcePropertyDeclaration, ()> {
+    let id = PropertyId::parse_enabled_for_all_content(name)?;
     let mut declarations = SourcePropertyDeclaration::default();
     parse_one_declaration_into(
         &mut declarations,
@@ -31,8 +30,12 @@ fn parses(name: &str, value: &str) -> bool {
         ParsingMode::DEFAULT,
         QuirksMode::NoQuirks,
         CssRuleType::Style,
-    )
-    .is_ok()
+    )?;
+    Ok(declarations)
+}
+
+fn parses(name: &str, value: &str) -> bool {
+    parse_declaration(name, value).is_ok()
 }
 
 fn accepts(name: &str, values: &[&str]) {
@@ -242,6 +245,150 @@ fn alignment_and_text_keyword_grammars() {
             "none underline",
         ],
     );
+}
+
+// ------------------------------------------------------------------------
+// `<baseline-position>` (css-align-3 §4.2) on the item and self alignment
+// properties. Native Lynx stops at `baseline` (`FlexAlignType` ends at
+// `kBaseline`); by the user's ruling of 2026-10-16 the `lynx` grammar also
+// takes `first baseline` and `last baseline`, as web-core's browser does.
+// `first baseline` is the same value as `baseline` and serializes as
+// `baseline`.
+// ------------------------------------------------------------------------
+
+/// Each `<baseline-position>`: the value, its serialization and its computed
+/// alignment flags.
+const BASELINE_POSITIONS: [(&str, &str, AlignFlags); 5] = [
+    ("baseline", "baseline", AlignFlags::BASELINE),
+    ("first baseline", "baseline", AlignFlags::BASELINE),
+    ("last baseline", "last baseline", AlignFlags::LAST_BASELINE),
+    ("FIRST Baseline", "baseline", AlignFlags::BASELINE),
+    ("Last BASELINE", "last baseline", AlignFlags::LAST_BASELINE),
+];
+
+/// Values that are not a `<baseline-position>` and that no other part of a
+/// Lynx alignment grammar accepts either.
+const NOT_BASELINE_POSITIONS: [&str; 9] = [
+    "first",
+    "last",
+    "baseline first",
+    "baseline last",
+    "first last baseline",
+    "last baseline baseline",
+    "first-baseline",
+    "last-baseline",
+    "safe last baseline",
+];
+
+/// The value of `property` in an inline style block holding `declarations`.
+fn serialized_from(declarations: &str, property: &str) -> String {
+    let block = parse_style_attribute(
+        declarations,
+        &url_data(),
+        None,
+        QuirksMode::NoQuirks,
+        CssRuleType::Style,
+    );
+    let mut out = String::new();
+    block
+        .property_value_to_css(
+            &PropertyId::parse_enabled_for_all_content(property).unwrap(),
+            &mut out,
+        )
+        .unwrap();
+    out
+}
+
+fn serialized(name: &str, value: &str) -> String {
+    serialized_from(&format!("{name}: {value}"), name)
+}
+
+/// The computed alignment flags of the alignment longhand `name: value`.
+fn computed_alignment(name: &str, value: &str) -> AlignFlags {
+    use style::values::computed::{Context, ToComputedValue};
+
+    let mut declarations = parse_declaration(name, value)
+        .unwrap_or_else(|_| panic!("`{name}: {value}` must parse"))
+        .declarations;
+    assert_eq!(declarations.len(), 1, "`{name}` is a longhand");
+    let declaration = declarations.remove(0);
+    let device = test_device();
+    Context::for_media_query_evaluation(
+        &device,
+        QuirksMode::NoQuirks,
+        |context| match declaration {
+            PropertyDeclaration::AlignItems(ref value) => value.to_computed_value(context).0,
+            PropertyDeclaration::JustifyItems(ref value) => {
+                value.to_computed_value(context).computed.0.0
+            },
+            PropertyDeclaration::AlignSelf(ref value)
+            | PropertyDeclaration::JustifySelf(ref value) => value.to_computed_value(context).0,
+            ref other => panic!("`{name}: {value}` parsed to {other:?}"),
+        },
+    )
+}
+
+/// Checks that every `<baseline-position>` parses on `name`, serializes as
+/// css-align-3 says, re-parses from its serialization and computes to its
+/// alignment flags.
+fn assert_baseline_positions(name: &str) {
+    for (value, serialization, flags) in BASELINE_POSITIONS {
+        assert!(parses(name, value), "expected `{name}: {value}` to parse");
+        assert_eq!(serialized(name, value), serialization, "`{name}: {value}`");
+        assert_eq!(
+            serialized(name, serialization),
+            serialization,
+            "`{name}: {serialization}` must round-trip"
+        );
+        assert_eq!(computed_alignment(name, value), flags, "`{name}: {value}`");
+    }
+    rejects(name, &NOT_BASELINE_POSITIONS);
+}
+
+#[test]
+fn align_items_and_align_self_take_every_baseline_position() {
+    assert_baseline_positions("align-items");
+    assert_baseline_positions("align-self");
+}
+
+#[test]
+fn justify_items_and_justify_self_take_no_baseline_position() {
+    for name in ["justify-items", "justify-self"] {
+        rejects(name, &["baseline", "first baseline", "last baseline"]);
+    }
+}
+
+#[test]
+fn the_content_distribution_properties_take_no_baseline_position() {
+    // `align-content` and `justify-content` keep their own Lynx grammar,
+    // which has no baseline keyword at all; the ruling covers the item and
+    // self alignment properties only.
+    for name in ["align-content", "justify-content", "place-content"] {
+        rejects(name, &["baseline", "first baseline", "last baseline"]);
+    }
+}
+
+#[test]
+fn place_items_and_place_self_carry_a_baseline_position_to_the_block_axis() {
+    for (shorthand, align, justify) in [
+        ("place-items", "align-items", "justify-items"),
+        ("place-self", "align-self", "justify-self"),
+    ] {
+        let declarations = format!("{shorthand}: last baseline center");
+        assert_eq!(serialized_from(&declarations, align), "last baseline");
+        assert_eq!(serialized_from(&declarations, justify), "center");
+        assert_eq!(
+            serialized(shorthand, "last baseline center"),
+            "last baseline center"
+        );
+        assert_eq!(
+            serialized(shorthand, "first baseline center"),
+            "baseline center"
+        );
+        // One value is copied to both axes, and the inline axis takes no
+        // baseline position.
+        rejects(shorthand, &["baseline", "first baseline", "last baseline"]);
+    }
 }
 
 #[test]
@@ -576,7 +723,7 @@ fn w3c_will_change_grammar() {
 
 /// A device whose viewport is 375×667 CSS px, with a 16px base font size —
 /// enough for `em` to resolve at computed-value time.
-fn flow_tolerance_test_device() -> style::device::Device {
+fn test_device() -> style::device::Device {
     use euclid::{Scale, Size2D};
     use style::media_queries::MediaType;
     use style::properties::{style_structs, ComputedValues};
@@ -664,7 +811,7 @@ fn flow_tolerance_keeps_its_keywords_at_computed_value_time() {
     use style::values::computed::{Context, FlowTolerance as ComputedFlowTolerance};
     use style::values::specified::FlowTolerance as SpecifiedFlowTolerance;
 
-    let device = flow_tolerance_test_device();
+    let device = test_device();
     Context::for_media_query_evaluation(&device, QuirksMode::NoQuirks, |context| {
         assert!(matches!(
             SpecifiedFlowTolerance::Normal.to_computed_value(context),
