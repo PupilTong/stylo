@@ -330,7 +330,7 @@ pub struct ElementDataWrapper {
     refcell: AtomicRefCell<()>,
 }
 
-/// A read-only reference to ElementData.
+/// A mutable reference to ElementData.
 #[derive(Debug)]
 pub struct ElementDataMut<'a> {
     v: &'a mut ElementData,
@@ -338,7 +338,7 @@ pub struct ElementDataMut<'a> {
     _borrow: AtomicRefMut<'a, ()>,
 }
 
-/// A mutable reference to ElementData.
+/// A read-only reference to ElementData.
 #[derive(Debug)]
 pub struct ElementDataRef<'a> {
     v: &'a ElementData,

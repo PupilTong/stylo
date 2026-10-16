@@ -293,10 +293,11 @@ impl AtRuleType {
             "import" => Self::Import,
             "namespace" => Self::Namespace,
             "layer" => Self::Layer,
-            "scope" if crate::pref!("layout.css.at-scope.enabled") => Self::Scope,
+            // Lynx admits css-cascade-6 §2.5 scoped styles; servo keeps the pref (false).
+            "scope" if cfg!(feature = "lynx") || crate::pref!("layout.css.at-scope.enabled") => Self::Scope,
             "starting-style" if crate::pref!("layout.css.starting-style-at-rules.enabled") => Self::StartingStyle,
             "appearance-base" if context.chrome_rules_enabled() => Self::AppearanceBase,
-            "position-try" if crate::pref!("layout.css.anchor-positioning.enabled", gecko = true) => Self::PositionTry,
+            "position-try" if crate::values::generics::length::anchor_positioning_enabled() => Self::PositionTry,
             "view-transition" if crate::pref!("dom.viewTransitions.cross-document.enabled") => Self::ViewTransition,
             _ => {
                 // The margin at-rules supported within @page.

@@ -26,7 +26,7 @@ use thin_vec::ThinVec;
 
 #[inline]
 fn grid_enabled() -> bool {
-    crate::pref!("layout.grid.enabled", gecko = true)
+    cfg!(feature = "lynx") || crate::pref!("layout.grid.enabled", gecko = true)
 }
 
 #[inline]
@@ -127,6 +127,7 @@ impl Parse for ScrollbarInset {
 }
 
 #[inline]
+#[cfg(not(feature = "lynx"))]
 fn is_display_grid_lanes_enabled() -> bool {
     static_prefs::pref!("layout.css.display-grid-lanes.enabled")
 }
@@ -141,7 +142,9 @@ pub enum DisplayOutside {
     None = 0,
     Inline,
     Block,
+    #[cfg(not(feature = "lynx"))]
     TableCaption,
+    #[cfg(not(feature = "lynx"))]
     InternalTable,
     #[cfg(feature = "gecko")]
     InternalRuby,
@@ -154,17 +157,35 @@ pub enum DisplayInside {
     None = 0,
     Contents,
     Flow,
+    #[cfg(not(feature = "lynx"))]
     FlowRoot,
     Flex,
+    #[cfg(feature = "lynx")]
+    #[css(keyword = "linear")]
+    LynxLinear,
     Grid,
     GridLanes,
+    #[cfg(not(feature = "lynx"))]
     Table,
+    #[cfg(feature = "lynx")]
+    #[css(keyword = "relative")]
+    LynxRelative,
+    #[cfg(feature = "lynx")]
+    #[css(keyword = "-lynx-text")]
+    LynxText,
+    #[cfg(not(feature = "lynx"))]
     TableRowGroup,
+    #[cfg(not(feature = "lynx"))]
     TableColumn,
+    #[cfg(not(feature = "lynx"))]
     TableColumnGroup,
+    #[cfg(not(feature = "lynx"))]
     TableHeaderGroup,
+    #[cfg(not(feature = "lynx"))]
     TableFooterGroup,
+    #[cfg(not(feature = "lynx"))]
     TableRow,
+    #[cfg(not(feature = "lynx"))]
     TableCell,
     #[cfg(feature = "gecko")]
     Ruby,
@@ -180,6 +201,7 @@ pub enum DisplayInside {
     WebkitBox,
 }
 
+#[cfg(not(feature = "lynx"))]
 impl DisplayInside {
     fn is_valid_for_list_item(self) -> bool {
         match self {
@@ -237,11 +259,14 @@ impl Display {
     pub const Contents: Self = Self(
         ((DisplayOutside::None as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Contents as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const Inline: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16);
+    #[cfg(not(feature = "lynx"))]
     pub const InlineBlock: Self = Self(
         ((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::FlowRoot as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const Block: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16);
     #[cfg(feature = "gecko")]
@@ -250,23 +275,42 @@ impl Display {
     );
     pub const Flex: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flex as u16);
+    #[cfg(feature = "lynx")]
+    pub const Linear: Self = Self(
+        ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::LynxLinear as u16,
+    );
+    #[cfg(not(feature = "lynx"))]
     pub const InlineFlex: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flex as u16);
     pub const Grid: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
+    #[cfg(not(feature = "lynx"))]
     pub const InlineGrid: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Grid as u16);
     pub const GridLanes: Self = Self(
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::GridLanes as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const InlineGridLanes: Self = Self(
         ((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::GridLanes as u16,
     );
+    #[cfg(feature = "lynx")]
+    pub const LynxRelative: Self = Self(
+        ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT)
+            | DisplayInside::LynxRelative as u16,
+    );
+    #[cfg(feature = "lynx")]
+    pub const LynxText: Self = Self(
+        ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::LynxText as u16,
+    );
+    #[cfg(not(feature = "lynx"))]
     pub const Table: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Table as u16);
+    #[cfg(not(feature = "lynx"))]
     pub const InlineTable: Self = Self(
         ((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Table as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableCaption: Self = Self(
         ((DisplayOutside::TableCaption as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16,
     );
@@ -284,30 +328,37 @@ impl Display {
 
     // Internal table boxes.
 
+    #[cfg(not(feature = "lynx"))]
     pub const TableRowGroup: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableRowGroup as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableHeaderGroup: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableHeaderGroup as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableFooterGroup: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableFooterGroup as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableColumn: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableColumn as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableColumnGroup: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableColumnGroup as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableRow: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableRow as u16,
     );
+    #[cfg(not(feature = "lynx"))]
     pub const TableCell: Self = Self(
         ((DisplayOutside::InternalTable as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::TableCell as u16,
@@ -343,6 +394,7 @@ impl Display {
 
     /// Make a display enum value from <display-outside> and <display-inside> values.
     #[inline]
+    #[cfg(not(feature = "lynx"))]
     fn from3(outside: DisplayOutside, inside: DisplayInside, list_item: bool) -> Self {
         let v = Self::new(outside, inside);
         if !list_item {
@@ -406,7 +458,28 @@ impl Display {
 
 /// Shared Display impl for both Gecko and Servo.
 impl Display {
-    /// The initial display value.
+    /// The initial computed value of the `display` property.
+    #[cfg(feature = "lynx")]
+    #[inline]
+    pub const fn initial() -> Self {
+        Self::Flex
+    }
+
+    /// The initial computed value of the `display` property.
+    #[cfg(not(feature = "lynx"))]
+    #[inline]
+    pub const fn initial() -> Self {
+        Self::Inline
+    }
+
+    #[cfg(feature = "lynx")]
+    #[inline]
+    const fn internal_block() -> Self {
+        Self::new(DisplayOutside::Block, DisplayInside::Flow)
+    }
+
+    /// The CSS `inline` display value.
+    #[cfg(not(feature = "lynx"))]
     #[inline]
     pub fn inline() -> Self {
         Display::Inline
@@ -418,7 +491,10 @@ impl Display {
     /// This is used to implement various style fixups.
     pub fn is_item_container(&self) -> bool {
         match self.inside() {
-            DisplayInside::Flex | DisplayInside::Grid | DisplayInside::GridLanes => true,
+            DisplayInside::Flex => true,
+            #[cfg(feature = "lynx")]
+            DisplayInside::LynxLinear => true,
+            DisplayInside::Grid | DisplayInside::GridLanes => true,
             _ => false,
         }
     }
@@ -431,7 +507,7 @@ impl Display {
             return true;
         }
         match *self {
-            #[cfg(feature = "gecko")]
+            #[cfg(all(feature = "gecko", not(feature = "lynx")))]
             Display::Contents | Display::Ruby | Display::RubyBaseContainer => true,
             _ => false,
         }
@@ -441,22 +517,45 @@ impl Display {
     ///
     /// Also used for :root style adjustments.
     pub fn equivalent_block_display(&self, is_root_element: bool) -> Self {
-        // Special handling for `contents` and `list-item`s on the root element.
-        if is_root_element && (self.is_contents() || self.is_list_item()) {
+        // Special handling for `contents` on the root element.
+        if is_root_element && self.is_contents() {
+            // css-display-3 §2.7 computes a root `contents` to `block`. Lynx's
+            // grammar has no flow layout, so its block-level container is the
+            // initial `display`, `flex`; the internal block/flow display has
+            // no layout in a Lynx engine.
+            #[cfg(feature = "lynx")]
+            return Display::Flex;
+
+            #[cfg(not(feature = "lynx"))]
+            return Display::Block;
+        }
+
+        // Special handling for `list-item`s on the root element.
+        #[cfg(not(feature = "lynx"))]
+        if is_root_element && self.is_list_item() {
             return Display::Block;
         }
 
         match self.outside() {
             DisplayOutside::Inline => {
+                // Unreachable under `lynx`: the grammar has no inline-outside
+                // value (every Lynx keyword is block-outside or `none`/
+                // `contents`), so no `lynx` computed display takes this arm.
+                #[cfg(feature = "lynx")]
+                return Self::internal_block();
+
+                #[cfg(not(feature = "lynx"))]
                 let inside = match self.inside() {
                     // `inline-block` blockifies to `block` rather than
                     // `flow-root`, for legacy reasons.
                     DisplayInside::FlowRoot => DisplayInside::Flow,
                     inside => inside,
                 };
+                #[cfg(not(feature = "lynx"))]
                 Display::from3(DisplayOutside::Block, inside, self.is_list_item())
             },
             DisplayOutside::Block | DisplayOutside::None => *self,
+            #[cfg(not(feature = "lynx"))]
             _ => Display::Block,
         }
     }
@@ -497,30 +596,64 @@ impl Display {
 
 enum DisplayKeyword {
     Full(Display),
+    #[cfg(not(feature = "lynx"))]
     Inside(DisplayInside),
+    #[cfg(not(feature = "lynx"))]
     Outside(DisplayOutside),
+    #[cfg(not(feature = "lynx"))]
     ListItem,
 }
 
 impl DisplayKeyword {
     fn parse(input: &mut Parser) -> Result<Self, ParseError> {
         use self::DisplayKeyword::*;
+        // Lynx's display property chooses only an internal layout algorithm:
+        // none | contents | flex | grid | grid-lanes | linear | relative |
+        // -lynx-text. It has no flow layout, and its documentation explicitly
+        // rejects block/inline and all compound <display-outside>
+        // <display-inside> forms. Nor is there any inline-level container
+        // value: `inline-flex`/`inline-grid` are gated out, so css-grid-3's
+        // `inline-grid-lanes` is deliberately left out alongside them.
+        // Unsupported public constants and inside variants compile out with
+        // the parser. The shared outside/inside representation can still
+        // encode upstream-only combinations internally, but Lynx never
+        // accepts them from authors.
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
             "contents" => Full(Display::Contents),
+            #[cfg(feature = "lynx")]
+            "linear" => Full(Display::Linear),
+            #[cfg(feature = "lynx")]
+            "relative" => Full(Display::LynxRelative),
+            #[cfg(feature = "lynx")]
+            "-lynx-text" => Full(Display::LynxText),
+            #[cfg(not(feature = "lynx"))]
             "inline-block" => Full(Display::InlineBlock),
+            #[cfg(not(feature = "lynx"))]
             "inline-table" => Full(Display::InlineTable),
+            #[cfg(not(feature = "lynx"))]
             "-webkit-flex" => Full(Display::Flex),
+            #[cfg(not(feature = "lynx"))]
             "inline-flex" | "-webkit-inline-flex" => Full(Display::InlineFlex),
+            #[cfg(not(feature = "lynx"))]
             "inline-grid" if grid_enabled() => Full(Display::InlineGrid),
+            #[cfg(not(feature = "lynx"))]
             "inline-grid-lanes" if is_display_grid_lanes_enabled() => Full(Display::InlineGridLanes),
+            #[cfg(not(feature = "lynx"))]
             "table-caption" => Full(Display::TableCaption),
+            #[cfg(not(feature = "lynx"))]
             "table-row-group" => Full(Display::TableRowGroup),
+            #[cfg(not(feature = "lynx"))]
             "table-header-group" => Full(Display::TableHeaderGroup),
+            #[cfg(not(feature = "lynx"))]
             "table-footer-group" => Full(Display::TableFooterGroup),
+            #[cfg(not(feature = "lynx"))]
             "table-column" => Full(Display::TableColumn),
+            #[cfg(not(feature = "lynx"))]
             "table-column-group" => Full(Display::TableColumnGroup),
+            #[cfg(not(feature = "lynx"))]
             "table-row" => Full(Display::TableRow),
+            #[cfg(not(feature = "lynx"))]
             "table-cell" => Full(Display::TableCell),
             #[cfg(feature = "gecko")]
             "ruby-base" => Full(Display::RubyBase),
@@ -537,18 +670,35 @@ impl DisplayKeyword {
 
             /// <display-outside> = block | inline | run-in
             /// https://drafts.csswg.org/css-display/#typedef-display-outside
+            #[cfg(not(feature = "lynx"))]
             "block" => Outside(DisplayOutside::Block),
+            #[cfg(not(feature = "lynx"))]
             "inline" => Outside(DisplayOutside::Inline),
 
+            #[cfg(not(feature = "lynx"))]
             "list-item" => ListItem,
 
             /// <display-inside> = flow | flow-root | table | flex | grid | ruby
             /// https://drafts.csswg.org/css-display/#typedef-display-inside
+            #[cfg(not(feature = "lynx"))]
             "flow" => Inside(DisplayInside::Flow),
+            #[cfg(feature = "lynx")]
+            "flex" => Full(Display::Flex),
+            #[cfg(not(feature = "lynx"))]
             "flex" => Inside(DisplayInside::Flex),
+            #[cfg(not(feature = "lynx"))]
             "flow-root" => Inside(DisplayInside::FlowRoot),
+            #[cfg(not(feature = "lynx"))]
             "table" => Inside(DisplayInside::Table),
+            #[cfg(feature = "lynx")]
+            "grid" if grid_enabled() => Full(Display::Grid),
+            // css-grid-3 `grid-lanes`; the same length as `-lynx-text`, so
+            // `match_ignore_ascii_case!`'s maximum keyword length is unchanged.
+            #[cfg(feature = "lynx")]
+            "grid-lanes" => Full(Display::GridLanes),
+            #[cfg(not(feature = "lynx"))]
             "grid" if grid_enabled() => Inside(DisplayInside::Grid),
+            #[cfg(not(feature = "lynx"))]
             "grid-lanes" if is_display_grid_lanes_enabled() => Inside(DisplayInside::GridLanes),
             #[cfg(feature = "gecko")]
             "ruby" => Inside(DisplayInside::Ruby),
@@ -563,18 +713,39 @@ impl ToCss for Display {
     {
         let outside = self.outside();
         let inside = self.inside();
+        #[cfg(feature = "lynx")]
+        if self.is_inline_flow() {
+            return dest.write_str("inline");
+        }
+        #[cfg(feature = "lynx")]
+        if *self == Self::internal_block() {
+            return dest.write_str("block");
+        }
         match *self {
+            #[cfg(feature = "lynx")]
+            Display::Linear => dest.write_str("linear"),
+            #[cfg(feature = "lynx")]
+            Display::LynxRelative => dest.write_str("relative"),
+            #[cfg(feature = "lynx")]
+            Display::LynxText => dest.write_str("-lynx-text"),
+            #[cfg(not(feature = "lynx"))]
             Display::Block | Display::Inline => outside.to_css(dest),
+            #[cfg(not(feature = "lynx"))]
             Display::InlineBlock => dest.write_str("inline-block"),
             #[cfg(feature = "gecko")]
             Display::WebkitInlineBox => dest.write_str("-webkit-inline-box"),
+            #[cfg(not(feature = "lynx"))]
             Display::TableCaption => dest.write_str("table-caption"),
             _ => match (outside, inside) {
+                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Grid) => dest.write_str("inline-grid"),
+                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::GridLanes) => {
                     dest.write_str("inline-grid-lanes")
                 },
+                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Flex) => dest.write_str("inline-flex"),
+                #[cfg(not(feature = "lynx"))]
                 (DisplayOutside::Inline, DisplayInside::Table) => dest.write_str("inline-table"),
                 #[cfg(feature = "gecko")]
                 (DisplayOutside::Block, DisplayInside::Ruby) => dest.write_str("block ruby"),
@@ -628,6 +799,19 @@ impl ToTyped for Display {
     }
 }
 
+#[cfg(feature = "lynx")]
+impl Parse for Display {
+    fn parse(
+        _: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Display, ParseError> {
+        match DisplayKeyword::parse(input)? {
+            DisplayKeyword::Full(display) => Ok(display),
+        }
+    }
+}
+
+#[cfg(not(feature = "lynx"))]
 impl Parse for Display {
     fn parse(_: &ParserContext, input: &mut Parser) -> Result<Display, ParseError> {
         let mut got_list_item = false;
@@ -673,6 +857,17 @@ impl Parse for Display {
 
 impl SpecifiedValueInfo for Display {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
+        #[cfg(feature = "lynx")]
+        f(&[
+            "none",
+            "linear",
+            "flex",
+            "grid",
+            "grid-lanes",
+            "relative",
+            "-lynx-text",
+        ]);
+        #[cfg(not(feature = "lynx"))]
         f(&[
             "block",
             "contents",
@@ -689,8 +884,10 @@ impl SpecifiedValueInfo for Display {
             "inline-table",
             "inline list-item",
             "inline flow-root list-item",
+            "linear",
             "list-item",
             "none",
+            "relative",
             "block ruby",
             "ruby",
             "ruby-base",
@@ -955,6 +1152,19 @@ impl ScrollSnapType {
             strictness: ScrollSnapStrictness::None,
         }
     }
+
+    /// The axes this container snaps on. Meaningless when
+    /// [`Self::strictness`] is `None`.
+    #[inline]
+    pub fn axis(&self) -> ScrollSnapAxis {
+        self.axis
+    }
+
+    /// How strictly it snaps; `None` is `scroll-snap-type: none`.
+    #[inline]
+    pub fn strictness(&self) -> ScrollSnapStrictness {
+        self.strictness
+    }
 }
 
 impl Parse for ScrollSnapType {
@@ -1049,6 +1259,18 @@ impl ScrollSnapAlign {
             inline: ScrollSnapAlignKeyword::None,
         }
     }
+
+    /// The alignment in the block axis.
+    #[inline]
+    pub fn block(&self) -> ScrollSnapAlignKeyword {
+        self.block
+    }
+
+    /// The alignment in the inline axis.
+    #[inline]
+    pub fn inline(&self) -> ScrollSnapAlignKeyword {
+        self.inline
+    }
 }
 
 impl Parse for ScrollSnapAlign {
@@ -1124,6 +1346,19 @@ pub enum OverscrollBehavior {
     Contain,
     Chain,
     None,
+    /// lynx-vello's own value: fences the chain the way `contain` does, and
+    /// turns the boundary into a rubber-band overscroll that springs back.
+    /// No W3C counterpart, so it exists only under the `lynx` feature.
+    #[cfg(feature = "lynx")]
+    ContainBounce,
+    /// lynx-vello's own value: the axis has no boundary at all. The scrolling
+    /// area repeats, so scrolling past its end continues from its start, and
+    /// it fences the chain the way `contain` does: nothing above it ever
+    /// receives that axis's delta. The wrap itself is the embedder's
+    /// compositor's; the computed value only names the policy. No W3C
+    /// counterpart, so it exists only under the `lynx` feature.
+    #[cfg(feature = "lynx")]
+    Circular,
 }
 
 #[allow(missing_docs)]
@@ -1254,11 +1489,17 @@ fn change_bits_for_longhand(longhand: LonghandId) -> WillChangeBits {
         | LonghandId::Rotate
         | LonghandId::Scale
         | LonghandId::OffsetPath => WillChangeBits::TRANSFORM,
-        LonghandId::Filter | LonghandId::BackdropFilter => {
+        LonghandId::Filter => {
             WillChangeBits::STACKING_CONTEXT_UNCONDITIONAL
                 | WillChangeBits::BACKDROP_ROOT
                 | WillChangeBits::FIXPOS_CB_NON_SVG
         },
+        LonghandId::BackdropFilter => {
+            WillChangeBits::STACKING_CONTEXT_UNCONDITIONAL
+                | WillChangeBits::BACKDROP_ROOT
+                | WillChangeBits::FIXPOS_CB_NON_SVG
+        },
+        #[cfg(not(feature = "lynx"))]
         LonghandId::ViewTransitionName => {
             WillChangeBits::VIEW_TRANSITION_NAME | WillChangeBits::BACKDROP_ROOT
         },
@@ -1709,6 +1950,7 @@ pub type Perspective = GenericPerspective<NonNegativeLength>;
 
 impl Perspective {
     /// Parses a `-webkit-perspective` value.
+    #[cfg(not(feature = "lynx"))]
     pub(crate) fn parse_legacy(
         context: &ParserContext,
         input: &mut Parser,
@@ -2138,6 +2380,7 @@ pub enum Overflow {
     Visible,
     Hidden,
     Scroll,
+    #[cfg(not(feature = "lynx"))]
     Auto,
     Clip,
 }
@@ -2150,6 +2393,7 @@ impl Parse for Overflow {
             "visible" => Self::Visible,
             "hidden" => Self::Hidden,
             "scroll" => Self::Scroll,
+            #[cfg(not(feature = "lynx"))]
             "auto" | "overlay" => Self::Auto,
             "clip" => Self::Clip,
             "-moz-hidden-unscrollable" if crate::pref!("layout.css.overflow-moz-hidden-unscrollable.enabled") => {
@@ -2163,15 +2407,41 @@ impl Overflow {
     /// Return true if the value will create a scrollable box.
     #[inline]
     pub fn is_scrollable(&self) -> bool {
+        #[cfg(feature = "lynx")]
+        return matches!(*self, Self::Hidden | Self::Scroll);
+        #[cfg(not(feature = "lynx"))]
         matches!(*self, Self::Hidden | Self::Scroll | Self::Auto)
+    }
+    /// Return true if the value lets the user scroll the box directly.
+    ///
+    /// `hidden` is a scroll container but is not user-scrollable: it only
+    /// scrolls programmatically (css-overflow-3 §3). `clip` is not even a
+    /// scroll container.
+    #[inline]
+    pub fn is_user_scrollable(&self) -> bool {
+        #[cfg(feature = "lynx")]
+        return matches!(*self, Self::Scroll);
+        #[cfg(not(feature = "lynx"))]
+        matches!(*self, Self::Scroll | Self::Auto)
     }
     /// Convert the value to a scrollable value if it's not already scrollable.
     /// This maps `visible` to `auto` and `clip` to `hidden`.
     #[inline]
     pub fn to_scrollable(&self) -> Self {
         match *self {
-            Self::Hidden | Self::Scroll | Self::Auto => *self,
+            Self::Hidden | Self::Scroll => *self,
+            #[cfg(not(feature = "lynx"))]
+            Self::Auto => *self,
+            #[cfg(not(feature = "lynx"))]
             Self::Visible => Self::Auto,
+            // The lynx grammar has no `auto` to pair a `visible` axis into, so
+            // it pairs into `hidden`: a clip that scrolls only
+            // programmatically. That is how `auto` renders on an axis with
+            // nothing to overflow, and it never leaves an axis spuriously
+            // user-scrollable — but it does mean an axis that *does* overflow
+            // is not draggable, which `auto` would have allowed.
+            #[cfg(feature = "lynx")]
+            Self::Visible => Self::Hidden,
             Self::Clip => Self::Hidden,
         }
     }
@@ -2407,6 +2677,7 @@ pub enum Orient {
 pub enum Visibility {
     Visible,
     Hidden,
+    #[cfg(not(feature = "lynx"))]
     Collapse,
 }
 
@@ -2634,3 +2905,166 @@ pub enum DirectionProperty {
     Ltr,
     Rtl,
 }
+
+#[cfg(feature = "lynx")]
+impl Parse for PositionProperty {
+    fn parse(
+        _: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
+        Ok(try_match_ident_ignore_ascii_case! { input,
+            "relative" => Self::Relative,
+            "absolute" => Self::Absolute,
+            "fixed" => Self::Fixed,
+            "sticky" => Self::Sticky,
+        })
+    }
+}
+
+/// https://drafts.csswg.org/css-scroll-snap-2/#scroll-initial-target
+#[cfg(feature = "lynx")]
+#[allow(missing_docs)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    FromPrimitive,
+    Hash,
+    MallocSizeOf,
+    Parse,
+    PartialEq,
+    Serialize,
+    SpecifiedValueInfo,
+    ToComputedValue,
+    ToCss,
+    ToResolvedValue,
+    ToShmem,
+    ToTyped,
+)]
+#[repr(u8)]
+pub enum ScrollInitialTarget {
+    None,
+    Nearest,
+}
+
+/// A `scroll-capture-x` / `scroll-capture-y` value:
+/// `auto | nearest [ forward | backward ]?` (lynx-vello's own per-axis
+/// nested-scroll ordering switch; see its entry in `longhands.toml`). The
+/// computed value is the specified value.
+///
+/// Directions are relative to the scroll offset on the longhand's own axis: a
+/// delta on that axis is *forward* when it increases that offset (toward the
+/// end edge) and *backward* when it decreases it.
+#[cfg(feature = "lynx")]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    Hash,
+    MallocSizeOf,
+    PartialEq,
+    Serialize,
+    ToComputedValue,
+    ToResolvedValue,
+    ToShmem,
+)]
+#[repr(u8)]
+pub enum ScrollCapture {
+    /// `auto`: the ordinary inner-first chain.
+    Auto,
+    /// `nearest`: the nearest ancestor scroll container scrolls first, for a
+    /// delta in either direction.
+    Nearest,
+    /// `nearest forward`: the nearest ancestor first for a forward delta
+    /// only.
+    NearestForward,
+    /// `nearest backward`: the nearest ancestor first for a backward delta
+    /// only.
+    NearestBackward,
+}
+
+#[cfg(feature = "lynx")]
+impl ScrollCapture {
+    /// Whether the value is one of the `nearest` forms.
+    #[inline]
+    pub fn is_nearest(self) -> bool {
+        !matches!(self, Self::Auto)
+    }
+
+    /// Whether the nearest ancestor goes first for a delta that increases
+    /// the scroll offset (`nearest` or `nearest forward`).
+    #[inline]
+    pub fn covers_forward(self) -> bool {
+        matches!(self, Self::Nearest | Self::NearestForward)
+    }
+
+    /// Whether the nearest ancestor goes first for a delta that decreases
+    /// the scroll offset (`nearest` or `nearest backward`).
+    #[inline]
+    pub fn covers_backward(self) -> bool {
+        matches!(self, Self::Nearest | Self::NearestBackward)
+    }
+
+    /// Whether the nearest ancestor goes first for this signed delta:
+    /// positive is forward, negative is backward, and a zero or NaN delta is
+    /// never captured.
+    #[inline]
+    pub fn covers_delta(self, delta: f32) -> bool {
+        if delta > 0. {
+            self.covers_forward()
+        } else if delta < 0. {
+            self.covers_backward()
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl Parse for ScrollCapture {
+    fn parse(_: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
+        let nearest = try_match_ident_ignore_ascii_case! { input,
+            "auto" => false,
+            "nearest" => true,
+        };
+        if !nearest {
+            return Ok(Self::Auto);
+        }
+        let direction = input.try_parse(|input| -> Result<Self, ParseError> {
+            Ok(try_match_ident_ignore_ascii_case! { input,
+                "forward" => Self::NearestForward,
+                "backward" => Self::NearestBackward,
+            })
+        });
+        Ok(direction.unwrap_or(Self::Nearest))
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToCss for ScrollCapture {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        dest.write_str(match *self {
+            Self::Auto => "auto",
+            Self::Nearest => "nearest",
+            Self::NearestForward => "nearest forward",
+            Self::NearestBackward => "nearest backward",
+        })
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl SpecifiedValueInfo for ScrollCapture {
+    fn collect_completion_keywords(f: KeywordsCollectFn) {
+        f(&["auto", "nearest", "forward", "backward"]);
+    }
+}
+
+#[cfg(feature = "lynx")]
+impl ToTyped for ScrollCapture {}
