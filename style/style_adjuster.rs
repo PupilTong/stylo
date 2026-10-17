@@ -186,9 +186,9 @@ impl<'a, 'b: 'a> StyleAdjuster<'a, 'b> {
         let display = *self.style.get_box().get_display();
         if display.is_contents() {
             // css-position-4 §3.1 computes a top-layer `contents` to
-            // `block`. Lynx's grammar has no flow layout, so its block-level
-            // container is the initial `display`, `flex`; the internal
-            // block/flow display has no layout in a Lynx engine.
+            // `block`. Lynx's author grammar has no flow layout — `block` is
+            // an engine-only value — so its block-level container is the
+            // initial `display`, `flex`.
             #[cfg(feature = "lynx")]
             let block_display = Display::Flex;
             #[cfg(not(feature = "lynx"))]

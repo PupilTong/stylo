@@ -195,3 +195,72 @@ fn lynx_display_keywords_are_single_keyword_values() {
     assert!(parse_display("inline-grid-lanes").is_err());
     assert!(parse_display("masonry").is_err());
 }
+
+fn parse_display_in(origin: Origin, url: &str, css: &str) -> Result<Display, ()> {
+    let url_data = UrlExtraData::from(::url::Url::parse(url).unwrap());
+    let context = ParserContext::new(
+        origin,
+        &url_data,
+        None,
+        ParsingMode::DEFAULT,
+        QuirksMode::NoQuirks,
+        Default::default(),
+        None,
+        None,
+        AttrTaint::default(),
+    );
+    let mut parser = CssParser::new(css);
+    parser
+        .parse_entirely(|input| Display::parse(&context, input))
+        .map_err(|_| ())
+}
+
+/// `block`, `flow` and `inline` are an engine's values, not an author's: a
+/// UA sheet, or a sheet whose URL enables chrome rules, can write them for
+/// the flow layout of the engine's own HTML content; an author sheet cannot,
+/// as Lynx's documentation rejects them and native Lynx falls `block` back to
+/// `flex`.
+#[test]
+fn block_flow_and_inline_parse_only_in_engine_sheets() {
+    for keyword in ["block", "flow", "inline", "BLOCK"] {
+        assert!(
+            parse_display(keyword).is_err(),
+            "an author sheet cannot write `{keyword}`"
+        );
+    }
+
+    let ua = |css| parse_display_in(Origin::UserAgent, "https://example.com/", css);
+    assert_eq!(ua("block").unwrap(), Display::Block);
+    assert_eq!(ua("flow").unwrap(), Display::Block);
+    assert_eq!(ua("inline").unwrap(), Display::Inline);
+    assert_eq!(ua("block").unwrap().to_css_string(), "block");
+    assert_eq!(ua("flow").unwrap().to_css_string(), "block");
+    assert_eq!(ua("inline").unwrap().to_css_string(), "inline");
+
+    let chrome = |css| parse_display_in(Origin::Author, "chrome://engine/sheet.css", css);
+    assert_eq!(chrome("block").unwrap(), Display::Block);
+    assert_eq!(chrome("inline").unwrap(), Display::Inline);
+
+    // Still single keywords: no `<display-outside> <display-inside>` pairs.
+    assert!(ua("block flow").is_err());
+    assert!(ua("inline flow").is_err());
+    assert!(ua("inline-block").is_err());
+    assert!(ua("flow-root").is_err());
+}
+
+#[test]
+fn block_and_inline_are_flow_boxes_and_inline_blockifies_to_block() {
+    let block = Display::Block;
+    assert_eq!(block.outside(), DisplayOutside::Block);
+    assert_eq!(block.inside(), DisplayInside::Flow);
+    assert!(!block.is_item_container());
+    assert_eq!(block.equivalent_block_display(false), Display::Block);
+
+    let inline = Display::Inline;
+    assert_eq!(inline.outside(), DisplayOutside::Inline);
+    assert_eq!(inline.inside(), DisplayInside::Flow);
+    assert!(inline.is_inline_flow());
+    assert!(!inline.is_item_container());
+    assert_eq!(inline.equivalent_block_display(false), Display::Block);
+    assert_eq!(inline.equivalent_block_display(true), Display::Block);
+}
