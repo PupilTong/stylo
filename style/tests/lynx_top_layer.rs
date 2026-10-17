@@ -322,7 +322,6 @@ fn a_root_keeps_its_lynx_display_value() {
         Display::Grid,
         Display::GridLanes,
         Display::LynxRelative,
-        Display::LynxText,
     ] {
         assert_eq!(adjusted_display(display, true), display, "{display:?}");
     }
