@@ -1,5 +1,5 @@
-// display:linear|relative|-lynx-text|grid-lanes are gated behind the `lynx`
-// cargo feature; without it there is nothing to test.
+// display:linear|relative|grid-lanes are gated behind the `lynx` cargo
+// feature; without it there is nothing to test.
 #![cfg(feature = "lynx")]
 
 use cssparser::Parser as CssParser;
@@ -59,15 +59,6 @@ fn parses_and_serializes_lynx_display_keywords() {
     assert_eq!(relative, Display::LynxRelative);
     assert_eq!(relative.to_css_string(), "relative");
 
-    let text = parse_display("-lynx-text").unwrap();
-    assert_eq!(text, Display::LynxText);
-    assert_eq!(text.to_css_string(), "-lynx-text");
-
-    // The keyword is a CSS ident, so it matches ASCII-case-insensitively the
-    // way every other display keyword does — the vendor prefix is not a
-    // separate token.
-    assert_eq!(parse_display("-LYNX-TEXT").unwrap(), Display::LynxText);
-
     let grid_lanes = parse_display("grid-lanes").unwrap();
     assert_eq!(grid_lanes, Display::GridLanes);
     assert_eq!(grid_lanes.to_css_string(), "grid-lanes");
@@ -80,13 +71,10 @@ fn display_inside_serializes_lynx_keywords() {
     // derived `ToCss` on `DisplayInside` (reachable via the multi-keyword
     // fallback) must agree — it kebab-cases the variant NAME unless
     // overridden with `#[css(keyword = ...)]`, which would leak
-    // "lynx-linear"/"lynx-relative". `LynxText` is the sharpest case: the
-    // kebab-cased variant name is "lynx-text", which differs from the real
-    // keyword only by the leading dash.
+    // "lynx-linear"/"lynx-relative".
     assert_eq!(DisplayInside::Contents.to_css_string(), "contents");
     assert_eq!(DisplayInside::LynxLinear.to_css_string(), "linear");
     assert_eq!(DisplayInside::LynxRelative.to_css_string(), "relative");
-    assert_eq!(DisplayInside::LynxText.to_css_string(), "-lynx-text");
     // `GridLanes` is a W3C keyword, so the kebab-cased variant name already
     // agrees with it; the explicit `#[css(keyword = ...)]` pins that.
     assert_eq!(DisplayInside::GridLanes.to_css_string(), "grid-lanes");
@@ -135,30 +123,9 @@ fn relative_behaves_like_block_without_becoming_css_block() {
     );
 }
 
-/// A Lynx text block is block-level like every other Lynx display value, but
-/// it is deliberately **not** an item container: a `<text>` establishes one
-/// flattened paragraph, and its subtree is inline content — runs, nested text
-/// scopes and atomic inline boxes — not flex/grid items. `LynxLinear` opts in
-/// to `is_item_container()`; `LynxRelative` and `LynxText` do not.
-#[test]
-fn lynx_text_is_block_level_and_not_an_item_container() {
-    let display = parse_display("-lynx-text").unwrap();
-
-    assert_eq!(display.outside(), DisplayOutside::Block);
-    assert_eq!(display.inside(), DisplayInside::LynxText);
-    assert!(!display.is_item_container());
-    assert!(!display.is_inline_flow());
-    assert!(!display.is_contents());
-    assert!(!display.is_none());
-    assert_eq!(display.equivalent_block_display(false), Display::LynxText);
-    // Blockification is identity for every Block-outside Lynx value, so a
-    // text block at the root is still a text block.
-    assert_eq!(display.equivalent_block_display(true), Display::LynxText);
-}
-
 /// `grid-lanes` (css-grid-3) is a block-level grid container: its children are
 /// grid items, so it opts into `is_item_container()` exactly like `grid` and
-/// `linear`, and unlike `relative`/`-lynx-text`.
+/// `linear`, and unlike `relative`.
 #[test]
 fn grid_lanes_behaves_like_a_block_level_grid_container() {
     let display = parse_display("grid-lanes").unwrap();
@@ -180,11 +147,6 @@ fn grid_lanes_behaves_like_a_block_level_grid_container() {
 fn lynx_display_keywords_are_single_keyword_values() {
     assert!(parse_display("inline linear").is_err());
     assert!(parse_display("relative list-item").is_err());
-    assert!(parse_display("inline -lynx-text").is_err());
-    assert!(parse_display("-lynx-text list-item").is_err());
-    // The unprefixed spelling is not the keyword.
-    assert!(parse_display("lynx-text").is_err());
-    assert!(parse_display("text").is_err());
     assert!(parse_display("inline grid-lanes").is_err());
     assert!(parse_display("grid-lanes list-item").is_err());
     // css-grid-3 defines `inline-grid-lanes` too, but the Lynx grammar has no
@@ -194,4 +156,88 @@ fn lynx_display_keywords_are_single_keyword_values() {
     // (`GenericGridTemplateComponent::Masonry`), never a display value.
     assert!(parse_display("inline-grid-lanes").is_err());
     assert!(parse_display("masonry").is_err());
+}
+
+fn parse_display_in(origin: Origin, url: &str, css: &str) -> Result<Display, ()> {
+    let url_data = UrlExtraData::from(::url::Url::parse(url).unwrap());
+    let context = ParserContext::new(
+        origin,
+        &url_data,
+        None,
+        ParsingMode::DEFAULT,
+        QuirksMode::NoQuirks,
+        Default::default(),
+        None,
+        None,
+        AttrTaint::default(),
+    );
+    let mut parser = CssParser::new(css);
+    parser
+        .parse_entirely(|input| Display::parse(&context, input))
+        .map_err(|_| ())
+}
+
+/// `block`, `flow` and `inline` are an engine's values, not an author's: a
+/// UA sheet, or a sheet whose URL enables chrome rules, can write them for
+/// the flow layout of the engine's own HTML content; an author sheet cannot,
+/// as Lynx's documentation rejects them and native Lynx falls `block` back to
+/// `flex`.
+#[test]
+fn block_flow_and_inline_parse_only_in_engine_sheets() {
+    for keyword in ["block", "flow", "inline", "BLOCK"] {
+        assert!(
+            parse_display(keyword).is_err(),
+            "an author sheet cannot write `{keyword}`"
+        );
+    }
+
+    let ua = |css| parse_display_in(Origin::UserAgent, "https://example.com/", css);
+    assert_eq!(ua("block").unwrap(), Display::Block);
+    assert_eq!(ua("flow").unwrap(), Display::Block);
+    assert_eq!(ua("inline").unwrap(), Display::Inline);
+    assert_eq!(ua("block").unwrap().to_css_string(), "block");
+    assert_eq!(ua("flow").unwrap().to_css_string(), "block");
+    assert_eq!(ua("inline").unwrap().to_css_string(), "inline");
+
+    let chrome = |css| parse_display_in(Origin::Author, "chrome://engine/sheet.css", css);
+    assert_eq!(chrome("block").unwrap(), Display::Block);
+    assert_eq!(chrome("inline").unwrap(), Display::Inline);
+
+    // Still single keywords: no `<display-outside> <display-inside>` pairs.
+    assert!(ua("block flow").is_err());
+    assert!(ua("inline flow").is_err());
+    assert!(ua("inline-block").is_err());
+    assert!(ua("flow-root").is_err());
+}
+
+#[test]
+fn block_and_inline_are_flow_boxes_and_inline_blockifies_to_block() {
+    let block = Display::Block;
+    assert_eq!(block.outside(), DisplayOutside::Block);
+    assert_eq!(block.inside(), DisplayInside::Flow);
+    assert!(!block.is_item_container());
+    assert_eq!(block.equivalent_block_display(false), Display::Block);
+
+    let inline = Display::Inline;
+    assert_eq!(inline.outside(), DisplayOutside::Inline);
+    assert_eq!(inline.inside(), DisplayInside::Flow);
+    assert!(inline.is_inline_flow());
+    assert!(!inline.is_item_container());
+    assert_eq!(inline.equivalent_block_display(false), Display::Block);
+    assert_eq!(inline.equivalent_block_display(true), Display::Block);
+}
+
+/// `-lynx-text` was removed on 2026-10-17: a Lynx text element is a Lynx
+/// paragraph by its element kind in the outer engine, so no sheet can write
+/// a text layout as a `display` value — an author's, the UA sheet or a sheet
+/// with chrome rules.
+#[test]
+fn lynx_text_is_not_a_display_keyword() {
+    let ua = |css| parse_display_in(Origin::UserAgent, "https://example.com/", css);
+    let chrome = |css| parse_display_in(Origin::Author, "chrome://engine/sheet.css", css);
+    for keyword in ["-lynx-text", "-LYNX-TEXT", "lynx-text", "text"] {
+        assert!(parse_display(keyword).is_err(), "author `{keyword}`");
+        assert!(ua(keyword).is_err(), "UA `{keyword}`");
+        assert!(chrome(keyword).is_err(), "chrome `{keyword}`");
+    }
 }

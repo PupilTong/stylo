@@ -170,9 +170,6 @@ pub enum DisplayInside {
     #[cfg(feature = "lynx")]
     #[css(keyword = "relative")]
     LynxRelative,
-    #[cfg(feature = "lynx")]
-    #[css(keyword = "-lynx-text")]
-    LynxText,
     #[cfg(not(feature = "lynx"))]
     TableRowGroup,
     #[cfg(not(feature = "lynx"))]
@@ -259,14 +256,16 @@ impl Display {
     pub const Contents: Self = Self(
         ((DisplayOutside::None as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Contents as u16,
     );
-    #[cfg(not(feature = "lynx"))]
+    /// Under `lynx` an engine-only value: [`DisplayKeyword::parse`] accepts
+    /// `inline` only where chrome rules are enabled.
     pub const Inline: Self =
         Self(((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16);
     #[cfg(not(feature = "lynx"))]
     pub const InlineBlock: Self = Self(
         ((DisplayOutside::Inline as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::FlowRoot as u16,
     );
-    #[cfg(not(feature = "lynx"))]
+    /// Under `lynx` an engine-only value: [`DisplayKeyword::parse`] accepts
+    /// `block` and `flow` only where chrome rules are enabled.
     pub const Block: Self =
         Self(((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::Flow as u16);
     #[cfg(feature = "gecko")]
@@ -298,10 +297,6 @@ impl Display {
     pub const LynxRelative: Self = Self(
         ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT)
             | DisplayInside::LynxRelative as u16,
-    );
-    #[cfg(feature = "lynx")]
-    pub const LynxText: Self = Self(
-        ((DisplayOutside::Block as u16) << Self::OUTSIDE_SHIFT) | DisplayInside::LynxText as u16,
     );
     #[cfg(not(feature = "lynx"))]
     pub const Table: Self =
@@ -387,6 +382,7 @@ impl Display {
     );
 
     /// Make a raw display value from <display-outside> and <display-inside> values.
+    #[cfg(not(feature = "lynx"))]
     #[inline]
     const fn new(outside: DisplayOutside, inside: DisplayInside) -> Self {
         Self((outside as u16) << Self::OUTSIDE_SHIFT | inside as u16)
@@ -472,12 +468,6 @@ impl Display {
         Self::Inline
     }
 
-    #[cfg(feature = "lynx")]
-    #[inline]
-    const fn internal_block() -> Self {
-        Self::new(DisplayOutside::Block, DisplayInside::Flow)
-    }
-
     /// The CSS `inline` display value.
     #[cfg(not(feature = "lynx"))]
     #[inline]
@@ -520,9 +510,9 @@ impl Display {
         // Special handling for `contents` on the root element.
         if is_root_element && self.is_contents() {
             // css-display-3 §2.7 computes a root `contents` to `block`. Lynx's
-            // grammar has no flow layout, so its block-level container is the
-            // initial `display`, `flex`; the internal block/flow display has
-            // no layout in a Lynx engine.
+            // author grammar has no flow layout — `block` is an engine-only
+            // value — so its block-level container is the initial `display`,
+            // `flex`.
             #[cfg(feature = "lynx")]
             return Display::Flex;
 
@@ -538,11 +528,11 @@ impl Display {
 
         match self.outside() {
             DisplayOutside::Inline => {
-                // Unreachable under `lynx`: the grammar has no inline-outside
-                // value (every Lynx keyword is block-outside or `none`/
-                // `contents`), so no `lynx` computed display takes this arm.
+                // Under `lynx` the one inline-outside value is `inline`, which
+                // only an engine sheet can write: it blockifies to `block`,
+                // as css-display-3 §2.7 blockifies an inline flow box.
                 #[cfg(feature = "lynx")]
-                return Self::internal_block();
+                return Display::Block;
 
                 #[cfg(not(feature = "lynx"))]
                 let inside = match self.inside() {
@@ -605,19 +595,31 @@ enum DisplayKeyword {
 }
 
 impl DisplayKeyword {
-    fn parse(input: &mut Parser) -> Result<Self, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ParseError> {
         use self::DisplayKeyword::*;
+        // Only the `lynx` grammar's engine-only keywords read the context.
+        #[cfg(not(feature = "lynx"))]
+        let _ = context;
         // Lynx's display property chooses only an internal layout algorithm:
-        // none | contents | flex | grid | grid-lanes | linear | relative |
-        // -lynx-text. It has no flow layout, and its documentation explicitly
-        // rejects block/inline and all compound <display-outside>
-        // <display-inside> forms. Nor is there any inline-level container
-        // value: `inline-flex`/`inline-grid` are gated out, so css-grid-3's
-        // `inline-grid-lanes` is deliberately left out alongside them.
-        // Unsupported public constants and inside variants compile out with
-        // the parser. The shared outside/inside representation can still
-        // encode upstream-only combinations internally, but Lynx never
-        // accepts them from authors.
+        // none | contents | flex | grid | grid-lanes | linear | relative. It
+        // has no flow layout, and its documentation explicitly rejects
+        // block/inline and all compound <display-outside> <display-inside>
+        // forms. Lynx's text elements have no display value of their own:
+        // the outer engine lays them out by element kind. Nor is there any
+        // inline-level container value: `inline-flex`/`inline-grid` are gated
+        // out, so css-grid-3's `inline-grid-lanes` is deliberately left out
+        // alongside them. Unsupported public constants and inside variants
+        // compile out with the parser. The shared outside/inside
+        // representation can still encode upstream-only combinations
+        // internally, but Lynx never accepts them from authors.
+        //
+        // An engine's own sheets — the UA sheet, or one whose URL enables
+        // chrome rules — may also write `block` (and its css-display-3
+        // single-keyword spelling `flow`) and `inline`: the flow layout an
+        // engine builds for its own HTML content, such as a rendered markdown
+        // tree, which no author can ask for. Native Lynx parses `block` and
+        // falls back to `flex` (`layout_computed_style.cc`), so an author's
+        // `block` is still no flow box here.
         Ok(try_match_ident_ignore_ascii_case! { input,
             "none" => Full(Display::None),
             "contents" => Full(Display::Contents),
@@ -626,7 +628,9 @@ impl DisplayKeyword {
             #[cfg(feature = "lynx")]
             "relative" => Full(Display::LynxRelative),
             #[cfg(feature = "lynx")]
-            "-lynx-text" => Full(Display::LynxText),
+            "block" | "flow" if context.chrome_rules_enabled() => Full(Display::Block),
+            #[cfg(feature = "lynx")]
+            "inline" if context.chrome_rules_enabled() => Full(Display::Inline),
             #[cfg(not(feature = "lynx"))]
             "inline-block" => Full(Display::InlineBlock),
             #[cfg(not(feature = "lynx"))]
@@ -692,8 +696,9 @@ impl DisplayKeyword {
             "table" => Inside(DisplayInside::Table),
             #[cfg(feature = "lynx")]
             "grid" if grid_enabled() => Full(Display::Grid),
-            // css-grid-3 `grid-lanes`; the same length as `-lynx-text`, so
-            // `match_ignore_ascii_case!`'s maximum keyword length is unchanged.
+            // css-grid-3 `grid-lanes`. At ten bytes it is the longest keyword
+            // the `lynx` grammar accepts, so it sets the maximum keyword length
+            // `match_ignore_ascii_case!` computes from the arms its `cfg`s keep.
             #[cfg(feature = "lynx")]
             "grid-lanes" => Full(Display::GridLanes),
             #[cfg(not(feature = "lynx"))]
@@ -713,21 +718,15 @@ impl ToCss for Display {
     {
         let outside = self.outside();
         let inside = self.inside();
-        #[cfg(feature = "lynx")]
-        if self.is_inline_flow() {
-            return dest.write_str("inline");
-        }
-        #[cfg(feature = "lynx")]
-        if *self == Self::internal_block() {
-            return dest.write_str("block");
-        }
         match *self {
+            #[cfg(feature = "lynx")]
+            Display::Block => dest.write_str("block"),
+            #[cfg(feature = "lynx")]
+            Display::Inline => dest.write_str("inline"),
             #[cfg(feature = "lynx")]
             Display::Linear => dest.write_str("linear"),
             #[cfg(feature = "lynx")]
             Display::LynxRelative => dest.write_str("relative"),
-            #[cfg(feature = "lynx")]
-            Display::LynxText => dest.write_str("-lynx-text"),
             #[cfg(not(feature = "lynx"))]
             Display::Block | Display::Inline => outside.to_css(dest),
             #[cfg(not(feature = "lynx"))]
@@ -802,10 +801,10 @@ impl ToTyped for Display {
 #[cfg(feature = "lynx")]
 impl Parse for Display {
     fn parse(
-        _: &ParserContext,
+        context: &ParserContext,
         input: &mut Parser,
     ) -> Result<Display, ParseError> {
-        match DisplayKeyword::parse(input)? {
+        match DisplayKeyword::parse(context, input)? {
             DisplayKeyword::Full(display) => Ok(display),
         }
     }
@@ -813,11 +812,11 @@ impl Parse for Display {
 
 #[cfg(not(feature = "lynx"))]
 impl Parse for Display {
-    fn parse(_: &ParserContext, input: &mut Parser) -> Result<Display, ParseError> {
+    fn parse(context: &ParserContext, input: &mut Parser) -> Result<Display, ParseError> {
         let mut got_list_item = false;
         let mut inside = None;
         let mut outside = None;
-        match DisplayKeyword::parse(input)? {
+        match DisplayKeyword::parse(context, input)? {
             DisplayKeyword::Full(d) => return Ok(d),
             DisplayKeyword::Outside(o) => {
                 outside = Some(o);
@@ -830,7 +829,7 @@ impl Parse for Display {
             },
         };
 
-        while let Ok(kw) = input.try_parse(DisplayKeyword::parse) {
+        while let Ok(kw) = input.try_parse(|input| DisplayKeyword::parse(context, input)) {
             match kw {
                 DisplayKeyword::ListItem if !got_list_item => {
                     got_list_item = true;
@@ -858,15 +857,7 @@ impl Parse for Display {
 impl SpecifiedValueInfo for Display {
     fn collect_completion_keywords(f: KeywordsCollectFn) {
         #[cfg(feature = "lynx")]
-        f(&[
-            "none",
-            "linear",
-            "flex",
-            "grid",
-            "grid-lanes",
-            "relative",
-            "-lynx-text",
-        ]);
+        f(&["none", "linear", "flex", "grid", "grid-lanes", "relative"]);
         #[cfg(not(feature = "lynx"))]
         f(&[
             "block",

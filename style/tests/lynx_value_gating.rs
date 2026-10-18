@@ -58,7 +58,7 @@ fn custom_properties_and_var_references_remain_enabled() {
 #[test]
 fn display_keyword_gating() {
     // Lynx: none | contents | flex | grid, plus the css-grid-3 `grid-lanes`
-    // extension and the Lynx-only linear | relative | -lynx-text.
+    // extension and the Lynx-only linear | relative.
     // `grid` is force-enabled under `lynx` (grid_enabled() returns true), so it
     // parses out of the box — matching its grid-* longhands, which are enabled
     // the same way — without needing stylo's `layout.grid.enabled` pref.
@@ -70,7 +70,6 @@ fn display_keyword_gating() {
         "grid-lanes",
         "linear",
         "relative",
-        "-lynx-text",
     ] {
         assert_accepts("display", value);
     }
@@ -91,7 +90,9 @@ fn display_keyword_gating() {
         "table-row",
         "table-cell",
         "table-caption",
-        // The vendor prefix is part of the keyword, not decoration on it.
+        // `-lynx-text` was removed on 2026-10-17: a Lynx text element is a
+        // paragraph by its element kind. Its unprefixed spellings never parsed.
+        "-lynx-text",
         "lynx-text",
         "text",
     ] {
