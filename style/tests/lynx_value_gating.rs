@@ -198,3 +198,11 @@ fn outline_accepts_the_w3c_grammar_without_offset() {
     assert_rejects("outline-color", "currentcolor");
     assert_rejects("outline-offset", "2px");
 }
+
+#[test]
+fn webkit_text_security_accepts_the_four_keywords() {
+    for value in ["none", "circle", "disc", "square"] {
+        assert_accepts("-webkit-text-security", value);
+    }
+    assert_rejects("-webkit-text-security", "bullet");
+}
