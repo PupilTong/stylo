@@ -280,6 +280,10 @@ text-shadow
 text-stroke-color
 text-stroke-width
 text-stroke
+# web-core passes `-webkit-text-security` through to the browser, whose UA
+# sheet masks `<input type=password>` with it; lynx-vello's `x-input` password
+# field needs the same declaration, and the paragraph masks every character.
+-webkit-text-security
 top
 transform-origin
 transform
