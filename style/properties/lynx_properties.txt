@@ -292,6 +292,11 @@ transition-duration
 transition-property
 transition-timing-function
 transition
+# css-ui-4 `user-select` (https://drafts.csswg.org/css-ui-4/#content-selection)
+# is a user-directed W3C extension beyond Lynx's property index: web-core
+# implements `<text text-selection>` as `user-select` in its own `x-text.css`,
+# and the engine maps the attribute the same way in its UA sheet.
+user-select
 vertical-align
 visibility
 white-space
