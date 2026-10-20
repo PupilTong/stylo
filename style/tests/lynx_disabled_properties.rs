@@ -74,7 +74,6 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "transform-style",
     "isolation",
     "appearance",
-    "user-select",
     "zoom",
     "tab-size",
     "scrollbar-width",

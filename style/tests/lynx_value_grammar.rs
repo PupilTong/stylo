@@ -165,6 +165,16 @@ fn typography_grammars() {
 }
 
 #[test]
+fn user_select_keywords() {
+    // css-ui-4 §"Content Selection": the four standard keywords plus the
+    // `contain` the Servo build carries. The `-webkit-` and `-moz-` aliases
+    // stay outside the Lynx surface, as every prefixed spelling does.
+    accepts("user-select", &["auto", "text", "none", "contain", "all"]);
+    rejects("user-select", &["element", "toggle", "text none"]);
+    rejects("-webkit-user-select", &["none"]);
+}
+
+#[test]
 fn alignment_and_text_keyword_grammars() {
     accepts(
         "align-content",
