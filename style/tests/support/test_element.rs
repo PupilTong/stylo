@@ -23,8 +23,9 @@ use style::applicable_declarations::ApplicableDeclarationBlock;
 use style::context::SharedStyleContext;
 use style::data::{ElementDataMut, ElementDataRef};
 use style::dom::{LayoutIterator, NodeInfo, OpaqueNode, TDocument, TElement, TNode, TShadowRoot};
-use style::properties::PropertyDeclarationBlock;
+use style::properties::{ComputedValues, PropertyDeclarationBlock};
 use style::selector_parser::{AttrValue, Lang, PseudoElement, SelectorImpl};
+use style::servo::restyle_damage::ServoRestyleDamage;
 use style::shared_lock::{Locked, SharedRwLock};
 use style::stylist::CascadeData;
 use style::values::computed::Display;
@@ -482,6 +483,16 @@ impl TElement for TestElement {
 
     fn relative_selector_search_direction(&self) -> ElementSelectorFlags {
         ElementSelectorFlags::empty()
+    }
+
+    /// One fixed embedder bit (`1 << 8`), so a test can tell whether the
+    /// traversal's damage diff consulted the hook.
+    fn compute_primary_style_damage(
+        &self,
+        _old: &ComputedValues,
+        _new: &ComputedValues,
+    ) -> ServoRestyleDamage {
+        ServoRestyleDamage::from_bits_retain(1 << 8)
     }
 
     fn get_attr(&self, _: &LocalName, _: &Namespace) -> Option<String> {

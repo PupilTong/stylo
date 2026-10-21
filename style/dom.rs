@@ -952,6 +952,31 @@ pub trait TElement:
         Default::default()
     }
 
+    /// lynx: the embedder's damage for a change of this element's own
+    /// primary style from `_old` to `_new`, read while both are alive.
+    ///
+    /// The traversal calls it for every primary style it replaces with a
+    /// different one (`std::ptr::eq` false), whatever damage the longhand
+    /// classification produced — none, repaint only (a custom property), or
+    /// relayout — and never for an eager pseudo-element's style or a first
+    /// style. What it returns is accumulated into `ElementData::damage`.
+    ///
+    /// It is the one place the old primary style is still alive: the
+    /// traversal drops it once the element's restyle finishes, so an
+    /// embedder that has to compare the old style with the new decides here
+    /// rather than keeping its own reference to the old one until a later
+    /// pass. It may set only the
+    /// [`EMBEDDER`](crate::servo::restyle_damage::ServoRestyleDamage::EMBEDDER)
+    /// bits, which nothing else in Stylo sets.
+    #[cfg(feature = "lynx")]
+    fn compute_primary_style_damage(
+        &self,
+        _old: &ComputedValues,
+        _new: &ComputedValues,
+    ) -> RestyleDamage {
+        RestyleDamage::empty()
+    }
+
     /// Return the value of the given custom attribute if it exists.
     fn get_attr(&self, attr: &LocalName, namespace: &Namespace) -> Option<String>;
 
