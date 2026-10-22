@@ -265,6 +265,17 @@ impl<Component> Value<Component> {
             attr_tainted,
         }
     }
+
+    /// Returns the single component this value holds, if it is one: the value of a property
+    /// registered with a syntax that has no multiplier, as computed. `None` for a list or a
+    /// universal-syntax value.
+    pub fn as_component(&self) -> Option<&Component> {
+        if let ValueInner::Component(ref component) = self.v {
+            Some(component)
+        } else {
+            None
+        }
+    }
 }
 
 impl<L, N, P, LP, C, Image, U, Integer, A, T, R, Transform>
