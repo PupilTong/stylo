@@ -1222,9 +1222,23 @@ pub trait MatchMethods: TElement {
         {
             RestyleDamage::compute_style_difference(old_values, new_values)
         }
-        #[cfg(feature = "servo")]
+        #[cfg(all(feature = "servo", not(feature = "lynx")))]
         {
             RestyleDamage::compute_style_difference::<Self>(old_values, new_values)
+        }
+        #[cfg(feature = "lynx")]
+        {
+            let mut difference =
+                RestyleDamage::compute_style_difference::<Self>(old_values, new_values);
+            if pseudo.is_none() && !std::ptr::eq(old_values, new_values) {
+                let embedder = self.compute_primary_style_damage(old_values, new_values);
+                debug_assert!(
+                    RestyleDamage::EMBEDDER.contains(embedder),
+                    "compute_primary_style_damage sets only the embedder bits"
+                );
+                difference.damage |= embedder;
+            }
+            difference
         }
     }
 }

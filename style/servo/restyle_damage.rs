@@ -52,6 +52,19 @@ bitflags! {
 
 malloc_size_of::malloc_size_of_is_0!(ServoRestyleDamage);
 
+#[cfg(feature = "lynx")]
+impl ServoRestyleDamage {
+    /// lynx: the upper byte, which the embedder owns.
+    ///
+    /// Only `TElement::compute_primary_style_damage` sets these bits: the
+    /// longhand classification never does, and [`Self::reconstruct`]
+    /// saturates every bit but these. The embedder gives them its own
+    /// meanings — verdicts about one element's primary style change that it
+    /// reads when it harvests `ElementData::damage` — and has to clear them
+    /// from whatever it hands on as damage.
+    pub const EMBEDDER: Self = Self::from_bits_retain(0xFF00);
+}
+
 impl ServoRestyleDamage {
     /// Compute the `StyleDifference` (including the appropriate restyle damage)
     /// for a given style change between `old` and `new`.
@@ -121,7 +134,19 @@ impl ServoRestyleDamage {
     pub fn reconstruct() -> ServoRestyleDamage {
         // There's no way of knowing what kind of damage system the embedder will use, but part of
         // this interface is that a fully saturated restyle damage means to rebuild everything.
-        ServoRestyleDamage::from_bits_retain(<ServoRestyleDamage as Flags>::Bits::MAX)
+        #[cfg(not(feature = "lynx"))]
+        {
+            ServoRestyleDamage::from_bits_retain(<ServoRestyleDamage as Flags>::Bits::MAX)
+        }
+        // lynx: everything but the embedder's verdict bits, which only its
+        // own hook answers: a pseudo-element appearing says nothing about
+        // what the element's primary style change was.
+        #[cfg(feature = "lynx")]
+        {
+            ServoRestyleDamage::from_bits_retain(
+                <ServoRestyleDamage as Flags>::Bits::MAX & !Self::EMBEDDER.bits(),
+            )
+        }
     }
 }
 

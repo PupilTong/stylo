@@ -359,6 +359,36 @@ impl ElementDataWrapper {
         }
     }
 
+    /// lynx: a shared reference to this ElementData for as long as `self`
+    /// is borrowed, with no guard to hold.
+    ///
+    /// [`Self::borrow`] ties its reference to a guard, so a reader that wants
+    /// a `&ComputedValues` with the lifetime of the element it reads (a
+    /// layout pass handing out `&'dom` styles) has to clone the style `Arc`
+    /// or keep a second owner of it. This hands out the same reference
+    /// without either. Debug builds take and drop a shared borrow of the
+    /// check cell, so a call while a [`Self::borrow_mut`] guard is alive
+    /// panics; nothing checks a guard taken after the call returns.
+    ///
+    /// # Safety
+    ///
+    /// The caller holds a shared borrow of the tree that owns this wrapper,
+    /// and every mutable access to it (`borrow_mut`, `TElement::ensure_data`,
+    /// `TElement::clear_data`, `TElement::mutate_data`) is reached only
+    /// through an exclusive borrow of that tree, or inside a style
+    /// traversal during which no reference this returned is alive. A
+    /// reference this returns must not outlive the shared borrow of the tree
+    /// it was read under.
+    #[cfg(feature = "lynx")]
+    #[inline(always)]
+    pub unsafe fn get(&self) -> &ElementData {
+        #[cfg(debug_assertions)]
+        drop(self.refcell.borrow());
+        // SAFETY: the caller guarantees no mutable reference to `inner`
+        // exists for the life of the returned reference.
+        unsafe { &*self.inner.get() }
+    }
+
     /// Gets an exclusive reference to this ElementData.
     #[inline(always)]
     pub fn borrow_mut(&self) -> ElementDataMut<'_> {
