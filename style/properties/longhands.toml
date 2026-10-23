@@ -180,11 +180,19 @@ spec = "https://drafts.csswg.org/css-inline-3/#alignment-baseline"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
+# lynx-vello: css-anchor-position-1 is a user-directed W3C extension beyond
+# Lynx's property index. Its properties (`anchor-name`, `anchor-scope`,
+# `position-anchor`, `position-area`, `position-try-fallbacks`,
+# `position-try-order`, `position-visibility`) are ported to servo behind the
+# experimental pref, the -webkit-text-stroke*/offset-distance pattern, so the
+# `lynx` feature force-enables the seeded spellings while stock servo keeps
+# them out of its author surface. The servo default
+# `servo_restyle_damage = "rebuild_box"` relays out when any of them changes.
 [anchor-name]
 type = "AnchorName"
 initial = "computed::AnchorName::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-anchor-name"
 affects = ""
@@ -193,7 +201,7 @@ affects = ""
 type = "ScopedName"
 initial = "computed::ScopedName::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-scope"
 affects = ""
@@ -349,6 +357,7 @@ gecko_pref = "layout.css.backdrop-filter.enabled"
 servo_pref = "layout.unimplemented"
 spec = "https://drafts.fxtf.org/filter-effects-2/#propdef-backdrop-filter"
 affects = "overflow"
+servo_restyle_damage = "repaint"
 
 [background-color]
 type = "Color"
@@ -556,7 +565,11 @@ affects = "paint"
 
 [color]
 type = "ColorPropertyValue"
-initial = "crate::color::AbsoluteColor::BLACK"
+initial = "crate::color::AbsoluteColor::BLACK.into()"
+# Lynx extends `color` with text gradients, but its animation engine only
+# interpolates numeric solid colors. The Lynx computed value therefore keeps
+# normal color animation for solid-to-solid pairs and reports gradient pairs
+# as non-interpolable so Web Animations applies its discrete fallback.
 struct = "inherited_text"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-color/#color"
@@ -633,14 +646,27 @@ initial = "specified::Contain::empty()"
 struct = "box"
 servo_pref = "layout.unimplemented"
 animation_type = "none"
+# lynx-vello: containment is a deliberate extension (see the containment note in
+# properties/lynx_properties.txt, https://drafts.csswg.org/css-contain-2/). A
+# `contain` change must force relayout; declared explicitly rather than relying
+# on the rebuild_box default so the intent is visible next to the enablement.
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-contain/#contain-property"
 affects = "layout"
 
+# lynx-vello: the logical `contain-intrinsic-block-size` / `-inline-size` pair is
+# un-`gecko`'d ONLY so the `contain-intrinsic-size` logical group stays balanced
+# for the servo build (data.py asserts logical_count * 2 == len(props)). They are
+# deliberately kept OUT of the lynx_properties.txt seed and its closure exposure,
+# so they stay disabled-for-content. No explicit servo_restyle_damage: logical
+# longhands have no own computed storage and are excluded from the servo damage
+# predicates (they resolve to the physical width/height whose rebuild_box damage
+# covers them).
 [contain-intrinsic-block-size]
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
 logical = true
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -650,8 +676,9 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 affects = "layout"
 
@@ -659,7 +686,7 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
 logical = true
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
@@ -669,8 +696,9 @@ affects = "layout"
 type = "ContainIntrinsicSize"
 initial = "computed::ContainIntrinsicSize::None"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "contain-intrinsic-size"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-sizing-4/#intrinsic-size-override"
 affects = "layout"
 
@@ -705,7 +733,13 @@ affects = "layout"
 type = "ContentVisibility"
 initial = "computed::ContentVisibility::Visible"
 struct = "box"
-engine = "gecko"
+# lynx-vello: ported to servo behind the experimental pref (the
+# -webkit-text-stroke*/offset-distance pattern); the `lynx` feature
+# force-enables it. Animation stays the default `normal`: the css-contain-2
+# §4.1 bespoke interpolation (hidden never appears mid-transition) lives in
+# helpers/animated_properties.mako.rs and is shared by gecko and servo.
+servo_pref = "layout.unimplemented"
+servo_restyle_damage = "rebuild_box"
 spec = "https://drafts.csswg.org/css-contain/#content-visibility"
 affects = "layout"
 
@@ -757,7 +791,7 @@ affects = "layout"
 
 [display]
 type = "Display"
-initial = "computed::Display::inline()"
+initial = "computed::Display::initial()"
 struct = "box"
 spec = "https://drafts.csswg.org/css-display/#propdef-display"
 servo_restyle_damage = "rebuild_box"
@@ -1120,6 +1154,19 @@ servo_pref = "layout.grid.enabled"
 spec = "https://drafts.csswg.org/css-grid/#propdef-grid-template-rows"
 affects = "layout"
 
+# css-grid-3 `flow-tolerance` (`normal | <length-percentage [0,∞]> |
+# infinite`), which applies to `display: grid-lanes` containers. Lynx has no
+# such property, so it exists only under the `lynx` feature, alongside the
+# grid longhands whose struct it shares.
+[flow-tolerance]
+lynx_only = true
+type = "FlowTolerance"
+initial = "computed::FlowTolerance::normal()"
+struct = "position"
+spec = "https://drafts.csswg.org/css-grid-3/#propdef-flow-tolerance"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
 [height]
 type = "Size"
 initial = "computed::Size::auto()"
@@ -1270,6 +1317,193 @@ spec = "https://drafts.csswg.org/css2/visudet.html#propdef-line-height"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
+# Lynx linear layout knobs are stored in Box because they parameterize the
+# box-level `display: linear` layout mode; reusing Box keeps this patch small
+# and gives ComputedValues generated clone_* accessors without a new style struct.
+[linear-direction]
+lynx_only = true
+struct = "box"
+spec = "Nonstandard Lynx linear layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+type = "lynx_layout::LinearDirection"
+initial = "computed::lynx_layout::LinearDirection::Column"
+
+[linear-weight]
+lynx_only = true
+type = "NonNegativeNumber"
+initial = "From::from(0.)"
+struct = "box"
+spec = "Nonstandard Lynx linear layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[linear-weight-sum]
+lynx_only = true
+type = "NonNegativeNumber"
+initial = "From::from(0.)"
+struct = "box"
+spec = "Nonstandard Lynx linear layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+# Lynx relative layout knobs are stored in Box for the same reason as the
+# linear layout knobs above: they parameterize the box-level `display: relative`
+# layout mode while keeping this fork patch mechanical and accessor-compatible.
+[relative-id]
+lynx_only = true
+type = "Integer"
+parse_method = "parse_positive"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-top]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-right]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-bottom]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-left]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-top-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-right-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-bottom-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-left-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-inline-start]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-align-inline-end]
+lynx_only = true
+type = "lynx_layout::RelativeAlign"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-inline-start-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-inline-end-of]
+lynx_only = true
+type = "lynx_layout::RelativeReference"
+initial = "-1"
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+
+[relative-center]
+lynx_only = true
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+type = "lynx_layout::RelativeCenter"
+initial = "computed::lynx_layout::RelativeCenter::None"
+
+[relative-layout-once]
+lynx_only = true
+struct = "box"
+spec = "Nonstandard Lynx relative layout property"
+animation_type = "none"
+servo_restyle_damage = "rebuild_box"
+affects = "layout"
+type = "lynx_layout::RelativeLayoutOnce"
+initial = "computed::lynx_layout::RelativeLayoutOnce::True"
+
 [link-parameters]
 type = "LinkParameters"
 initial = "computed::LinkParameters::none()"
@@ -1348,6 +1582,8 @@ affects = "layout"
 [max-height]
 type = "MaxSize"
 initial = "computed::MaxSize::none()"
+lynx_parse_method = "parse_lynx_max_size"
+lynx_allow_quirks = false
 struct = "position"
 logical_group = "max-size"
 allow_quirks = true
@@ -1370,6 +1606,8 @@ affects = "layout"
 [max-width]
 type = "MaxSize"
 initial = "computed::MaxSize::none()"
+lynx_parse_method = "parse_lynx_max_size"
+lynx_allow_quirks = false
 struct = "position"
 logical_group = "max-size"
 allow_quirks = true
@@ -1445,7 +1683,9 @@ affects = "overflow"
 type = "LengthPercentage"
 initial = "computed::LengthPercentage::zero()"
 struct = "box"
-engine = "gecko"
+# Lynx-supported; gecko-only in stylo. Expose in servo behind the experimental
+# pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 flags = "CAN_ANIMATE_ON_COMPOSITOR SCROLL_LINKED_EFFECTIVE"
 spec = "https://drafts.fxtf.org/motion-1/#offset-distance-property"
 servo_restyle_damage = "rebuild_box"
@@ -1476,7 +1716,9 @@ affects = "overflow"
 type = "OffsetRotate"
 initial = "computed::OffsetRotate::auto()"
 struct = "box"
-engine = "gecko"
+# Lynx-supported; gecko-only in stylo. Expose in servo behind the experimental
+# pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 flags = "CAN_ANIMATE_ON_COMPOSITOR SCROLL_LINKED_EFFECTIVE"
 spec = "https://drafts.fxtf.org/motion-1/#offset-rotate-property"
 servo_restyle_damage = "rebuild_box"
@@ -1646,6 +1888,57 @@ spec = "https://wicg.github.io/overscroll-behavior/#overscroll-behavior-properti
 animation_type = "discrete"
 affects = "paint"
 
+# lynx-vello's own nested-scroll ordering switch, with no W3C or Lynx
+# counterpart, so it exists only under the `lynx` feature. It is per physical
+# axis, the shape of `overscroll-behavior-x`/`-y` (this engine has no writing
+# modes, so there is no logical pair), and the `scroll-capture` shorthand sets
+# both. On an axis, `nearest` hands a gesture on this scroll container to the
+# nearest ancestor scroll container first and scrolls this one only once that
+# ancestor cannot move; `auto` is the ordinary inner-first chain.
+# Paint-affecting only: the engine reads it into the committed frame's
+# scroll-slot table, never into layout.
+#
+# Grammar per axis: `auto | nearest [ forward | backward ]?`. The optional
+# direction limits `nearest` to one sign of that axis's delta: `forward` is
+# the delta that increases the scroll offset on that axis, `backward` the
+# delta that decreases it; plain `nearest` covers both. A direction or axis
+# the value does not cover walks the ordinary inner-first chain, so
+# `scroll-capture-y: nearest forward` on an inner list under a folding header
+# folds the header first when scrolling down and scrolls the list first when
+# scrolling back up, while its horizontal gestures chain as usual (the clay
+# engine's `CaptureScroll` phase, nested_scrollable.h, spelled from the inner
+# side).
+[scroll-capture-x]
+lynx_only = true
+type = "ScrollCapture"
+initial = "computed::ScrollCapture::Auto"
+struct = "box"
+spec = "Nonstandard lynx-vello scroll chaining property"
+animation_type = "discrete"
+affects = "paint"
+
+[scroll-capture-y]
+lynx_only = true
+type = "ScrollCapture"
+initial = "computed::ScrollCapture::Auto"
+struct = "box"
+spec = "Nonstandard lynx-vello scroll chaining property"
+animation_type = "discrete"
+affects = "paint"
+
+# css-scroll-snap-2's `scroll-initial-target` (`none | nearest`): the element
+# sets its nearest scroll container's initial scroll position. Gecko has no
+# declaration for it, so like `flow-tolerance` it exists only under the `lynx`
+# feature. Paint-affecting only: the engine reads it during the paint build.
+[scroll-initial-target]
+lynx_only = true
+struct = "box"
+spec = "https://drafts.csswg.org/css-scroll-snap-2/#scroll-initial-target"
+animation_type = "discrete"
+affects = "paint"
+type = "ScrollInitialTarget"
+initial = "computed::ScrollInitialTarget::None"
+
 [page]
 type = "PageName"
 initial = "computed::PageName::auto()"
@@ -1728,7 +2021,7 @@ affects = "layout"
 type = "PositionAnchor"
 initial = "computed::PositionAnchor::normal()"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 rule_types_allowed = ["style", "keyframe", "scope", "position-try"]
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-position-anchor"
@@ -1757,16 +2050,20 @@ affects = "layout"
 type = "PositionTryOrder"
 initial = "computed::PositionTryOrder::normal()"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#position-try-order-property"
 affects = "layout"
 
+# Under the `lynx` feature only the Editor's Draft spelling parses
+# (`always | [ anchor-valid || anchor-visible || no-overflow ]`); the legacy
+# `anchors-valid` / `anchors-visible` aliases are rejected.
 [position-visibility]
 type = "PositionVisibility"
 initial = "computed::PositionVisibility::ANCHORS_VISIBLE"
+lynx_initial = "computed::PositionVisibility::ANCHOR_VISIBLE"
 struct = "position"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://drafts.csswg.org/css-anchor-position-1/#propdef-position-visibility"
 affects = "layout"
@@ -1842,11 +2139,17 @@ spec = "https://drafts.csswg.org/css-transforms-2/#individual-transforms"
 servo_restyle_damage = "recalculate_overflow"
 affects = "overflow"
 
+# lynx-vello: css-scroll-snap-1 is a user-directed W3C extension beyond Lynx's
+# property index (Lynx has no snapping property). Ported to servo behind the
+# experimental pref, the -webkit-text-stroke*/offset-distance pattern, so the
+# `lynx` feature force-enables the seeded spellings while stock servo keeps
+# them out of its author surface. Same for the scroll-margin-*/scroll-padding-*
+# families below.
 [scroll-snap-align]
 type = "ScrollSnapAlign"
 initial = "computed::ScrollSnapAlign::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#scroll-snap-align"
 animation_type = "discrete"
 affects = "paint"
@@ -1855,7 +2158,7 @@ affects = "paint"
 type = "ScrollSnapStop"
 initial = "computed::ScrollSnapStop::Normal"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#scroll-snap-stop"
 animation_type = "discrete"
 affects = "paint"
@@ -1864,7 +2167,7 @@ affects = "paint"
 type = "ScrollSnapType"
 initial = "computed::ScrollSnapType::none()"
 struct = "box"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#scroll-snap-type"
 animation_type = "discrete"
 affects = "paint"
@@ -2061,6 +2364,8 @@ affects = "layout"
 type = "SimpleShadow"
 struct = "inherited_text"
 vector = { simple_bindings = true, animation_type = "with_zero" }
+lynx_vector = { simple_bindings = true, single_item = true }
+lynx_animation_type = "none"
 ignored_when_colors_disabled = true
 spec = "https://drafts.csswg.org/css-text-decor-3/#text-shadow-property"
 servo_restyle_damage = "repaint"
@@ -2261,11 +2566,18 @@ animation_type = "none"
 spec = "https://drafts.csswg.org/css-animations-2/#animation-composition"
 affects = ""
 
+# lynx-vello: scroll-animations-1's timeline declarations are a user-directed
+# W3C extension beyond Lynx (native Lynx has no scroll-driven animations).
+# Ported to servo behind the experimental pref, the container/scroll-snap
+# pattern, so the `lynx` feature force-enables them while stock servo keeps
+# them out of its author surface. Same for the view-timeline-* longhands below.
+# `view-timeline-inset` keeps `animation_type = "none"`, as Firefox ships it,
+# although scroll-animations-1 makes it animatable by computed value.
 [scroll-timeline-axis]
 type = "ScrollAxis"
 initial = "computed::ScrollAxis::default()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2277,7 +2589,7 @@ affects = ""
 type = "TimelineName"
 initial = "computed::TimelineName::none()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2289,7 +2601,7 @@ affects = ""
 type = "ScrollAxis"
 initial = "computed::ScrollAxis::default()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2301,7 +2613,7 @@ affects = ""
 type = "ViewTimelineInset"
 initial = "computed::ViewTimelineInset::default()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2313,7 +2625,7 @@ affects = ""
 type = "TimelineName"
 initial = "computed::TimelineName::none()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 vector = { need_index = true }
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
@@ -2513,7 +2825,11 @@ affects = "paint"
 type = "Color"
 initial = "computed_value::T::currentcolor()"
 struct = "inherited_text"
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke-color`; stylo ships it gecko-only
+# under the -webkit- name. Expose it in servo behind the experimental pref (so
+# the `lynx` feature force-enables it) and register the unprefixed Lynx alias.
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke-color"]
 ignored_when_colors_disabled = true
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke-color"
 affects = "paint"
@@ -2522,7 +2838,9 @@ affects = "paint"
 type = "LineWidth"
 initial = "app_units::Au(0)"
 struct = "inherited_text"
-engine = "gecko"
+# Lynx exposes this unprefixed as `text-stroke-width` (see -webkit-text-stroke-color).
+servo_pref = "layout.unimplemented"
+aliases = ["text-stroke-width"]
 spec = "https://compat.spec.whatwg.org/#the-webkit-text-stroke-width"
 animation_type = "discrete"
 affects = "overflow"
@@ -2749,6 +3067,7 @@ struct = "text"
 servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 boxed = true
+lynx_boxed = false
 spec = "https://drafts.csswg.org/css-ui/#propdef-text-overflow"
 servo_restyle_damage = "rebuild_box"
 affects = "paint"
@@ -3372,11 +3691,14 @@ animation_type = "none"
 spec = "https://drafts.csswg.org/css-box-4/#propdef-margin-trim"
 affects = "layout"
 
+# lynx-vello: ported to servo behind the experimental pref with the snap
+# longhands (see scroll-snap-align). The logical pair is compiled for group
+# balance only; only the physical sides are seeded.
 [scroll-margin-top]
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.0"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin-top"
@@ -3386,7 +3708,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.1"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin-right"
@@ -3396,7 +3718,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.2"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin-bottom"
@@ -3406,7 +3728,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.3"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-margin-left"
@@ -3416,7 +3738,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.4"
@@ -3427,7 +3749,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.5"
@@ -3438,7 +3760,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.6"
@@ -3449,7 +3771,7 @@ affects = ""
 type = "Length"
 initial = "computed::Length::zero()"
 struct = "margin"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-margin"
 gecko_ffi_name = "mScrollMargin.7"
@@ -3546,11 +3868,14 @@ gecko_ffi_name = "mPadding.7"
 servo_restyle_damage = "rebuild_box"
 affects = "layout"
 
+# lynx-vello: ported to servo behind the experimental pref with the snap
+# longhands (see scroll-snap-align). The logical pair is compiled for group
+# balance only; only the physical sides are seeded.
 [scroll-padding-top]
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.0"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding-top"
@@ -3560,7 +3885,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.1"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding-right"
@@ -3570,7 +3895,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.2"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding-bottom"
@@ -3580,7 +3905,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.3"
 spec = "https://drafts.csswg.org/css-scroll-snap-1/#propdef-scroll-padding-left"
@@ -3590,7 +3915,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.4"
@@ -3601,7 +3926,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.5"
@@ -3612,7 +3937,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.6"
@@ -3623,7 +3948,7 @@ affects = ""
 type = "NonNegativeLengthPercentageOrAuto"
 initial = "computed::NonNegativeLengthPercentageOrAuto::auto()"
 struct = "padding"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 logical = true
 logical_group = "scroll-padding"
 gecko_ffi_name = "mScrollPadding.7"
@@ -4324,11 +4649,13 @@ servo_restyle_damage = "rebuild_box"
 type = "WhiteSpaceCollapse"
 initial = "computed::WhiteSpaceCollapse::Collapse"
 
+# lynx-vello: ported to servo behind the experimental pref with the
+# scroll-timeline-* longhands (see scroll-timeline-axis).
 [timeline-scope]
 type = "ScopedName"
 initial = "computed::ScopedName::none()"
 struct = "ui"
-engine = "gecko"
+servo_pref = "layout.unimplemented"
 animation_type = "none"
 gecko_pref = "layout.css.scroll-driven-animations.enabled"
 spec = "https://drafts.csswg.org/scroll-animations-1/#timeline-scope"

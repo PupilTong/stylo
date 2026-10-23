@@ -1,0 +1,243 @@
+// display:linear|relative|grid-lanes are gated behind the `lynx` cargo
+// feature; without it there is nothing to test.
+#![cfg(feature = "lynx")]
+
+use cssparser::Parser as CssParser;
+use style::context::QuirksMode;
+use style::custom_properties::AttrTaint;
+use style::parser::{Parse, ParserContext};
+use style::properties::{longhands, style_structs, ComputedValues};
+use style::stylesheets::{Origin, UrlExtraData};
+use style::values::specified::box_::{Display, DisplayInside, DisplayOutside};
+use style_traits::{ParsingMode, ToCss};
+
+fn parse_display(css: &str) -> Result<Display, ()> {
+    let url_data = UrlExtraData::from(::url::Url::parse("https://example.com/").unwrap());
+    let context = ParserContext::new(
+        Origin::Author,
+        &url_data,
+        None,
+        ParsingMode::DEFAULT,
+        QuirksMode::NoQuirks,
+        Default::default(),
+        None,
+        None,
+        AttrTaint::default(),
+    );
+    let mut parser = CssParser::new(css);
+    parser
+        .parse_entirely(|input| Display::parse(&context, input))
+        .map_err(|_| ())
+}
+
+#[test]
+fn display_initial_value_is_flex() {
+    assert_eq!(Display::initial(), Display::Flex);
+    assert_eq!(longhands::display::get_initial_value(), Display::Flex);
+    assert_eq!(
+        longhands::display::get_initial_specified_value(),
+        Display::Flex
+    );
+
+    let values =
+        ComputedValues::initial_values_with_font_override(style_structs::Font::initial_values());
+    assert_eq!(values.slow_clone_display(), Display::Flex);
+    assert_eq!(values.get_box().original_display, Display::Flex);
+}
+
+#[test]
+fn parses_and_serializes_lynx_display_keywords() {
+    let contents = parse_display("contents").unwrap();
+    assert_eq!(contents, Display::Contents);
+    assert_eq!(contents.to_css_string(), "contents");
+
+    let linear = parse_display("linear").unwrap();
+    assert_eq!(linear, Display::Linear);
+    assert_eq!(linear.to_css_string(), "linear");
+
+    let relative = parse_display("relative").unwrap();
+    assert_eq!(relative, Display::LynxRelative);
+    assert_eq!(relative.to_css_string(), "relative");
+
+    let grid_lanes = parse_display("grid-lanes").unwrap();
+    assert_eq!(grid_lanes, Display::GridLanes);
+    assert_eq!(grid_lanes.to_css_string(), "grid-lanes");
+    assert_eq!(parse_display("GRID-LANES").unwrap(), Display::GridLanes);
+}
+
+#[test]
+fn display_inside_serializes_lynx_keywords() {
+    // `Display::to_css` has explicit arms for the full keywords, but the
+    // derived `ToCss` on `DisplayInside` (reachable via the multi-keyword
+    // fallback) must agree — it kebab-cases the variant NAME unless
+    // overridden with `#[css(keyword = ...)]`, which would leak
+    // "lynx-linear"/"lynx-relative".
+    assert_eq!(DisplayInside::Contents.to_css_string(), "contents");
+    assert_eq!(DisplayInside::LynxLinear.to_css_string(), "linear");
+    assert_eq!(DisplayInside::LynxRelative.to_css_string(), "relative");
+    // `GridLanes` is a W3C keyword, so the kebab-cased variant name already
+    // agrees with it; the explicit `#[css(keyword = ...)]` pins that.
+    assert_eq!(DisplayInside::GridLanes.to_css_string(), "grid-lanes");
+}
+
+#[test]
+fn contents_keeps_upstream_box_generation_and_root_fixup_semantics() {
+    let contents = parse_display("contents").unwrap();
+
+    assert_eq!(contents.outside(), DisplayOutside::None);
+    assert_eq!(contents.inside(), DisplayInside::Contents);
+    assert!(contents.is_contents());
+    assert_eq!(contents.equivalent_block_display(false), Display::Contents);
+
+    // css-display-3 computes a root `contents` to `block`; Lynx has no flow
+    // layout, so the block-level container is the grammar's initial `flex`.
+    let root_display = contents.equivalent_block_display(true);
+    assert_eq!(root_display, Display::Flex);
+    assert_eq!(root_display.outside(), DisplayOutside::Block);
+    assert_eq!(root_display.inside(), DisplayInside::Flex);
+    assert_eq!(root_display.to_css_string(), "flex");
+}
+
+#[test]
+fn linear_behaves_like_block_level_flex_container() {
+    let display = parse_display("linear").unwrap();
+
+    assert_eq!(display.outside(), DisplayOutside::Block);
+    assert_eq!(display.inside(), DisplayInside::LynxLinear);
+    assert!(display.is_item_container());
+    assert!(!display.is_inline_flow());
+    assert_eq!(display.equivalent_block_display(false), Display::Linear);
+}
+
+#[test]
+fn relative_behaves_like_block_without_becoming_css_block() {
+    let display = parse_display("relative").unwrap();
+
+    assert_eq!(display.outside(), DisplayOutside::Block);
+    assert_eq!(display.inside(), DisplayInside::LynxRelative);
+    assert!(!display.is_item_container());
+    assert!(!display.is_inline_flow());
+    assert_eq!(
+        display.equivalent_block_display(false),
+        Display::LynxRelative
+    );
+}
+
+/// `grid-lanes` (css-grid-3) is a block-level grid container: its children are
+/// grid items, so it opts into `is_item_container()` exactly like `grid` and
+/// `linear`, and unlike `relative`.
+#[test]
+fn grid_lanes_behaves_like_a_block_level_grid_container() {
+    let display = parse_display("grid-lanes").unwrap();
+
+    assert_eq!(display.outside(), DisplayOutside::Block);
+    assert_eq!(display.inside(), DisplayInside::GridLanes);
+    assert!(display.is_item_container());
+    assert!(!display.is_inline_flow());
+    assert!(!display.is_contents());
+    assert!(!display.is_none());
+    assert_eq!(display.equivalent_block_display(false), Display::GridLanes);
+    // There is no inline-level grid lanes value to blockify from, and
+    // blockification is identity for every Block-outside Lynx value, so this
+    // holds at the root too.
+    assert_eq!(display.equivalent_block_display(true), Display::GridLanes);
+}
+
+#[test]
+fn lynx_display_keywords_are_single_keyword_values() {
+    assert!(parse_display("inline linear").is_err());
+    assert!(parse_display("relative list-item").is_err());
+    assert!(parse_display("inline grid-lanes").is_err());
+    assert!(parse_display("grid-lanes list-item").is_err());
+    // css-grid-3 defines `inline-grid-lanes` too, but the Lynx grammar has no
+    // inline-level container values at all (`inline-flex`/`inline-grid` are
+    // gated out), so `grid-lanes` deliberately gets no inline-level partner.
+    // `masonry` is a grid *track* keyword in this fork
+    // (`GenericGridTemplateComponent::Masonry`), never a display value.
+    assert!(parse_display("inline-grid-lanes").is_err());
+    assert!(parse_display("masonry").is_err());
+}
+
+fn parse_display_in(origin: Origin, url: &str, css: &str) -> Result<Display, ()> {
+    let url_data = UrlExtraData::from(::url::Url::parse(url).unwrap());
+    let context = ParserContext::new(
+        origin,
+        &url_data,
+        None,
+        ParsingMode::DEFAULT,
+        QuirksMode::NoQuirks,
+        Default::default(),
+        None,
+        None,
+        AttrTaint::default(),
+    );
+    let mut parser = CssParser::new(css);
+    parser
+        .parse_entirely(|input| Display::parse(&context, input))
+        .map_err(|_| ())
+}
+
+/// `block`, `flow` and `inline` are an engine's values, not an author's: a
+/// UA sheet, or a sheet whose URL enables chrome rules, can write them for
+/// the flow layout of the engine's own HTML content; an author sheet cannot,
+/// as Lynx's documentation rejects them and native Lynx falls `block` back to
+/// `flex`.
+#[test]
+fn block_flow_and_inline_parse_only_in_engine_sheets() {
+    for keyword in ["block", "flow", "inline", "BLOCK"] {
+        assert!(
+            parse_display(keyword).is_err(),
+            "an author sheet cannot write `{keyword}`"
+        );
+    }
+
+    let ua = |css| parse_display_in(Origin::UserAgent, "https://example.com/", css);
+    assert_eq!(ua("block").unwrap(), Display::Block);
+    assert_eq!(ua("flow").unwrap(), Display::Block);
+    assert_eq!(ua("inline").unwrap(), Display::Inline);
+    assert_eq!(ua("block").unwrap().to_css_string(), "block");
+    assert_eq!(ua("flow").unwrap().to_css_string(), "block");
+    assert_eq!(ua("inline").unwrap().to_css_string(), "inline");
+
+    let chrome = |css| parse_display_in(Origin::Author, "chrome://engine/sheet.css", css);
+    assert_eq!(chrome("block").unwrap(), Display::Block);
+    assert_eq!(chrome("inline").unwrap(), Display::Inline);
+
+    // Still single keywords: no `<display-outside> <display-inside>` pairs.
+    assert!(ua("block flow").is_err());
+    assert!(ua("inline flow").is_err());
+    assert!(ua("inline-block").is_err());
+    assert!(ua("flow-root").is_err());
+}
+
+#[test]
+fn block_and_inline_are_flow_boxes_and_inline_blockifies_to_block() {
+    let block = Display::Block;
+    assert_eq!(block.outside(), DisplayOutside::Block);
+    assert_eq!(block.inside(), DisplayInside::Flow);
+    assert!(!block.is_item_container());
+    assert_eq!(block.equivalent_block_display(false), Display::Block);
+
+    let inline = Display::Inline;
+    assert_eq!(inline.outside(), DisplayOutside::Inline);
+    assert_eq!(inline.inside(), DisplayInside::Flow);
+    assert!(inline.is_inline_flow());
+    assert!(!inline.is_item_container());
+    assert_eq!(inline.equivalent_block_display(false), Display::Block);
+    assert_eq!(inline.equivalent_block_display(true), Display::Block);
+}
+
+/// `-lynx-text` was removed on 2026-10-17: a Lynx text element is a Lynx
+/// paragraph by its element kind in the outer engine, so no sheet can write
+/// a text layout as a `display` value — an author's, the UA sheet or a sheet
+/// with chrome rules.
+#[test]
+fn lynx_text_is_not_a_display_keyword() {
+    let ua = |css| parse_display_in(Origin::UserAgent, "https://example.com/", css);
+    let chrome = |css| parse_display_in(Origin::Author, "chrome://engine/sheet.css", css);
+    for keyword in ["-lynx-text", "-LYNX-TEXT", "lynx-text", "text"] {
+        assert!(parse_display(keyword).is_err(), "author `{keyword}`");
+        assert!(ua(keyword).is_err(), "UA `{keyword}`");
+        assert!(chrome(keyword).is_err(), "chrome `{keyword}`");
+    }
+}
