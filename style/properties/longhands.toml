@@ -1781,8 +1781,10 @@ affects = "overflow"
 type = "OverflowAnchor"
 initial = "computed::OverflowAnchor::Auto"
 struct = "box"
-engine = "gecko"
 gecko_pref = "layout.css.scroll-anchoring.enabled"
+# lynx-vello: ported to servo behind the experimental pref (the
+# content-visibility pattern); the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/css-scroll-anchoring/#exclusion-api"
 animation_type = "discrete"
 affects = ""

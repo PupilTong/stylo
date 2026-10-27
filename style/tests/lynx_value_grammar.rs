@@ -175,6 +175,13 @@ fn user_select_keywords() {
 }
 
 #[test]
+fn overflow_anchor_keywords() {
+    // css-scroll-anchoring-1 §2.3: `auto | none`.
+    accepts("overflow-anchor", &["auto", "none"]);
+    rejects("overflow-anchor", &["visible", "auto none"]);
+}
+
+#[test]
 fn alignment_and_text_keyword_grammars() {
     accepts(
         "align-content",
