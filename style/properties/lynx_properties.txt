@@ -201,6 +201,12 @@ overflow
 # Under the `lynx` feature the value grammar grows a fourth keyword,
 # `contain-bounce` (lynx-vello's own): `contain`'s fence plus a rubber-band
 # overscroll at the boundary that springs back.
+# css-scroll-anchoring-1's `overflow-anchor`
+# (https://drafts.csswg.org/css-scroll-anchoring/#exclusion-api) is a
+# user-directed W3C extension beyond Lynx's property index: web-core's lists
+# and scroll views anchor through the browser's default `auto`, and this is
+# the standard way for a scroll container to opt out.
+overflow-anchor
 overscroll-behavior
 padding-bottom
 padding-inline-end

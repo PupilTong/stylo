@@ -131,6 +131,16 @@ fn ported_containment_surface_stays_pref_gated() {
 }
 
 #[test]
+fn ported_overflow_anchor_stays_pref_gated() {
+    // `overflow-anchor` is ported to servo for the `lynx` feature's benefit
+    // behind the same experimental pref as the containment family.
+    assert!(
+        !parses("overflow-anchor", "none"),
+        "stock servo must keep `overflow-anchor` pref-gated"
+    );
+}
+
+#[test]
 fn container_query_properties_stay_pref_gated() {
     // `container-type` / `container-name` are upstream servo longhands behind
     // `layout.container-queries.enabled` (false), and the `container`
