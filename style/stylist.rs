@@ -1418,7 +1418,7 @@ impl Stylist {
         };
         let fallback_block = fallback_rule
             .as_ref()
-            .map(|r| &r.read_with(guards.author).block);
+            .map(|r| &r.read_with(guards.for_locked(r)).block);
         let pseudo = style
             .pseudo()
             .or_else(|| element.implemented_pseudo_element());

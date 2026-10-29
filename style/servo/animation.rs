@@ -427,9 +427,18 @@ impl IntermediateComputedKeyframe {
         context: &SharedStyleContext,
         base_style: &ComputedValues,
     ) {
+        // A step without declarations specifies neither a timing function
+        // nor a composite operation.
+        let block = match step.value {
+            KeyframesStepValue::ComputedValues => return,
+            KeyframesStepValue::Declarations { ref block } => block,
+        };
+        // The block is under the lock of the sheet the `@keyframes` rule
+        // came from, which may be the user-agent origin's.
+        let guard = context.guards.for_locked(block);
+
         // Each keyframe declaration may optionally specify a timing function, falling
         // back to the one defined global for the animation.
-        let guard = &context.guards.author;
         if let Some(timing_function) = step.get_animation_timing_function(&guard) {
             self.timing_function = Some(timing_function.to_computed_value_without_context());
         }
@@ -439,11 +448,6 @@ impl IntermediateComputedKeyframe {
         if let Some(composition) = step.get_animation_composition(&guard) {
             self.composition = Some(composition);
         }
-
-        let block = match step.value {
-            KeyframesStepValue::ComputedValues => return,
-            KeyframesStepValue::Declarations { ref block } => block,
-        };
 
         // Filter out !important, non-animatable properties, and the
         // 'display' property (which is only animatable from SMIL).
