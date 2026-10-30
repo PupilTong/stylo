@@ -261,6 +261,21 @@ impl<'a> StylesheetGuards<'a> {
         }
     }
 
+    /// The guard that reads `locked`: whichever of the two is a guard of the
+    /// lock the data was wrapped with.
+    ///
+    /// For data whose origin the caller does not know — a `@keyframes` or
+    /// `@position-try` rule's block, which the stylist looks up across
+    /// origins — where a host parses user-agent sheets under a lock of their
+    /// own, as Gecko does, and reads them with `ua_or_user`.
+    pub fn for_locked<T>(&self, locked: &Locked<T>) -> &SharedRwLockReadGuard<'a> {
+        if locked.same_lock_as(self.ua_or_user.ptr()) {
+            self.ua_or_user
+        } else {
+            self.author
+        }
+    }
+
     /// Same guard for all origins
     pub fn same(guard: &'a SharedRwLockReadGuard<'a>) -> Self {
         StylesheetGuards {
