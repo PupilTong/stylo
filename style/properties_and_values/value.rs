@@ -225,6 +225,14 @@ impl<Component: PartialEq> PartialEq for Value<Component> {
     }
 }
 
+#[cfg(feature = "lynx")]
+impl<Component: PartialEq> Value<Component> {
+    /// Whether the two values are equal once their attr()-taint is disregarded.
+    pub(crate) fn eq_ignoring_attr_taint(&self, other: &Self) -> bool {
+        self.v == other.v
+    }
+}
+
 impl<Component: Animate> Animate for Value<Component> {
     fn animate(&self, other: &Self, procedure: Procedure) -> Result<Self, ()> {
         let v = self.v.animate(&other.v, procedure)?;
@@ -255,6 +263,17 @@ impl<Component> Value<Component> {
             v,
             url_data,
             attr_tainted,
+        }
+    }
+
+    /// Returns the single component this value holds, if it is one: the value of a property
+    /// registered with a syntax that has no multiplier, as computed. `None` for a list or a
+    /// universal-syntax value.
+    pub fn as_component(&self) -> Option<&Component> {
+        if let ValueInner::Component(ref component) = self.v {
+            Some(component)
+        } else {
+            None
         }
     }
 }

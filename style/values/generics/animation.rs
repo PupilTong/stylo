@@ -64,7 +64,9 @@ impl<T: ToCss + Zero> ToCss for AnimationDuration<T> {
     {
         match *self {
             Self::Auto => {
-                if crate::pref!("layout.css.scroll-driven-animations.enabled") {
+                if cfg!(feature = "lynx")
+                    || crate::pref!("layout.css.scroll-driven-animations.enabled")
+                {
                     dest.write_str("auto")
                 } else {
                     Self::Time(T::zero()).to_css(dest)
@@ -80,7 +82,9 @@ impl<T: ToTyped + Zero> ToTyped for AnimationDuration<T> {
     fn to_typed(&self, dest: &mut ThinVec<TypedValue>) -> Result<(), ()> {
         match *self {
             Self::Auto => {
-                if crate::pref!("layout.css.scroll-driven-animations.enabled") {
+                if cfg!(feature = "lynx")
+                    || crate::pref!("layout.css.scroll-driven-animations.enabled")
+                {
                     dest.push(TypedValue::Keyword(KeywordValue(CssString::from("auto"))));
                     Ok(())
                 } else {

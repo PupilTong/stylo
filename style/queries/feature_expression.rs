@@ -5,12 +5,12 @@
 //! Parsing for query feature expressions, like `(foo: bar)` or
 //! `(width >= 400px)`.
 
+use super::condition::StyleQuerySubject;
 use super::feature::{Evaluator, QueryFeatureDescription};
 use super::feature::{FeatureFlags, KeywordDiscriminant};
 use crate::context::QuirksMode;
 use crate::custom_properties::{
-    self, ComputedSubstitutionFunctions, SubstitutionFunctionKind,
-    VariableValue as CustomVariableValue,
+    self, SubstitutionFunctionKind, VariableValue as CustomVariableValue,
 };
 use crate::derives::*;
 use crate::dom::AttributeTracker;
@@ -921,10 +921,12 @@ impl QueryStyleRange {
         })
     }
 
-    /// Returns whether this style-range query evaluates to true for the given context.
+    /// Returns whether this style-range query evaluates to true for the given context, reading
+    /// custom properties from `subject`.
     pub fn evaluate(
         &self,
         context: &computed::Context,
+        subject: &dyn StyleQuerySubject,
         attribute_tracker: &mut AttributeTracker,
     ) -> KleeneValue {
         match self {
@@ -936,6 +938,7 @@ impl QueryStyleRange {
                 Self::resolve_value(
                     value1,
                     context,
+                    subject,
                     attribute_tracker,
                     &mut PrecomputedHashSet::default(),
                 )
@@ -943,6 +946,7 @@ impl QueryStyleRange {
                 Self::resolve_value(
                     value2,
                     context,
+                    subject,
                     attribute_tracker,
                     &mut PrecomputedHashSet::default(),
                 )
@@ -961,12 +965,14 @@ impl QueryStyleRange {
                 let v1 = Self::resolve_value(
                     value1,
                     context,
+                    subject,
                     attribute_tracker,
                     &mut PrecomputedHashSet::default(),
                 );
                 let v2 = Self::resolve_value(
                     value2,
                     context,
+                    subject,
                     attribute_tracker,
                     &mut PrecomputedHashSet::default(),
                 );
@@ -978,6 +984,7 @@ impl QueryStyleRange {
                                 Self::resolve_value(
                                     value3,
                                     context,
+                                    subject,
                                     attribute_tracker,
                                     &mut PrecomputedHashSet::default(),
                                 )
@@ -994,6 +1001,7 @@ impl QueryStyleRange {
     fn resolve_value(
         value: &QueryExpressionValue,
         context: &computed::Context,
+        subject: &dyn StyleQuerySubject,
         attribute_tracker: &mut AttributeTracker,
         visited_set: &mut PrecomputedHashSet<DashedIdent>,
     ) -> Option<Component> {
@@ -1002,14 +1010,15 @@ impl QueryStyleRange {
                 // `ident` is the dashed ident, but we need the name
                 // without "--" for custom-property lookup.
                 let name = ident.undashed();
+                if subject.is_cyclic(&name) {
+                    return None;
+                }
                 let stylist = context
                     .builder
                     .stylist
                     .expect("container queries should have a stylist around");
                 let registration = stylist.get_custom_property_registration(&name);
-                let current_value = context
-                    .inherited_custom_properties()
-                    .get(registration, &name)?;
+                let current_value = subject.custom_property(context, registration, &name)?;
                 match &current_value.v {
                     ValueInner::Component(component) => Some(component.clone()),
                     ValueInner::Universal(v) => {
@@ -1021,6 +1030,7 @@ impl QueryStyleRange {
                                 &v.css,
                                 &v.url_data,
                                 context,
+                                subject,
                                 attribute_tracker,
                                 visited_set,
                             )
@@ -1035,10 +1045,7 @@ impl QueryStyleRange {
                 }
             },
             QueryExpressionValue::Function(value) => {
-                let sub_funcs = ComputedSubstitutionFunctions::new(
-                    Some(context.inherited_custom_properties().clone()),
-                    None,
-                );
+                let sub_funcs = subject.substitution_functions(context);
                 let stylist = context
                     .builder
                     .stylist
@@ -1052,10 +1059,14 @@ impl QueryStyleRange {
                     attribute_tracker,
                 )
                 .ok()?;
+                if !substituted.attr_taint.is_empty() {
+                    subject.note_attr_taint();
+                }
                 Self::resolve_universal(
                     &substituted.css,
                     &value.url_data,
                     context,
+                    subject,
                     attribute_tracker,
                     visited_set,
                 )
@@ -1092,6 +1103,7 @@ impl QueryStyleRange {
         css_text: &str,
         url_data: &UrlExtraData,
         context: &computed::Context,
+        subject: &dyn StyleQuerySubject,
         attribute_tracker: &mut AttributeTracker,
         visited_set: &mut PrecomputedHashSet<DashedIdent>,
     ) -> Option<Component> {
@@ -1109,7 +1121,7 @@ impl QueryStyleRange {
         QueryExpressionValue::parse_for_style_range(&parser_context, &mut Parser::new(css_text))
             .ok()
             .and_then(|parsed| {
-                Self::resolve_value(&parsed, context, attribute_tracker, visited_set)
+                Self::resolve_value(&parsed, context, subject, attribute_tracker, visited_set)
             })
     }
 
@@ -1140,6 +1152,28 @@ impl QueryStyleRange {
                 }
             },
             _ => None,
+        }
+    }
+
+    /// Calls `f` with the name of every custom property this range compares by name.
+    #[cfg(feature = "lynx")]
+    pub(crate) fn for_each_queried_property(
+        &self,
+        f: &mut dyn FnMut(&crate::custom_properties::Name),
+    ) {
+        let values: &[&QueryExpressionValue] = match self {
+            QueryStyleRange::StyleRange2 { value1, value2, .. } => &[value1, value2],
+            QueryStyleRange::StyleRange3 {
+                value1,
+                value2,
+                value3,
+                ..
+            } => &[value1, value2, value3],
+        };
+        for value in values {
+            if let QueryExpressionValue::Custom(ident) = value {
+                f(&ident.undashed());
+            }
         }
     }
 
