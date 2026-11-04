@@ -9,7 +9,7 @@
 use super::CSSFloat;
 use super::computed::{Context, ToComputedValue};
 #[cfg(feature = "lynx")]
-use super::generics::grid::FlowTolerance as GenericFlowTolerance;
+use super::generics::grid::FitTolerance as GenericFitTolerance;
 use super::generics::grid::ImplicitGridTracks as GenericImplicitGridTracks;
 use super::generics::grid::{GridLine as GenericGridLine, TrackBreadth as GenericTrackBreadth};
 use super::generics::grid::{TrackList as GenericTrackList, TrackSize as GenericTrackSize};
@@ -403,10 +403,10 @@ pub type GridLine = GenericGridLine<Integer>;
 /// `<grid-template-rows> | <grid-template-columns>`
 pub type GridTemplateComponent = GenericGridTemplateComponent<LengthPercentage, Integer>;
 
-/// The specified value of `flow-tolerance`
+/// The specified value of `fit-tolerance`
 /// (`normal | <length-percentage [0,∞]> | infinite`).
 #[cfg(feature = "lynx")]
-pub type FlowTolerance = GenericFlowTolerance<NonNegativeLengthPercentage>;
+pub type FitTolerance = GenericFitTolerance<NonNegativeLengthPercentage>;
 
 /// rect(...)
 pub type ClipRect = generics::GenericClipRect<LengthOrAuto>;

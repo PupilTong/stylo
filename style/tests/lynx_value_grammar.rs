@@ -690,10 +690,10 @@ fn grid_and_lynx_layout_grammars() {
     );
     rejects("grid-template-columns", &["repeat(2)"]);
 
-    // css-grid-3 `flow-tolerance`, which parameterizes `display: grid-lanes`:
+    // css-grid-3 `fit-tolerance`, which parameterizes `display: grid-lanes`:
     // normal | <length-percentage [0,∞]> | infinite.
     accepts(
-        "flow-tolerance",
+        "fit-tolerance",
         &[
             "normal",
             "infinite",
@@ -705,7 +705,7 @@ fn grid_and_lynx_layout_grammars() {
         ],
     );
     rejects(
-        "flow-tolerance",
+        "fit-tolerance",
         &[
             // The range is [0,∞]; negative lengths and percentages are
             // rejected at parse time, not clamped.
@@ -721,6 +721,9 @@ fn grid_and_lynx_layout_grammars() {
             "infinite 1px",
         ],
     );
+    // The draft renamed the property from `flow-tolerance`; the old name is
+    // not kept as an alias.
+    rejects("flow-tolerance", &["normal", "0", "infinite"]);
 
     accepts(
         "linear-direction",
@@ -775,7 +778,7 @@ fn w3c_will_change_grammar() {
 }
 
 // ------------------------------------------------------------------------
-// `flow-tolerance` (css-grid-3 §4.2) is the one Lynx-gated longhand whose
+// `fit-tolerance` (css-grid-3 §4.2) is the one Lynx-gated longhand whose
 // computed value keeps a keyword alongside a `<length-percentage>`: `normal`'s
 // used value is `1em` and `infinite`'s is unbounded, both of which layout
 // resolves, so the cascade must hand the keywords through untouched.
@@ -831,7 +834,7 @@ fn test_device() -> style::device::Device {
     )
 }
 
-fn parse_flow_tolerance(css: &str) -> Result<style::values::specified::FlowTolerance, ()> {
+fn parse_fit_tolerance(css: &str) -> Result<style::values::specified::FitTolerance, ()> {
     use cssparser::Parser as CssParser;
     use style::custom_properties::AttrTaint;
     use style::parser::{Parse, ParserContext};
@@ -850,56 +853,56 @@ fn parse_flow_tolerance(css: &str) -> Result<style::values::specified::FlowToler
     );
     let mut parser = CssParser::new(css);
     parser
-        .parse_entirely(|input| style::values::specified::FlowTolerance::parse(&context, input))
+        .parse_entirely(|input| style::values::specified::FitTolerance::parse(&context, input))
         .map_err(|_| ())
 }
 
 #[test]
-fn flow_tolerance_round_trips_through_serialization() {
+fn fit_tolerance_round_trips_through_serialization() {
     use style_traits::ToCss;
 
     for css in ["normal", "infinite", "10px", "50%"] {
         assert_eq!(
-            parse_flow_tolerance(css).unwrap().to_css_string(),
+            parse_fit_tolerance(css).unwrap().to_css_string(),
             css,
-            "`flow-tolerance: {css}` must serialize back to itself"
+            "`fit-tolerance: {css}` must serialize back to itself"
         );
     }
 }
 
 #[test]
-fn flow_tolerance_keeps_its_keywords_at_computed_value_time() {
+fn fit_tolerance_keeps_its_keywords_at_computed_value_time() {
     use style::values::computed::ToComputedValue;
-    use style::values::computed::{Context, FlowTolerance as ComputedFlowTolerance};
-    use style::values::specified::FlowTolerance as SpecifiedFlowTolerance;
+    use style::values::computed::{Context, FitTolerance as ComputedFitTolerance};
+    use style::values::specified::FitTolerance as SpecifiedFitTolerance;
 
     let device = test_device();
     Context::for_media_query_evaluation(&device, QuirksMode::NoQuirks, |context| {
         assert!(matches!(
-            SpecifiedFlowTolerance::Normal.to_computed_value(context),
-            ComputedFlowTolerance::Normal
+            SpecifiedFitTolerance::Normal.to_computed_value(context),
+            ComputedFitTolerance::Normal
         ));
         assert!(matches!(
-            SpecifiedFlowTolerance::Infinite.to_computed_value(context),
-            ComputedFlowTolerance::Infinite
+            SpecifiedFitTolerance::Infinite.to_computed_value(context),
+            ComputedFitTolerance::Infinite
         ));
 
         // A font-relative length is absolutized by the cascade (16px base).
-        let computed = parse_flow_tolerance("1em")
+        let computed = parse_fit_tolerance("1em")
             .unwrap()
             .to_computed_value(context);
-        let ComputedFlowTolerance::LengthPercentage(length) = computed else {
-            panic!("`flow-tolerance: 1em` must compute to a <length-percentage>");
+        let ComputedFitTolerance::LengthPercentage(length) = computed else {
+            panic!("`fit-tolerance: 1em` must compute to a <length-percentage>");
         };
         assert_eq!(length.0.to_length().map(|l| l.px()), Some(16.0));
 
         // A percentage stays a percentage: it resolves against the grid-axis
         // content box size, which only layout knows.
-        let computed = parse_flow_tolerance("50%")
+        let computed = parse_fit_tolerance("50%")
             .unwrap()
             .to_computed_value(context);
-        let ComputedFlowTolerance::LengthPercentage(percentage) = computed else {
-            panic!("`flow-tolerance: 50%` must compute to a <length-percentage>");
+        let ComputedFitTolerance::LengthPercentage(percentage) = computed else {
+            panic!("`fit-tolerance: 50%` must compute to a <length-percentage>");
         };
         assert_eq!(percentage.0.to_length(), None);
     });

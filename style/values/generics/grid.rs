@@ -957,10 +957,10 @@ impl<L, I> Default for GridTemplateComponent<L, I> {
     }
 }
 
-/// A generic `flow-tolerance` value: `normal | <length-percentage [0,∞]> |
+/// A generic `fit-tolerance` value: `normal | <length-percentage [0,∞]> |
 /// infinite`.
 ///
-/// <https://drafts.csswg.org/css-grid-3/#propdef-flow-tolerance>
+/// <https://drafts.csswg.org/css-grid-3/#propdef-fit-tolerance>
 ///
 /// Shaped after `GenericLengthPercentageOrNormal`, with the extra `infinite`
 /// keyword css-grid-3 adds. `normal` is kept as a keyword through computed
@@ -969,7 +969,7 @@ impl<L, I> Default for GridTemplateComponent<L, I> {
 /// lanes container, so they too survive as percentages.
 ///
 /// This is a `lynx`-feature addition: the grammar is a user-directed W3C
-/// extension and upstream Stylo has no `flow-tolerance`, so the type does not
+/// extension and upstream Stylo has no `fit-tolerance`, so the type does not
 /// exist at all in a plain build.
 #[cfg(feature = "lynx")]
 #[derive(
@@ -991,7 +991,7 @@ impl<L, I> Default for GridTemplateComponent<L, I> {
     ToTyped,
 )]
 #[repr(C, u8)]
-pub enum GenericFlowTolerance<LengthPercent> {
+pub enum GenericFitTolerance<LengthPercent> {
     /// A `<length-percentage [0,∞]>` tolerance.
     LengthPercentage(LengthPercent),
     /// `normal`: the initial value, whose used value is `1em`.
@@ -999,18 +999,18 @@ pub enum GenericFlowTolerance<LengthPercent> {
     /// `infinite`: every candidate start position counts as tied with the
     /// shortest lane, so items are placed strictly in order regardless of how
     /// far each lane has already been filled
-    /// (<https://drafts.csswg.org/css-grid-3/#propdef-flow-tolerance>).
+    /// (<https://drafts.csswg.org/css-grid-3/#propdef-fit-tolerance>).
     Infinite,
 }
 
 #[cfg(feature = "lynx")]
-pub use self::GenericFlowTolerance as FlowTolerance;
+pub use self::GenericFitTolerance as FitTolerance;
 
 #[cfg(feature = "lynx")]
-impl<LengthPercent> FlowTolerance<LengthPercent> {
+impl<LengthPercent> FitTolerance<LengthPercent> {
     /// Returns the `normal` value.
     #[inline]
     pub fn normal() -> Self {
-        FlowTolerance::Normal
+        FitTolerance::Normal
     }
 }

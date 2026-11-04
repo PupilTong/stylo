@@ -93,7 +93,7 @@ fn lynx_only_names_and_values_do_not_exist() {
         ("display", "linear"),
         ("display", "relative"),
         ("display", "grid-lanes"),
-        ("flow-tolerance", "0"),
+        ("fit-tolerance", "0"),
         ("width", "1rpx"),
         ("overscroll-behavior-x", "contain-bounce"),
         ("overscroll-behavior-x", "circular"),
