@@ -7,7 +7,7 @@
 use self::transform::DirectionVector;
 use super::animated::ToAnimatedValue;
 #[cfg(feature = "lynx")]
-use super::generics::grid::FlowTolerance as GenericFlowTolerance;
+use super::generics::grid::FitTolerance as GenericFitTolerance;
 use super::generics::grid::GridTemplateComponent as GenericGridTemplateComponent;
 use super::generics::grid::ImplicitGridTracks as GenericImplicitGridTracks;
 use super::generics::grid::{GenericGridLine, GenericTrackBreadth};
@@ -1173,13 +1173,13 @@ pub type GridLine = GenericGridLine<Integer>;
 /// `<grid-template-rows> | <grid-template-columns>`
 pub type GridTemplateComponent = GenericGridTemplateComponent<LengthPercentage, Integer>;
 
-/// The computed value of `flow-tolerance`
+/// The computed value of `fit-tolerance`
 /// (`normal | <length-percentage [0,∞]> | infinite`).
 ///
 /// `normal` stays a keyword here: its used value (`1em`) is resolved by
 /// layout, not by the cascade.
 #[cfg(feature = "lynx")]
-pub type FlowTolerance = GenericFlowTolerance<NonNegativeLengthPercentage>;
+pub type FitTolerance = GenericFitTolerance<NonNegativeLengthPercentage>;
 
 impl ClipRect {
     /// Given a border box, resolves the clip rect against the border box

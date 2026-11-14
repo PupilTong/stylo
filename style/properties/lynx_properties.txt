@@ -117,6 +117,11 @@ cursor
 direction
 display
 filter
+# `fit-tolerance` (css-grid-3) is a user-directed W3C extension beyond Lynx's
+# property index: it parameterizes `display: grid-lanes`, which Lynx itself has
+# no property for. css-grid-3 renamed it from `flow-tolerance`, which is no
+# longer accepted.
+fit-tolerance
 flex-basis
 flex-direction
 flex-flow
@@ -124,10 +129,6 @@ flex-grow
 flex-shrink
 flex-wrap
 flex
-# `flow-tolerance` (css-grid-3) is a user-directed W3C extension beyond Lynx's
-# property index: it parameterizes `display: grid-lanes`, which Lynx itself has
-# no property for.
-flow-tolerance
 font-family
 font-feature-settings
 font-optical-sizing
