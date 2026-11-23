@@ -89,19 +89,14 @@ const NON_LYNX_UPSTREAM_PROPERTIES: &[&str] = &[
     "caret-color",
     // Background pieces outside the supported subset.
     "background-blend-mode",
-    // SVG paint properties are now content-enabled upstream for Servo, but
-    // remain outside Lynx's author property surface.
-    "fill",
-    "fill-opacity",
-    "fill-rule",
-    "stroke",
-    "stroke-width",
-    "stroke-linecap",
-    "stroke-linejoin",
-    "stroke-dasharray",
-    "stroke-dashoffset",
-    "stroke-miterlimit",
-    "stroke-opacity",
+    // SVG properties outside the seeded SVG 2 presentation set (see
+    // lynx_svg_properties). `fill`/`stroke*` and the geometry longhands are
+    // author properties under the `lynx` feature.
+    "vector-effect",
+    "marker-start",
+    "dominant-baseline",
+    "shape-rendering",
+    "mask-type",
 ];
 
 #[test]

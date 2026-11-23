@@ -248,6 +248,12 @@ impl Parse for ClipPath {
             return Ok(ClipPath::None);
         }
 
+        // `url()` references an SVG `<clipPath>` (css-masking-1); under
+        // `lynx` the shape set stays inset/circle/ellipse/path.
+        if let Ok(url) = input.try_parse(|i| SpecifiedUrl::parse(context, i)) {
+            return Ok(ClipPath::Url(url));
+        }
+
         #[cfg(feature = "lynx")]
         return BasicShape::parse(
             context,
@@ -259,11 +265,6 @@ impl Parse for ClipPath {
             ShapeType::Filled,
         )
         .map(|shape| ClipPath::Shape(Box::new(shape), Default::default()));
-
-        #[cfg(not(feature = "lynx"))]
-        if let Ok(url) = input.try_parse(|i| SpecifiedUrl::parse(context, i)) {
-            return Ok(ClipPath::Url(url));
-        }
 
         #[cfg(not(feature = "lynx"))]
         return parse_shape_or_box(

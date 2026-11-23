@@ -141,6 +141,52 @@ fn ported_overflow_anchor_stays_pref_gated() {
 }
 
 #[test]
+fn ported_svg_properties_stay_pref_gated() {
+    // `clip-rule`, `paint-order`, `stop-color`, `stop-opacity`, `text-anchor`
+    // and `transform-box` are ported to servo for the `lynx` feature's
+    // benefit behind `layout.unimplemented`: a stock Servo build must refuse
+    // them, and `PropertyId` must not resolve them for `@supports` either.
+    for (name, value) in [
+        ("clip-rule", "evenodd"),
+        ("paint-order", "stroke"),
+        ("stop-color", "red"),
+        ("stop-opacity", "0.5"),
+        ("text-anchor", "middle"),
+        ("transform-box", "fill-box"),
+    ] {
+        assert!(
+            !parses(name, value),
+            "stock servo must keep `{name}: {value}` pref-gated"
+        );
+        assert!(
+            PropertyId::parse_enabled_for_all_content(name).is_err(),
+            "stock servo must not expose `{name}` to the author surface"
+        );
+    }
+}
+
+#[test]
+fn upstream_svg_properties_stay_content_enabled() {
+    // The engine-agnostic SVG longhands are content-enabled in stock servo;
+    // seeding them for the `lynx` feature does not change that.
+    for (name, value) in [
+        ("fill", "url(#g) red"),
+        ("fill", "currentcolor"),
+        ("stroke", "url(#g) currentcolor"),
+        ("clip-path", "url(#c)"),
+        ("stroke", "none"),
+        ("stroke-width", "2px"),
+        ("stroke-dasharray", "4px 2px"),
+        ("cx", "10px"),
+        ("r", "5px"),
+        ("rx", "auto"),
+        ("d", "path(\"M 0 0\")"),
+    ] {
+        assert!(parses(name, value), "upstream `{name}: {value}` must parse");
+    }
+}
+
+#[test]
 fn container_query_properties_stay_pref_gated() {
     // `container-type` / `container-name` are upstream servo longhands behind
     // `layout.container-queries.enabled` (false), and the `container`

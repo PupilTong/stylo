@@ -619,6 +619,24 @@ impl Color {
         }
     }
 
+    /// `<color>` plus the `currentcolor` keyword, which the `lynx` color
+    /// grammar otherwise rejects. Only the SVG paint properties (`fill`,
+    /// `stroke`, `stop-color`) call this; every other color property keeps
+    /// the shared grammar.
+    #[cfg(feature = "lynx")]
+    pub fn parse_with_currentcolor(
+        context: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
+        if input
+            .try_parse(|i| i.expect_ident_matching("currentcolor"))
+            .is_ok()
+        {
+            return Ok(Color::CurrentColor);
+        }
+        Self::parse(context, input)
+    }
+
     /// Returns whether a given color is valid for authors.
     pub fn is_valid(context: &ParserContext, input: &mut Parser) -> bool {
         input
