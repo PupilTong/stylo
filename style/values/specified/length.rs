@@ -142,21 +142,21 @@ impl LengthUnit {
         unit: &str,
     ) -> Result<Self, ()> {
         let allows_computational_dependence = parsing_mode.allows_computational_dependence();
+        // Under `lynx` the absolute units other than px parse only in the SVG
+        // presentation-attribute mode (`ALLOW_UNITLESS_LENGTH`), the only
+        // `lynx` caller that sets it: SVG attributes such as `y="1in"` or
+        // `font-size="12pt"` keep them, author CSS does not.
+        let allows_absolute_units =
+            cfg!(not(feature = "lynx")) || parsing_mode.allows_unitless_lengths();
 
         Ok(match_ignore_ascii_case! { unit,
             "px" => Self::Px,
-            #[cfg(not(feature = "lynx"))]
-            "in" => Self::In,
-            #[cfg(not(feature = "lynx"))]
-            "cm" => Self::Cm,
-            #[cfg(not(feature = "lynx"))]
-            "mm" => Self::Mm,
-            #[cfg(not(feature = "lynx"))]
-            "q" => Self::Q,
-            #[cfg(not(feature = "lynx"))]
-            "pt" => Self::Pt,
-            #[cfg(not(feature = "lynx"))]
-            "pc" => Self::Pc,
+            "in" if allows_absolute_units => Self::In,
+            "cm" if allows_absolute_units => Self::Cm,
+            "mm" if allows_absolute_units => Self::Mm,
+            "q" if allows_absolute_units => Self::Q,
+            "pt" if allows_absolute_units => Self::Pt,
+            "pc" if allows_absolute_units => Self::Pc,
             // The Lynx rpx unit is viewport-relative (1rpx = viewport
             // width / 750), so like vw/vh below it is only valid in contexts
             // permitting computational dependence (not @font-face descriptors).

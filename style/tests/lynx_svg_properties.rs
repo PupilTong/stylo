@@ -158,15 +158,31 @@ fn device() -> Device {
 /// The test element's style with `declarations` as its only author
 /// declarations (an inline-style-like block at author normal), no sheets.
 fn style(declarations: &str) -> Arc<ComputedValues> {
-    let lock = SharedRwLock::new();
-    let stylist = Stylist::new(device(), QuirksMode::NoQuirks);
-    let block = parse_style_attribute(
+    style_for_block(parse_style_attribute(
         declarations,
         &url_data(),
         None,
         QuirksMode::NoQuirks,
         CssRuleType::Style,
-    );
+    ))
+}
+
+/// The test element's style with each `(name, value)` parsed as an SVG
+/// presentation attribute (`ParsingMode::ALLOW_UNITLESS_LENGTH`).
+fn svg_attribute_style(attributes: &[(&str, &str)]) -> Arc<ComputedValues> {
+    let mut block = PropertyDeclarationBlock::new();
+    for (name, value) in attributes {
+        let mut declarations =
+            parse_with_mode(name, value, ParsingMode::ALLOW_UNITLESS_LENGTH)
+                .unwrap_or_else(|_| panic!("`{name}: {value}` must parse"));
+        block.extend(declarations.drain(), Importance::Normal);
+    }
+    style_for_block(block)
+}
+
+fn style_for_block(block: PropertyDeclarationBlock) -> Arc<ComputedValues> {
+    let lock = SharedRwLock::new();
+    let stylist = Stylist::new(device(), QuirksMode::NoQuirks);
     let block = Arc::new(lock.wrap(block));
     let guard = lock.read();
     let guards = StylesheetGuards::same(&guard);
@@ -664,4 +680,57 @@ fn unitless_lengths_in_author_css() {
     assert_rejects("r", &["5"]);
     assert_rejects("font-size", &["12"]);
     assert_rejects("width", &["24"]);
+}
+
+// ---------------------------------------------------------------------------
+// Absolute length units other than px: the `lynx` grammar drops them from
+// author CSS, but SVG presentation attributes (parsed with
+// `ParsingMode::ALLOW_UNITLESS_LENGTH`) keep them.
+
+const ABSOLUTE_UNIT_ATTRIBUTES: &[(&str, &str, &str)] = &[
+    ("y", "1in", "96px"),
+    ("font-size", "12pt", "16px"),
+    ("stroke-width", "1pt", "1.33333px"),
+    ("x", "2.54cm", "96px"),
+    ("r", "10mm", "37.7953px"),
+    ("stroke-dashoffset", "1pc", "16px"),
+    ("cy", "4q", "3.77953px"),
+];
+
+#[test]
+fn absolute_units_parse_in_svg_presentation_attributes() {
+    for &(name, value, _) in ABSOLUTE_UNIT_ATTRIBUTES {
+        // The specified value keeps its unit.
+        assert_eq!(
+            serialized_with_mode(name, value, ParsingMode::ALLOW_UNITLESS_LENGTH).as_deref(),
+            Some(value),
+            "`{name}: {value}` with ALLOW_UNITLESS_LENGTH"
+        );
+    }
+    assert_eq!(
+        serialized_with_mode("x", "calc(1in + 2px)", ParsingMode::ALLOW_UNITLESS_LENGTH)
+            .as_deref(),
+        Some("calc(98px)"),
+        "calc() parses its dimensions through the same unit table"
+    );
+}
+
+#[test]
+fn absolute_units_compute_to_px() {
+    for &(name, value, expected) in ABSOLUTE_UNIT_ATTRIBUTES {
+        assert_eq!(
+            value_of(&svg_attribute_style(&[(name, value)]), name),
+            expected,
+            "`{name}: {value}` computed"
+        );
+    }
+}
+
+#[test]
+fn absolute_units_stay_rejected_in_author_css() {
+    for &(name, value, _) in ABSOLUTE_UNIT_ATTRIBUTES {
+        assert_rejects(name, &[value]);
+    }
+    assert_rejects("x", &["calc(1in + 2px)"]);
+    assert_rejects("width", &["1in", "1cm", "1mm", "1q", "1pt", "1pc"]);
 }
