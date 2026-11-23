@@ -22,6 +22,42 @@ use style_traits::{StyleParseErrorKind, ToCss};
 /// Specified SVG Paint value
 pub type SVGPaint = generic::GenericSVGPaint<Color, SpecifiedUrl>;
 
+#[cfg(feature = "lynx")]
+impl SVGPaint {
+    /// SVG 2 `<paint>` with `currentcolor` accepted as the color and as the
+    /// fallback color after a `url()`. The `lynx` `<color>` grammar has no
+    /// `currentcolor`; `fill` and `stroke` parse through here instead
+    /// (`lynx_parse_method` in longhands.toml).
+    pub fn parse_with_currentcolor(
+        context: &ParserContext,
+        input: &mut Parser,
+    ) -> Result<Self, ParseError> {
+        if let Ok(color) = input.try_parse(|i| {
+            i.expect_ident_matching("currentcolor")?;
+            Ok::<_, ParseError>(Color::CurrentColor)
+        }) {
+            return Ok(generic::SVGPaint {
+                kind: generic::SVGPaintKind::Color(color),
+                fallback: generic::SVGPaintFallback::Unset,
+            });
+        }
+        let mut paint = Self::parse(context, input)?;
+        // The generic parse leaves a `currentcolor` fallback unconsumed.
+        if matches!(paint.fallback, generic::SVGPaintFallback::Unset)
+            && !matches!(
+                paint.kind,
+                generic::SVGPaintKind::None | generic::SVGPaintKind::Color(..)
+            )
+            && input
+                .try_parse(|i| i.expect_ident_matching("currentcolor"))
+                .is_ok()
+        {
+            paint.fallback = generic::SVGPaintFallback::Color(Color::CurrentColor);
+        }
+        Ok(paint)
+    }
+}
+
 /// <length> | <percentage> | <number> | context-value
 pub type SVGLength = generic::GenericSVGLength<LengthPercentage>;
 

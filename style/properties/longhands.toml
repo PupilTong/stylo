@@ -558,7 +558,9 @@ servo_restyle_damage = "rebuild_stacking_context"
 type = "FillRule"
 initial = "Default::default()"
 struct = "inherited_svg"
-engine = "gecko"
+# lynx-vello inline SVG; gecko-only in stylo. Expose in servo behind the
+# experimental pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://svgwg.org/svg2-draft/masking.html#ClipRuleProperty"
 affects = "paint"
@@ -802,6 +804,8 @@ type = "SVGPaint"
 initial = "crate::values::computed::SVGPaint::BLACK"
 struct = "inherited_svg"
 boxed = true
+# The `lynx` `<color>` grammar has no `currentcolor`; SVG paint takes it.
+lynx_parse_method = "parse_with_currentcolor"
 spec = "https://svgwg.org/svg2-draft/painting.html#SpecifyingFillPaint"
 affects = "paint"
 
@@ -1964,7 +1968,9 @@ affects = "layout"
 type = "SVGPaintOrder"
 initial = "computed::SVGPaintOrder::normal()"
 struct = "inherited_svg"
-engine = "gecko"
+# lynx-vello inline SVG; gecko-only in stylo. Expose in servo behind the
+# experimental pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 animation_type = "discrete"
 spec = "https://svgwg.org/svg2-draft/painting.html#PaintOrder"
 affects = "paint"
@@ -2273,7 +2279,11 @@ affects = "layout"
 type = "Color"
 initial = "computed::Color::BLACK"
 struct = "svg"
-engine = "gecko"
+# The `lynx` `<color>` grammar has no `currentcolor`; SVG paint takes it.
+lynx_parse_method = "parse_with_currentcolor"
+# lynx-vello inline SVG; gecko-only in stylo. Expose in servo behind the
+# experimental pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 spec = "https://svgwg.org/svg2-draft/pservers.html#StopColorProperties"
 affects = "paint"
 
@@ -2281,7 +2291,9 @@ affects = "paint"
 type = "Opacity"
 initial = "1.0"
 struct = "svg"
-engine = "gecko"
+# lynx-vello inline SVG; gecko-only in stylo. Expose in servo behind the
+# experimental pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 spec = "https://svgwg.org/svg2-draft/pservers.html#StopOpacityProperty"
 affects = "paint"
 
@@ -2290,6 +2302,8 @@ type = "SVGPaint"
 initial = "Default::default()"
 struct = "inherited_svg"
 boxed = true
+# The `lynx` `<color>` grammar has no `currentcolor`; SVG paint takes it.
+lynx_parse_method = "parse_with_currentcolor"
 spec = "https://svgwg.org/svg2-draft/painting.html#SpecifyingStrokePaint"
 affects = "paint"
 
@@ -2417,7 +2431,9 @@ affects = "overflow"
 type = "TransformBox"
 initial = "computed::TransformBox::ViewBox"
 struct = "box"
-engine = "gecko"
+# lynx-vello inline SVG; gecko-only in stylo. Expose in servo behind the
+# experimental pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 spec = "https://drafts.csswg.org/css-transforms/#transform-box"
 animation_type = "discrete"
 affects = "overflow"
@@ -4222,7 +4238,9 @@ initial = "computed::ImageOrientation::FromImage"
 
 [text-anchor]
 struct = "inherited_svg"
-engine = "gecko"
+# lynx-vello inline SVG; gecko-only in stylo. Expose in servo behind the
+# experimental pref (like offset-path) so the `lynx` feature force-enables it.
+servo_pref = "layout.unimplemented"
 spec = "https://svgwg.org/svg2-draft/text.html#TextAnchorProperty"
 animation_type = "discrete"
 affects = "layout"

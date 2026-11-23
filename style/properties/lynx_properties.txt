@@ -314,3 +314,44 @@ z-index
 
 # Generated text for Bobcat paragraphs.
 content
+
+# W3C SVG 2, css-masking-1 and css-transforms-1 properties outside Lynx's own
+# property list. lynx-vello's document tree carries SVG-namespace elements
+# (`svg`, `g`, `path`, `rect`, `circle`, `text`, `linearGradient`, `stop`,
+# `clipPath`, ...) and stylo cascades these properties onto them. `fill`,
+# `stroke` and `stop-color` accept `currentcolor`, which the shared `lynx`
+# `<color>` grammar does not (`lynx_parse_method` in longhands.toml).
+# Painting (https://svgwg.org/svg2-draft/painting.html):
+fill
+fill-opacity
+fill-rule
+stroke
+stroke-width
+stroke-opacity
+stroke-linecap
+stroke-linejoin
+stroke-miterlimit
+stroke-dasharray
+stroke-dashoffset
+paint-order
+# Geometry (https://svgwg.org/svg2-draft/geometry.html) and paths
+# (https://svgwg.org/svg2-draft/paths.html#TheDProperty):
+cx
+cy
+r
+rx
+ry
+x
+y
+d
+# Masking (https://drafts.fxtf.org/css-masking-1/#the-clip-rule), gradient
+# stops (https://svgwg.org/svg2-draft/pservers.html#StopColorProperties), text
+# (https://svgwg.org/svg2-draft/text.html#TextAnchorProperty) and
+# css-transforms-1 `transform-box`. These five and `paint-order` above are
+# gecko-only upstream and are ported to servo behind `layout.unimplemented` in
+# longhands.toml.
+clip-rule
+stop-color
+stop-opacity
+text-anchor
+transform-box

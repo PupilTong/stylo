@@ -598,9 +598,10 @@ fn effects_and_motion_grammars() {
             "circle(50%)",
             "ellipse(40% 30%)",
             "path(\"M 0 0 L 1 1\")",
+            "url(#clip)",
         ],
     );
-    rejects("clip-path", &["polygon(0 0, 100% 100%)", "url(#clip)"]);
+    rejects("clip-path", &["polygon(0 0, 100% 100%)", "border-box"]);
     accepts(
         "offset-path",
         &["inset(1px)", "circle(50%)", "path(\"M 0 0 L 1 1\")"],
